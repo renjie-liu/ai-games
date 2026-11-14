@@ -1,0 +1,35 @@
+{
+  "offline": true,
+  "actualNetworkRequests": 0,
+  "actualMicrophoneRequests": 0,
+  "results": [
+    {
+      "name": "background while microphone permission is unresolved",
+      "hidden": true,
+      "modelStartPosts": 1,
+      "stopPosts": 0,
+      "micRequested": true,
+      "micStopped": false,
+      "contextStates": [
+        "running"
+      ],
+      "state": "麦克风已开启 · 正在连接模型",
+      "stopDisabled": false,
+      "interruptDisabled": false
+    },
+    {
+      "name": "fixture stream EOF before start response",
+      "hidden": false,
+      "modelStartPosts": 1,
+      "stopPosts": 1,
+      "micRequested": false,
+      "micStopped": false,
+      "contextStates": [
+        "closed"
+      ],
+      "state": "离线 fixture · 无麦克风、无模型",
+      "stopDisabled": false,
+      "interruptDisabled": false
+    }
+  ]
+}

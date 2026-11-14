@@ -1,0 +1,34 @@
+<!doctype html><html lang="zh"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="icon" href="data:,"><title>Live 启动生命周期 · 离线 fixture</title>
+<style>body{max-width:760px;margin:24px auto;padding:0 18px;background:#101722;color:#edf2fc;font:16px/1.6 system-ui}button{padding:10px;margin:4px;border-radius:8px;border:1px solid #9baac1}button:disabled{opacity:.5}.small{font-size:14px;color:#abbdd6}#live-panel{padding:16px;border:1px solid #65768e;border-radius:12px}#controls{margin-top:24px}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style>
+<h1>离线 fixture · 无麦克风、无模型</h1><p>实际生产组件，假权限、音频设备和网络响应。仅验证启动生命周期与状态，不验证真人语音体验。</p>
+<section id="live-panel"></section><section id="controls"><button id="grant">模拟授权返回</button><button id="hide">模拟后台</button><button id="eof">模拟下行结束</button><button id="suspend">模拟音频挂起</button><button id="release">释放响应</button><button id="refresh">显示检查结果</button></section><pre id="results"></pre>
+<script type="module">
+import {setupLive} from '../../live-client.mjs';
+const mode=new URL(location.href).searchParams.get('case')||'permission';
+const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
+const grant=deferred(),release=deferred(),stats={fixture:true,realModelRequests:0,realMicrophoneRequests:0,startPosts:0,stopPosts:0,captureRequests:0,trackStops:0,contextStates:[],mode};
+let hidden=false,controller;const contexts=[],track={readyState:'live',stop(){this.readyState='ended';stats.trackStops++;}};
+Object.defineProperty(document,'hidden',{get:()=>hidden});
+Object.defineProperty(navigator,'mediaDevices',{value:{getUserMedia:async()=>{stats.captureRequests++;return mode==='permission'?grant.promise:{getTracks:()=>[track]};}}});
+window.AudioContext=class {constructor(){this.state='suspended';this.currentTime=0;this.destination={};this.audioWorklet={addModule:async()=>{}};contexts.push(this);}async resume(){this.state='running';}async close(){this.state='closed';}createMediaStreamSource(){return {connect(t){return t;},disconnect(){}};}createGain(){return {gain:{value:1},connect(t){return t;}};}};
+window.AudioWorkletNode=class {constructor(){this.port={};}connect(t){return t;}disconnect(){}};
+const originalFetch=window.fetch.bind(window);
+window.fetch=async(url,options={})=>{
+  if(!String(url).startsWith('/api/'))return originalFetch(url,options);
+  if(String(url).endsWith('status'))return Response.json({runtimeReady:true,remaining:1,totalUsd:.5,fixture:mode==='eof'});
+  if(String(url).endsWith('stream')){
+    if(mode==='suspended')await release.promise;
+    return new Response(new ReadableStream({start(c){controller=c;}}),{headers:{'Content-Type':'application/x-ndjson'}});
+  }
+  if(String(url).endsWith('start')){stats.startPosts++;if(mode==='eof')await release.promise;}
+  if(options.body&&JSON.parse(options.body).type==='stop')stats.stopPosts++;
+  return Response.json({ok:true});
+};
+window.fixture={stats,contexts,grant:()=>grant.resolve({getTracks:()=>[track]}),
+ hide(){hidden=true;document.dispatchEvent(new Event('visibilitychange'));},
+ eof(){controller.close();},suspend(){contexts[0].state='suspended';contexts[0].onstatechange?.();},release:()=>release.resolve(),
+ result(){return {...stats,contextStates:contexts.map(x=>x.state),state:document.querySelector('#live-state').textContent,stopDisabled:document.querySelector('#live-stop').disabled,interruptDisabled:document.querySelector('#live-interrupt').disabled,overflow:document.documentElement.scrollWidth>innerWidth};}};
+setupLive({room:'offline-fixture',key:'fixture-token',getView:()=>({role:'west',controllers:{east:'live'},paused:false})});
+for(const [id,fn] of [['grant','grant'],['hide','hide'],['eof','eof'],['suspend','suspend'],['release','release']])document.getElementById(id).onclick=()=>window.fixture[fn]();
+document.getElementById('refresh').onclick=()=>document.getElementById('results').textContent=JSON.stringify(window.fixture.result(),null,2);
+</script></html>

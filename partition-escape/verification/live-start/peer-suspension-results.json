@@ -1,0 +1,15 @@
+{
+  "case": "AudioContext suspends while stream connection awaits",
+  "state": "音频设备已暂停，语音已停止",
+  "startPosts": 0,
+  "stopPosts": 0,
+  "mics": 1,
+  "contexts": [
+    "closed"
+  ],
+  "audio": 0,
+  "timers": 0,
+  "trackState": "ended",
+  "stopDisabled": true,
+  "interruptDisabled": true
+}

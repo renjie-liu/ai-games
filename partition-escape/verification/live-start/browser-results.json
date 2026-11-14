@@ -1,0 +1,153 @@
+{
+  "fixture": true,
+  "actualMicrophoneRequests": 0,
+  "actualModelRequests": 0,
+  "pageErrors": [],
+  "external": [],
+  "results": [
+    {
+      "scenario": "background",
+      "width": 1440,
+      "fixture": true,
+      "realModelRequests": 0,
+      "realMicrophoneRequests": 0,
+      "startPosts": 0,
+      "stopPosts": 0,
+      "captureRequests": 1,
+      "trackStops": 1,
+      "contextStates": [],
+      "mode": "permission",
+      "state": "已暂停收音 · 页面在后台",
+      "stopDisabled": true,
+      "interruptDisabled": true,
+      "overflow": false
+    },
+    {
+      "scenario": "cancel",
+      "width": 1440,
+      "fixture": true,
+      "realModelRequests": 0,
+      "realMicrophoneRequests": 0,
+      "startPosts": 0,
+      "stopPosts": 0,
+      "captureRequests": 1,
+      "trackStops": 1,
+      "contextStates": [],
+      "mode": "permission",
+      "state": "麦克风关 · 语音已结束",
+      "stopDisabled": true,
+      "interruptDisabled": true,
+      "overflow": false
+    },
+    {
+      "scenario": "eof",
+      "width": 1440,
+      "fixture": true,
+      "realModelRequests": 0,
+      "realMicrophoneRequests": 0,
+      "startPosts": 1,
+      "stopPosts": 1,
+      "captureRequests": 0,
+      "trackStops": 0,
+      "contextStates": [
+        "closed"
+      ],
+      "mode": "eof",
+      "state": "语音连接已结束",
+      "stopDisabled": true,
+      "interruptDisabled": true,
+      "overflow": false
+    },
+    {
+      "scenario": "suspended",
+      "width": 1440,
+      "fixture": true,
+      "realModelRequests": 0,
+      "realMicrophoneRequests": 0,
+      "startPosts": 0,
+      "stopPosts": 0,
+      "captureRequests": 1,
+      "trackStops": 1,
+      "contextStates": [
+        "closed"
+      ],
+      "mode": "suspended",
+      "state": "音频设备已暂停，语音已停止",
+      "stopDisabled": true,
+      "interruptDisabled": true,
+      "overflow": false
+    },
+    {
+      "scenario": "background",
+      "width": 390,
+      "fixture": true,
+      "realModelRequests": 0,
+      "realMicrophoneRequests": 0,
+      "startPosts": 0,
+      "stopPosts": 0,
+      "captureRequests": 1,
+      "trackStops": 1,
+      "contextStates": [],
+      "mode": "permission",
+      "state": "已暂停收音 · 页面在后台",
+      "stopDisabled": true,
+      "interruptDisabled": true,
+      "overflow": false
+    },
+    {
+      "scenario": "cancel",
+      "width": 390,
+      "fixture": true,
+      "realModelRequests": 0,
+      "realMicrophoneRequests": 0,
+      "startPosts": 0,
+      "stopPosts": 0,
+      "captureRequests": 1,
+      "trackStops": 1,
+      "contextStates": [],
+      "mode": "permission",
+      "state": "麦克风关 · 语音已结束",
+      "stopDisabled": true,
+      "interruptDisabled": true,
+      "overflow": false
+    },
+    {
+      "scenario": "eof",
+      "width": 390,
+      "fixture": true,
+      "realModelRequests": 0,
+      "realMicrophoneRequests": 0,
+      "startPosts": 1,
+      "stopPosts": 1,
+      "captureRequests": 0,
+      "trackStops": 0,
+      "contextStates": [
+        "closed"
+      ],
+      "mode": "eof",
+      "state": "语音连接已结束",
+      "stopDisabled": true,
+      "interruptDisabled": true,
+      "overflow": false
+    },
+    {
+      "scenario": "suspended",
+      "width": 390,
+      "fixture": true,
+      "realModelRequests": 0,
+      "realMicrophoneRequests": 0,
+      "startPosts": 0,
+      "stopPosts": 0,
+      "captureRequests": 1,
+      "trackStops": 1,
+      "contextStates": [
+        "closed"
+      ],
+      "mode": "suspended",
+      "state": "音频设备已暂停，语音已停止",
+      "stopDisabled": true,
+      "interruptDisabled": true,
+      "overflow": false
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "mode": "offline worker stub; real server HTTP routes and Room engine",
+  "real_model_requests": 0,
+  "results": [
+    {
+      "command": "accept",
+      "outcome": "applied",
+      "room_event_ids": [
+        3,
+        4
+      ],
+      "worker_inputs_added": 0
+    },
+    {
+      "command": "action",
+      "outcome": "applied",
+      "room_event_ids": [
+        5
+      ],
+      "worker_inputs_added": 0
+    },
+    {
+      "command": "inspect",
+      "outcome": "recorded",
+      "room_event_ids": [
+        6
+      ],
+      "worker_inputs_added": 0
+    },
+    {
+      "command": "share",
+      "outcome": "recorded",
+      "room_event_ids": [
+        7
+      ],
+      "worker_inputs_added": 0
+    },
+    {
+      "command": "say",
+      "outcome": "recorded",
+      "room_event_ids": [
+        8
+      ],
+      "worker_inputs_added": 1
+    }
+  ]
+}

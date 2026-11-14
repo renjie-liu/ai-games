@@ -1,0 +1,33 @@
+{
+  "offline": true,
+  "actualNetworkRequests": 0,
+  "actualMicrophoneRequests": 0,
+  "results": [
+    {
+      "name": "background while microphone permission is unresolved",
+      "hidden": true,
+      "modelStartPosts": 0,
+      "stopPosts": 0,
+      "micRequested": true,
+      "micStopped": true,
+      "contextStates": [],
+      "state": "已暂停收音 · 页面在后台",
+      "stopDisabled": true,
+      "interruptDisabled": true
+    },
+    {
+      "name": "fixture stream EOF before start response",
+      "hidden": false,
+      "modelStartPosts": 1,
+      "stopPosts": 1,
+      "micRequested": false,
+      "micStopped": false,
+      "contextStates": [
+        "closed"
+      ],
+      "state": "语音连接已结束",
+      "stopDisabled": true,
+      "interruptDisabled": true
+    }
+  ]
+}
