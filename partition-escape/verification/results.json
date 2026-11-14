@@ -1,0 +1,68 @@
+{
+  "source_repository": "https://github.com/renjie-liu/ai-gaming",
+  "source_commit": "a2952a4c1372169535c3b05cd30c31152e67640f",
+  "harness_commit": "65d0749207965af98819a8dd2f222478b0795f56",
+  "node_tests_passed": 49,
+  "python_tests_passed": 82,
+  "four_combinations_passed": 4,
+  "mock_tts_http_passed": true,
+  "real_model_requests": 0,
+  "microphone_captured": false,
+  "new_live_grant_created": false,
+  "original_live_ledger_unchanged": true,
+  "live_fixture": {
+    "source": "offline-fixture",
+    "before_rev": 1,
+    "after_rev": 2,
+    "output_pcm_bytes": 9600,
+    "tool_receipts": [
+      {
+        "requestId": "5f4e5d9c30952a95870d8805",
+        "source": "rules",
+        "seat": "east",
+        "command": "查看本侧物件",
+        "outcome": "recorded",
+        "code": "ok",
+        "roomEventIds": [
+          2
+        ],
+        "changes": {},
+        "proposalId": null
+      }
+    ]
+  },
+  "adapted_imported_files": [
+    ".gitignore",
+    "live.mjs",
+    "live.test.mjs",
+    "live_budget.py",
+    "model_smoke.py",
+    "seat_worker.py",
+    "server3d.mjs",
+    "start-live.mjs",
+    "start-local.mjs",
+    "test_live.py",
+    "test_model_smoke.py",
+    "test_protocol.py",
+    "voice_http_check.py"
+  ],
+  "core_unchanged": [
+    "world.mjs",
+    "engine.mjs",
+    "seat_protocol.py",
+    "public_trace.py",
+    "play.mjs",
+    "play.html",
+    "scene.mjs",
+    "play.css"
+  ],
+  "format_only_imported_files": [
+    "decision_reasons.py",
+    "handoff_fixture.py",
+    "handoff_probe.py",
+    "script_policy.py",
+    "test_handoff_reasons.py",
+    "test_reasons.py",
+    "verify_reasons.py"
+  ]
+}

@@ -1,0 +1,13 @@
+.DS_Store
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.playwright-cli/
+output/
+.env*
+**/.runs/
+**/.voice/
+**/.live/
+**/.model/
+**/model_request_ledger.json

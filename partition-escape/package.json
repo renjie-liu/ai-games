@@ -1,0 +1,15 @@
+{
+  "name": "partition-escape-prototype",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server3d.mjs",
+    "start:local": "node start-local.mjs",
+    "start:legacy": "node server.mjs",
+    "test": "node --test *.test.mjs",
+    "start:live": "node start-live.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

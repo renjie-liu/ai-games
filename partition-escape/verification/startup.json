@@ -1,0 +1,29 @@
+{
+  "command": "PORT=4317 npm run start:local",
+  "default_sibling_harness": true,
+  "health": {
+    "ok": true,
+    "localOnly": true,
+    "tts": "off",
+    "live": {
+      "enabled": false,
+      "runtimeReady": false,
+      "runtimeCode": "disabled",
+      "fixture": false,
+      "model": "gemini-3.8-live",
+      "remaining": 0,
+      "seconds": 60,
+      "totalUsd": 0.5,
+      "creditsVerified": false
+    }
+  },
+  "static_assets": {
+    "/": 200,
+    "/play.mjs": 200,
+    "/play.css": 200,
+    "/scene.mjs": 200,
+    "/vendor/three.module.min.js": 200,
+    "/vendor/three.core.min.js": 200
+  },
+  "real_model_requests": 0
+}

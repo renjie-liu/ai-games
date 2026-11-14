@@ -1,0 +1,5 @@
+{"mode": "human+human", "complete": true, "room": "57d482e49e86429c", "private_views_checked": true}
+{"mode": "human+script", "complete": true, "room": "88e7afad331446ae", "private_views_checked": true}
+{"mode": "script+human", "complete": true, "room": "d01464c76ba1e4ab", "private_views_checked": true}
+{"mode": "script+script", "complete": true, "room": "9cf4ec05b1f56a0e", "private_views_checked": true}
+PASS: four combinations, HTTP permissions, real offline harness sessions and Trace artifacts; no model calls.

@@ -1,0 +1,62 @@
+
+> test
+> node --test *.test.mjs
+
+Checked 43 reachable world states; every state can reach the exit.
+✔ both independent roles are needed for the full escape; no dialogue declares success (1.336708ms)
+✔ early exit opening is recoverable; cannot restart power while door is open (0.109041ms)
+✔ a hand on the brake is not an escape solution; unsafe reaching changes nothing (0.072542ms)
+✔ early release drops gate safely and permits another attempt (0.048625ms)
+✔ actor permissions, missing items and impossible states are rejected (0.140666ms)
+✔ exhaustive reachable-state graph: all states can still reach a legitimate shared exit (1.480375ms)
+✔ partner observation excludes player-only door state and private discoveries (2.44625ms)
+✔ offline natural language offers actions, never executes or fabricates objects (0.616625ms)
+✔ negations, conditions, questions, multiple actions and unsupported input cannot move the world (0.484333ms)
+✔ Live tool uses normal engine; shared action waits for human button (451.439584ms)
+✔ speech onset invalidates prior ticket, including late complete tool (312.069375ms)
+✔ re-observe after end gets fresh authority; duplicates do not execute (307.894625ms)
+✔ world revision, expiration, pause and wrong seat cannot bypass gate (1242.0375ms)
+✔ actual permissions and rules remain rejected, no forged seat or batch (313.683042ms)
+✔ own observe never includes other unshared notes (305.899834ms)
+✔ worklet fixture detects onset, retains preroll, limits silence, ends turn (22.032083ms)
+✔ runtime check admits only safe dependency codes, never subprocess text (0.901292ms)
+✔ missing runtime blocks start before worker or session mutation (2.913708ms)
+✔ new game folder or corrupt ledger advertises zero real credit (1.617834ms)
+✔ off is zero budget and never loads a key or sends (0.984833ms)
+✔ key parser reads literal only without sourcing or echoing shell contents (3.34325ms)
+✔ speech selects peer public script events only; no private observations or free text (1.066708ms)
+✔ cache and duplicate concurrent clicks spend one reservation; restart retains it (16.63875ms)
+✔ failed request consumes reservation forever, no retry after restart (13.511959ms)
+✔ requests cap checked cumulatively before send (12.583417ms)
+✔ characters cap checked cumulatively before send (12.352125ms)
+✔ money cap checked cumulatively before send (8.862625ms)
+✔ per-request cap rejects without charging or truncating (0.853416ms)
+✔ exclusive lock prevents simultaneous services; config change cannot replenish quota (1.066208ms)
+✔ global disable aborts current audio, persists across restart, blocks cached playback (15.210708ms)
+✔ missing/expired authorization, unverified rate, excessive limits and corrupt ledger fail closed (1.226ms)
+✔ deleting a real-mode ledger cannot recreate an approved allowance (0.639917ms)
+✔ mock uses separate zero-dollar ledger and never reads key or invokes provider (13.959084ms)
+✔ HTTP adapter pins endpoint, language and model; redirects/errors get no retry or raw response (20.796084ms)
+✔ one ruleset: human+human (2.502ms)
+✔ one ruleset: human+script (0.352792ms)
+✔ one ruleset: script+human (0.132292ms)
+✔ one ruleset: script+script (0.109417ms)
+✔ private facts and meshes stay private until deliberately shared (0.895542ms)
+✔ capabilities and permissions cannot be switched with a command (0.099875ms)
+✔ pause and stale confirmation cannot advance state (0.117334ms)
+✔ texts, invented victory and unknown commands never operate the engine (0.068583ms)
+✔ early open and premature release recover with the same actions (0.229084ms)
+✔ neither seat alone can win; physical attempts are bounded to its own controls (0.268916ms)
+✔ only proposer can cancel; stale accept/cancel cannot mutate a replacement proposal (0.225708ms)
+✔ withdrawing power-off immediately restores both seats operations without changing power (0.077125ms)
+✔ spectator geometry projection follows real public outcomes without inventory or clue facts (0.191959ms)
+✔ expected conflict is recoverable; permissions and rule refusals are not (0.137292ms)
+✔ public receipts omit private clues, arbitrary prose and inventory (0.076417ms)
+ℹ tests 49
+ℹ suites 0
+ℹ pass 49
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3079.893542

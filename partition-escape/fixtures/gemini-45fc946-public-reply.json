@@ -1,0 +1,12 @@
+{
+  "source": "actual gemini-3.8-flash explicit reply, NOT internal thinking, NOT fixture",
+  "model_call_harness_seq": 6,
+  "provider_request_id": "445935d24ee240208966b522888e9fc3",
+  "reply_sha256": "d6925468e642b23eb4ef092c9f39f0a7f9ece968b93f93c1cb52c9310b8ad3c7",
+  "public_reply_verbatim": "```json\n{\n  \"commentary\": \"对席提出共同动作；按本席观察确认，实际结果由机关判定。\",\n  \"actions\": [\n    {\n      \"type\": \"accept\",\n      \"id\": \"46b3968a4c11\"\n    }\n  ]\n}\n```",
+  "validation": "Only public pending proposal ID and the exact allowed public summary sentence are present.",
+  "protocol_result": "Not a harness action chunk: accept was put directly in actions, expected type/text wrapper. No repair was sent.",
+  "original_private_event_log_sha256": "e3de3d56e90fcfa0550d7e47dd0e81974867c740b642908bdd17a363061ea918",
+  "original_observation_not_exported": true,
+  "unshared_peer_facts_not_exported": true
+}

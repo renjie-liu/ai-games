@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "external_requests": 0,
+  "source": "mock-tone; script harness; human test driver",
+  "host_origin": "preserved",
+  "private_assets": "404",
+  "watch_and_missing_token": "403",
+  "arbitrary_text": "400",
+  "paused_and_disabled": "409",
+  "cache": "one reservation for two plays",
+  "used": {
+    "requests": 1,
+    "characters": 24,
+    "microUsd": 0
+  },
+  "eventId": 6
+}
