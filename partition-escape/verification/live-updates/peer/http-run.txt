@@ -1,0 +1,58 @@
+[
+  {
+    "case": "delivery",
+    "source": "offline-fixture",
+    "realModelRequests": 0,
+    "engineOutcome": "applied",
+    "roomEventIds": [
+      3,
+      4
+    ],
+    "requestId": "243ad60ca79c5081b02d6a14",
+    "contextSends": 1,
+    "ledgerTextBytes": 2067,
+    "passed": true
+  },
+  {
+    "case": "pause-before-flush",
+    "source": "offline-fixture",
+    "realModelRequests": 0,
+    "engineOutcome": "applied",
+    "roomEventIds": [
+      3,
+      4
+    ],
+    "requestId": "f218003a0433c674b2d3555e",
+    "contextSends": 0,
+    "ledgerTextBytes": 1125,
+    "passed": true
+  },
+  {
+    "case": "speech-before-flush",
+    "source": "offline-fixture",
+    "realModelRequests": 0,
+    "engineOutcome": "applied",
+    "roomEventIds": [
+      3,
+      4
+    ],
+    "requestId": "c601bc9585187383edf218d4",
+    "contextSends": 0,
+    "ledgerTextBytes": 1125,
+    "passed": true
+  },
+  {
+    "case": "stop-before-flush",
+    "source": "offline-fixture",
+    "realModelRequests": 0,
+    "engineOutcome": "applied",
+    "roomEventIds": [
+      3,
+      4
+    ],
+    "requestId": "ccdbc4b489b3937f344cbfaf",
+    "contextSends": 0,
+    "ledgerTextBytes": 1125,
+    "passed": true
+  }
+]

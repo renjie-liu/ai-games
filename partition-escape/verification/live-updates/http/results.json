@@ -1,0 +1,61 @@
+{
+  "source": "offline-fixture; temporary test-only provider script",
+  "cases": [
+    {
+      "case": "delivery",
+      "source": "offline-fixture",
+      "realModelRequests": 0,
+      "engineOutcome": "applied",
+      "roomEventIds": [
+        3,
+        4
+      ],
+      "requestId": "94eae63bf3fa49bde1a9c85c",
+      "contextSends": 1,
+      "ledgerTextBytes": 2067,
+      "passed": true
+    },
+    {
+      "case": "pause-before-flush",
+      "source": "offline-fixture",
+      "realModelRequests": 0,
+      "engineOutcome": "applied",
+      "roomEventIds": [
+        3,
+        4
+      ],
+      "requestId": "02d579c337459c4746d319f0",
+      "contextSends": 0,
+      "ledgerTextBytes": 1125,
+      "passed": true
+    },
+    {
+      "case": "speech-before-flush",
+      "source": "offline-fixture",
+      "realModelRequests": 0,
+      "engineOutcome": "applied",
+      "roomEventIds": [
+        3,
+        4
+      ],
+      "requestId": "f51574e2d8fad072daae9168",
+      "contextSends": 0,
+      "ledgerTextBytes": 1125,
+      "passed": true
+    },
+    {
+      "case": "stop-before-flush",
+      "source": "offline-fixture",
+      "realModelRequests": 0,
+      "engineOutcome": "applied",
+      "roomEventIds": [
+        3,
+        4
+      ],
+      "requestId": "b4df2fc6963379488d5e240e",
+      "contextSends": 0,
+      "ledgerTextBytes": 1125,
+      "passed": true
+    }
+  ]
+}

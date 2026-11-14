@@ -1,0 +1,27 @@
+✔ confirmed action and shared clue coalesce with real receipt IDs, no private observation (6.917375ms)
+✔ same receipt replay and repeated shared fact create no extra sends (0.404125ms)
+✔ inspect, hint, say, failed and nonhuman commands do not enqueue (0.223ms)
+✔ debounce is not extended by a burst, interval and three-batch cap are hard (0.2505ms)
+✔ stop, pause and epoch supersession discard pending timer without retry (0.223333ms)
+✔ oversized published clue batch fails closed, never splits into unbounded sends (0.122166ms)
+✔ pending events and dedupe memory remain bounded under repeated operations (3.724792ms)
+✔ LiveHub invalidates pending updates alongside old tool tickets on real input and stop (0.947791ms)
+✔ new button update during same-epoch speech reaches worker queue; only old epoch is canceled (0.095125ms)
+✔ Live tool uses normal engine; shared action waits for human button (33.748959ms)
+✔ speech onset invalidates prior ticket, including late complete tool (32.776625ms)
+✔ re-observe after end gets fresh authority; duplicates do not execute (28.195542ms)
+✔ world revision, expiration, pause and wrong seat cannot bypass gate (112.998ms)
+✔ actual permissions and rules remain rejected, no forged seat or batch (29.455208ms)
+✔ own observe never includes other unshared notes (36.77875ms)
+✔ worklet fixture detects onset, retains preroll, limits silence, ends turn (40.24125ms)
+✔ runtime check admits only safe dependency codes, never subprocess text (1.251958ms)
+✔ missing runtime blocks start before worker or session mutation (0.452ms)
+✔ new game folder or corrupt ledger advertises zero real credit (1.389375ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 19
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2130.572959

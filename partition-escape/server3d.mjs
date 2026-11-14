@@ -105,6 +105,7 @@ const server=http.createServer(async(req,res)=>{
         if(Object.values(r.controllers).includes('live')){
           if(c.type==='pause')live.stop(r,'game_paused');
           else if(c.type==='say'&&result.ok&&live.get(r).started&&!live.get(r).ended)live.input(r,{type:'text',text:c.text});
+          else live.notify(r,role,c,result);
         }
         return send(res,200,{...result,view:r.view(role)});
       }

@@ -1,0 +1,16 @@
+✔ confirmed action and shared clue coalesce with real receipt IDs, no private observation (3.023167ms)
+✔ same receipt replay and repeated shared fact create no extra sends (0.257583ms)
+✔ inspect, hint, say, failed and nonhuman commands do not enqueue (0.127958ms)
+✔ debounce is not extended by a burst, interval and three-batch cap are hard (0.181833ms)
+✔ stop, pause, speech and epoch supersession discard pending timer without retry (0.2015ms)
+✔ oversized published clue batch fails closed, never splits into unbounded sends (0.122542ms)
+✔ pending events and dedupe memory remain bounded under repeated operations (6.8365ms)
+✔ LiveHub invalidates pending updates alongside old tool tickets on real input and stop (0.827792ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2098.789083

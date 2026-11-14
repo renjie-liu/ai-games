@@ -11,6 +11,7 @@ import time
 from live_budget import Ledger,LIMITS,MODEL,key
 from live_harness import execute
 from live_trace import write as write_public_index
+from live_updates import ContextUpdates
 from seat_worker import SeatAPI
 from seat_protocol import command as validate_command
 from live_runtime import check as check_runtime, diagnostic
@@ -46,13 +47,14 @@ class Session:
         self.ledger=Ledger(self.root/'fixture-ledger' if fixture else None,fixture=fixture)
         self.closed=asyncio.Event();self.session=None;self.reason='closed';self.speaking=False;self.drop_audio=False;self.turn_open=False
         self.calls={};self.canceled=set();self.tool_queue=asyncio.Queue();self.public=[];self.started=time.monotonic()
+        self.tool_busy=False;self.updates=ContextUpdates(self)
     def record(self,kind,**fields):
         row={'source':'offline-fixture' if self.fixture else 'gemini-live','kind':kind,'at_ms':round((time.monotonic()-self.started)*1000),'epoch':self.epoch,**fields}
         self.public.append(row)
         data={'model':MODEL,'events':self.public,'audit':self.ledger.row}
         (self.root/'live-public.json').write_text(json.dumps(data,ensure_ascii=False,indent=2))
         write_public_index(self.root,data,self.api.url.rsplit('/',1)[-1],self.seat)
-    def stop(self,reason):self.reason=reason;self.closed.set()
+    def stop(self,reason):self.reason=reason;self.closed.set();self.updates.cancel()
     async def send_content(self,text,complete=False):
         self.ledger.debit('text_bytes',len(text.encode()))
         if not self.fixture:await self.session.send_client_content(turns={'role':'user','parts':[{'text':text}]},turn_complete=complete)
@@ -68,29 +70,33 @@ class Session:
             await self.session.send_tool_response(function_responses=[types.FunctionResponse(id=call['id'],name=call['name'],response=result)])
     async def tool_loop(self):
         while not self.closed.is_set():
-            call=await self.tool_queue.get();a=alias(call['id']);fingerprint=json.dumps([call['name'],call['args']],sort_keys=True)
-            if call['id'] in self.calls:
-                saved=self.calls[call['id']]
-                result=saved[1] if saved[0]==fingerprint else {'ok':False,'code':'duplicate_call_conflict'}
-            elif call['id'] in self.canceled or call['epoch']!=self.epoch or self.speaking:
-                result={'ok':False,'code':'live_superseded'}
-            else:
-                self.ledger.debit('tools',1)
-                if call['name']=='observe' and set(call['args'])=={'scope'}:result=await self.observation(call['args']['scope'])
-                elif call['name']=='seat_command':
-                    args=dict(call['args']);ticket=args.pop('ticket',None)
-                    try:
-                        validate_command(args)
-                        result=await asyncio.to_thread(execute,self.api,self.seat,self.root,a,ticket,args,self.fixture)
-                        # Fresh own-seat result stays on the private model channel only.
-                        if result.get('view'):result['view']=slim(result['view'])
-                        self.record('tool_result',call_alias=a,receipt=result.get('receipt'),harness_run=result.get('harness_run'),harness_chunk=result.get('harness_chunk'),reason_status='not_provided')
-                        emit({'type':'tool','callAlias':a,'receipt':result.get('receipt'),'harnessRun':result.get('harness_run'),'harnessChunk':result.get('harness_chunk')})
-                    except (ValueError,TypeError):result={'ok':False,'code':'invalid_tool'}
-                else:result={'ok':False,'code':'unknown_tool'}
-                self.calls[call['id']]=(fingerprint,result)
-            self.record('tool_response',call_alias=a,tool=call['name'] if call['name'] in ('observe','seat_command') else 'unknown',ok=bool(result.get('ok')),code=result.get('code') or result.get('receipt',{}).get('code'))
-            await self.respond(call,result)
+            call=await self.tool_queue.get();self.tool_busy=True
+            try:
+                a=alias(call['id']);fingerprint=json.dumps([call['name'],call['args']],sort_keys=True)
+                if call['id'] in self.calls:
+                    saved=self.calls[call['id']]
+                    result=saved[1] if saved[0]==fingerprint else {'ok':False,'code':'duplicate_call_conflict'}
+                elif call['id'] in self.canceled or call['epoch']!=self.epoch or self.speaking:
+                    result={'ok':False,'code':'live_superseded'}
+                else:
+                    self.ledger.debit('tools',1)
+                    if call['name']=='observe' and set(call['args'])=={'scope'}:result=await self.observation(call['args']['scope'])
+                    elif call['name']=='seat_command':
+                        args=dict(call['args']);ticket=args.pop('ticket',None)
+                        try:
+                            validate_command(args)
+                            result=await asyncio.to_thread(execute,self.api,self.seat,self.root,a,ticket,args,self.fixture)
+                            # Fresh own-seat result stays on the private model channel only.
+                            if result.get('view'):result['view']=slim(result['view'])
+                            self.record('tool_result',call_alias=a,receipt=result.get('receipt'),harness_run=result.get('harness_run'),harness_chunk=result.get('harness_chunk'),reason_status='not_provided')
+                            emit({'type':'tool','callAlias':a,'receipt':result.get('receipt'),'harnessRun':result.get('harness_run'),'harnessChunk':result.get('harness_chunk')})
+                        except (ValueError,TypeError):result={'ok':False,'code':'invalid_tool'}
+                    else:result={'ok':False,'code':'unknown_tool'}
+                    self.calls[call['id']]=(fingerprint,result)
+                self.record('tool_response',call_alias=a,tool=call['name'] if call['name'] in ('observe','seat_command') else 'unknown',ok=bool(result.get('ok')),code=result.get('code') or result.get('receipt',{}).get('code'))
+                await self.respond(call,result)
+            finally:
+                self.tool_busy=False;self.tool_queue.task_done();self.updates.wake()
     async def input_loop(self):
         reader=asyncio.StreamReader(limit=30000);protocol=asyncio.StreamReaderProtocol(reader)
         await asyncio.get_running_loop().connect_read_pipe(lambda:protocol,sys.stdin)
@@ -99,12 +105,14 @@ class Session:
             if not line:self.stop('browser_disconnected');return
             b=json.loads(line);kind=b.get('type')
             if kind=='stop':self.stop('user_stop');return
+            if kind=='game_update':self.updates.offer(b);continue
             if kind=='start':
+                self.updates.cancel()
                 self.speaking=True;self.scope=b['scope'];self.epoch=b['epoch'];self.drop_audio=self.turn_open
                 self.record('interrupted',trigger='local_voice');emit({'type':'interrupted','epoch':self.epoch})
                 if not self.fixture:await self.session.send_realtime_input(activity_start={})
             elif kind=='end':
-                self.speaking=False
+                self.speaking=False;self.turn_open=True
                 await self.send_content('Control scope '+self.scope+'. Previous tickets are invalid. Use observe if you need a current observation.',False)
                 if not self.fixture:await self.session.send_realtime_input(activity_end={})
                 self.turn_open=True
@@ -116,7 +124,8 @@ class Session:
                     from google.genai import types
                     await self.session.send_realtime_input(audio=types.Blob(data=audio,mime_type='audio/pcm;rate=16000'))
             elif kind=='text':
-                self.scope=b['scope'];self.epoch=b['epoch'];self.drop_audio=self.turn_open
+                self.updates.cancel()
+                self.scope=b['scope'];self.epoch=b['epoch'];self.drop_audio=self.turn_open;self.turn_open=True
                 await self.send_content(json.dumps({'player_message':b['text'],'control_scope':self.scope},ensure_ascii=False),True)
     async def receive_loop(self):
         while not self.closed.is_set():
@@ -145,7 +154,7 @@ class Session:
                     if t and t.text:emit({'type':'transcript','speaker':who,'text':t.text[:1000],'epoch':self.epoch})
                 if content.turn_complete:
                     self.ledger.debit('turns',1);self.turn_open=False;self.drop_audio=False
-                    self.record('turn_complete');emit({'type':'turn_complete'})
+                    self.record('turn_complete');emit({'type':'turn_complete'});self.updates.wake()
     async def fixture_loop(self,initial):
         emit({'type':'ready','source':'offline-fixture','model':'offline-fixture','seconds':60})
         # Artificial PCM tone, never a synthesized voice or environmental recording.
@@ -173,7 +182,7 @@ class Session:
             initial=await self.observation(self.scope)
             if not initial.get('ok'):raise RuntimeError('initial_observation_failed')
             if self.fixture:
-                tasks=[asyncio.create_task(self.input_loop()),asyncio.create_task(self.tool_loop()),asyncio.create_task(self.fixture_loop(initial))]
+                tasks=[asyncio.create_task(self.input_loop()),asyncio.create_task(self.tool_loop()),asyncio.create_task(self.updates.run()),asyncio.create_task(self.fixture_loop(initial))]
                 done,_=await asyncio.wait(tasks,timeout=LIMITS['seconds'],return_when=asyncio.FIRST_COMPLETED)
                 for task in done:
                     if task.exception():raise task.exception()
@@ -184,7 +193,7 @@ class Session:
                     async with client.aio.live.connect(model=MODEL,config=parsed_config) as session:
                         self.session=session;self.record('connected');emit({'type':'ready','source':'gemini-live','model':MODEL,'seconds':60})
                         await self.send_content(json.dumps({'initial_observation':initial,'request':'先查看自己的hatch，再向搭档打个简短招呼。'},ensure_ascii=False),True)
-                        tasks=[asyncio.create_task(self.input_loop()),asyncio.create_task(self.tool_loop()),asyncio.create_task(self.receive_loop())]
+                        tasks=[asyncio.create_task(self.input_loop()),asyncio.create_task(self.tool_loop()),asyncio.create_task(self.updates.run()),asyncio.create_task(self.receive_loop())]
                         done,_=await asyncio.wait([*tasks,asyncio.create_task(self.closed.wait())],return_when=asyncio.FIRST_COMPLETED)
                         for task in done:
                             if not task.cancelled() and task.exception():raise task.exception()
@@ -196,7 +205,7 @@ class Session:
             numeric=getattr(error,'code',None) or getattr(getattr(error,'rcvd',None),'code',None)
             self.record('provider_or_runtime_error',error_class=type(error).__name__,diagnostic_code=diagnostic(error),numeric_code=numeric if isinstance(numeric,int) else None)
         finally:
-            self.closed.set()
+            self.closed.set();self.updates.cancel()
             for task in tasks:task.cancel()
             await asyncio.gather(*tasks,return_exceptions=True)
             if client:

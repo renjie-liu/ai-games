@@ -1,0 +1,66 @@
+{
+  "real_requests": 0,
+  "network_blocked": true,
+  "results": [
+    {
+      "scenario": "idle",
+      "transport_calls": 1,
+      "all_turn_complete_false": true,
+      "ledger_text_bytes": 521,
+      "statuses": [
+        "queued",
+        "send_attempt",
+        "transport_sent"
+      ],
+      "fixture_ledger_only": true
+    },
+    {
+      "scenario": "busy_merge",
+      "transport_calls": 1,
+      "all_turn_complete_false": true,
+      "ledger_text_bytes": 719,
+      "statuses": [
+        "queued",
+        "queued",
+        "send_attempt",
+        "transport_sent"
+      ],
+      "fixture_ledger_only": true
+    },
+    {
+      "scenario": "scope_cancel",
+      "transport_calls": 0,
+      "all_turn_complete_false": true,
+      "ledger_text_bytes": 0,
+      "statuses": [
+        "queued",
+        "canceled"
+      ],
+      "fixture_ledger_only": true
+    },
+    {
+      "scenario": "budget",
+      "transport_calls": 0,
+      "all_turn_complete_false": true,
+      "ledger_text_bytes": 8000,
+      "statuses": [
+        "queued",
+        "send_attempt",
+        "send_failed_or_canceled_no_retry"
+      ],
+      "fixture_ledger_only": true
+    },
+    {
+      "scenario": "inflight_stop",
+      "transport_calls": 1,
+      "all_turn_complete_false": true,
+      "ledger_text_bytes": 521,
+      "statuses": [
+        "queued",
+        "send_attempt",
+        "transport_sent"
+      ],
+      "fixture_ledger_only": true
+    }
+  ]
+}
