@@ -661,20 +661,20 @@ function renderMcp() {
     ['evaluate_bot', '对一群对手、多图、多种子、换边，给胜率表和最惨的几场'], ['run_tournament', '循环赛积分榜']];
   const code = (text) => { const pre = el('pre', { text }); return el('div', {}, el('button', { class: 'btn copy', type: 'button', text: '复制', onclick: () => copyText(text) }), pre); };
   $('mcp').replaceChildren(
-    el('p', { text: '这个页面里的引擎和命令行、MCP 服务用的是同一份代码。把项目包解压到本地，任何支持 MCP 的 Agent（Claude Code、Codex、Cursor、OpenCode…）就能自己读规则、设计蓝图、写策略、跑比赛、看战报再迭代，全程离线。' }),
+    el('p', { text: '这个页面里的引擎和命令行、MCP 服务用的是同一份代码。把这个项目放到本地（克隆仓库或解压项目包），任何支持 MCP 的 Agent（Claude Code、Codex、Cursor、OpenCode…）就能自己读规则、设计蓝图、写策略、跑比赛、看战报再迭代，全程离线。' }),
     el('h2', { text: '1. 启动' }),
-    code('unzip ironyard.zip && cd ironyard        # Node 20+，引擎和 MCP 服务零依赖\nnode node/cli.js tournament                 # 先看内置 bot 打一轮'),
+    code('cd ironyard                                 # Node 20+，引擎和 MCP 服务零依赖\nnode node/cli.js tournament                 # 先看内置 bot 打一轮'),
     el('h2', { text: '2. 接到 Agent 上' }),
     el('h3', { text: 'Claude Code（stdio）' }), code('claude mcp add ironyard -- node /绝对路径/ironyard/node/mcp-server.js'),
     el('h3', { text: '通用 JSON 配置（Cursor、Codex 等）' }), code('{\n  "mcpServers": {\n    "ironyard": { "command": "node", "args": ["/绝对路径/ironyard/node/mcp-server.js"] }\n  }\n}'),
-    el('h3', { text: 'HTTP（Streamable HTTP，给远程或多个 Agent 共用）' }), code('node node/mcp-server.js --http 8787\nclaude mcp add --transport http ironyard http://127.0.0.1:8787/mcp'),
+    el('h3', { text: 'HTTP（Streamable HTTP，给远程或多个 Agent 共用）' }), code('node node/mcp-server.js --http 8787\nclaude mcp add --transport http ironyard http://127.0.0.1:8787/mcp\n\n# 让别的机器接进来：监听所有网卡，并要求口令\nIRONYARD_TOKEN=你的口令 node node/mcp-server.js --http 8787 --host 0.0.0.0\nclaude mcp add --transport http ironyard http://服务器地址:8787/mcp --header "Authorization: Bearer 你的口令"'),
     el('h2', { text: '3. Agent 能用的工具' }),
     el('div', { class: 'scroll-x' }, el('table', {}, el('tbody', {}, ...tools.map(([n, d]) => el('tr', {}, el('td', {}, el('code', { text: n })), el('td', { text: d })))))),
     el('h2', { text: '4. 一句话开工' }),
     code('用 ironyard 的工具：先 get_rules，然后给 2v2 设计两辆互补的车并写控制器，submit_bot 之后用 evaluate_bot 迭代，直到对全部内置 bot 胜率过 60%。'),
     el('p', { class: 'note', text: '服务还自带一个 build-a-bot 提示词模板和 ironyard://rules 资源。Agent 提交的 bot 存在 user_bots/ 目录；run_match 加 save_replay 会把回放写到 replays/，用“对战”页的“导入回放 JSON”就能在这里看。' }),
     el('h2', { text: '安全边界' }),
-    el('p', { text: '控制器在 Node 的 vm 上下文和工作线程里运行，死循环会被看门狗杀掉并判负。vm 能挡住误用，但不是对抗恶意代码的沙箱：现在的形态适合本机和自己信任的 Agent。要开放给陌生人提交，需要先换成 QuickJS/isolated-vm 或容器隔离。HTTP 模式默认只监听 127.0.0.1。' }));
+    el('p', { text: '每辆车的控制器跑在自己的 vm 上下文里，引擎和它之间只传字符串和数字，不给它任何引擎自己的对象：它拿不到 process、require、文件和网络，改不了引擎或别的车看到的东西，没有时钟，回合之外没有它的代码在跑；死循环和吃光内存由工作线程的看门狗处理，记到那个控制器头上。这比“只防君子”强得多，但 vm 不是进程或容器那样的安全边界：对陌生人开放提交时，把整个服务放进容器。HTTP 模式默认只监听 127.0.0.1；口令只有一个，所有接进来的人共用一个 bot 目录。这个网页里引擎和控制器在同一个 Web Worker 里，没有隔离：这里跑的是你自己贴进来的代码。' }));
 }
 
 // ── boot ────────────────────────────────────────────────────────────────
