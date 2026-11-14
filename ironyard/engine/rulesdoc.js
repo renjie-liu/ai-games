@@ -18,12 +18,12 @@ function partRow(p) {
     if (p.projSpeed) bits.push(`shot speed ${p.projSpeed} m/s`); else bits.push('instant hit');
     bits.push(p.energyShot ? `${p.energyShot} energy/shot` : `${p.energyUse} energy/s`);
     if (p.splash) bits.push(p.weapon === 'lob' ? `blast ${p.splash.r} m, up to ${p.splash.max} pieces` : `splash ${p.splash.r} m x${p.splash.f}`);
-    if (p.rope) bits.push(`cable holds ${p.rope.hold} s, reels in ${p.rope.reel} m/s down to ${p.rope.min} m`);
+    if (p.rope) bits.push(`cable holds ${p.rope.hold} s, reels in ${p.rope.reel} m/s down to ${p.rope.min} m`, `pulled tight it tears the hooked piece at ${p.rope.tear} hp/s`);
     if (p.recoil) bits.push(`recoil ${p.recoil} N·s`);
     bits.push(p.dtype);
   }
   if (p.punch) bits.push(`${p.punch.dmg} dmg and ${p.punch.impulse} N·s per punch`, `reach ${p.punch.reach} m`, `${p.punch.cooldown} s to reset`, `${p.punch.energy} energy/punch`);
-  if (p.blast) bits.push(`blast ${p.blast.dmg} dmg, ${p.blast.r} m, up to ${p.blast.max} pieces per vehicle`, `fuse ${p.blast.fuse} s when dropped`);
+  if (p.blast) bits.push(`blast ${p.blast.dmg} dmg, ${p.blast.r} m, up to ${p.blast.max} pieces per vehicle`, `let go, it is flung ${p.fling} m/s the way it faces and goes off on the first other vehicle it reaches, or after ${p.blast.fuse} s`);
   if (p.weapon === 'melee') bits.push(`${p.dps} dps on contact`, `${p.energyUse} energy/s while cutting`);
   if (p.force) bits.push(`${p.force} N drive`, `grip ${p.grip}`);
   if (p.lift) bits.push(`lift ${p.lift} kg`, `${p.energyUse} energy/s`);
@@ -280,7 +280,7 @@ A mortar shell in \`projectiles\` tells you where and when it lands — drive ou
   target: id,                 // missile lock (enemy id) and/or repair-arm priority (ally id)
   shield: false, repair: false, melee: false, // switch those systems off to save energy (default on); melee covers saws and pistons
   detonate: true | [partIndex, ...],          // set off your kegs (all, or those) where they sit
-  jettison: [partIndex, ...],                 // let go of pieces (not the core): a keg rolls on and blows when its fuse is up, anything else is just gone
+  jettison: [partIndex, ...],                 // let go of pieces (not the core): a keg is flung the way it faces and blows on the first other vehicle it reaches or when its fuse is up; anything else is just gone
   reel:  0..1,                                // wind in your harpoon cable
   release: true,                              // let go of whatever your harpoon holds
   say: anyJSON,               // ≤ ${R.sayLimit} chars; teammates read it next tick in state.messages
@@ -335,8 +335,10 @@ into pits, and picking the fight your build wins — out-range brawlers, out-tur
 against missiles and mortars, saw through shields.
 
 And the physical side: what on your vehicle burns and where the firebreaks are (\`validate_design\` reports the share of
-fireproof pieces); where your kegs sit when somebody shoots them; which way a blast or a punch will send you and
-what is behind you when it does; whether you are the heavier end of a cable. A vehicle that has lost its wheels and
+fireproof pieces); where your kegs sit when somebody shoots them, and which way they face — forward is a torpedo,
+backward a mine for whoever is chasing you; which way a blast or a punch will send you and what is behind you when it
+does; whether you are the heavier end of a cable, and what the hook has bitten into: a cable pulled tight tears that
+piece off, and everything only it was holding. A vehicle that has lost its wheels and
 its guns is out, so there are more ways to win than drilling for the core — and more ways to lose.
 `;
 }

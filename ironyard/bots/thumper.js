@@ -83,6 +83,9 @@ function tick(state, api) {
 }
 
 function guard(state, api, cmd) {
+  // a keg or a mortar shell about to go off here: nothing else matters until we are clear of it
+  const blast = api.util.threat(state);
+  if (blast) Object.assign(cmd, api.util.driveTo(state.self, blast.away, { reverse: true }));
   const s = state.self, nav = api.nav;
   if (s.hovering) return cmd;
   const c = Math.cos(s.heading), n = Math.sin(s.heading);

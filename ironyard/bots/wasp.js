@@ -85,6 +85,9 @@ function tick(state, api) {
   if (zoneEdge) goal = state.zone;
   const wp = route.next(self, goal.x, goal.y, state.tick);
   Object.assign(cmd, U.driveTo(self, wp));
+  // a keg or a mortar shell about to go off here: get clear of it first
+  const blast = U.threat(state);
+  if (blast) Object.assign(cmd, U.driveTo(self, blast.away, { reverse: true }));
   // if the lift ever fails (energy), respect the holes like everyone else
   if (!hov) {
     const px = self.x + self.vx * 0.8, py = self.y + self.vy * 0.8;

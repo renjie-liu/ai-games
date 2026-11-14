@@ -47,7 +47,7 @@ function newStats() {
     itemsPicked: 0, itemsUsed: 0, distance: 0, rams: 0,
     timeStunned: 0, timeEnergyStarved: 0, timeFireOutOfArc: 0, timeOutsideZone: 0,
     timeOn: { mud: 0, ice: 0, lava: 0 }, timeStill: 0, timeNoEnemyVisible: 0,
-    timeBurning: 0, piecesBurnt: 0, tilesBroken: 0, punches: 0, hooks: 0, timeTethered: 0,
+    timeBurning: 0, piecesBurnt: 0, tilesBroken: 0, punches: 0, hooks: 0, timeTethered: 0, piecesTorn: 0,
   };
 }
 
@@ -216,7 +216,7 @@ export class World {
 
   // ── damage ────────────────────────────────────────────────────────────
   /** shotAng: travel direction of the shot (radians), used for slope ricochets. */
-  damage(v, p, amount, dtype, src, shotAng) {
+  damage(v, p, amount, dtype, src, shotAng, cause) {
     if (!p.alive || !v.alive || !(amount > 0)) return 0;
     const def = p.def;
     if (def.deflect && shotAng !== undefined && (dtype === 'kinetic' || dtype === 'explosive')
@@ -238,7 +238,7 @@ export class World {
       // decor riding on this piece gets shaken off
       for (const d of v.decor) if (d.alive && d.under === p.i) { d.hp -= amount; if (d.hp <= 0) this.destroy(v, d, src, dtype); }
     }
-    if (p.hp <= 0) this.destroy(v, p, src, dtype);
+    if (p.hp <= 0) this.destroy(v, p, src, cause || dtype);
     return dealt;
   }
 
@@ -482,8 +482,11 @@ export class World {
   jettison(v, p) {
     if (!p.alive || p === v.core) return;
     if (p.def.blast) {
-      this.bombs.push({ id: this.nextId++, x: p.wx, y: p.wy, vx: v.vx - v.w * (p.wy - v.y), vy: v.vy + v.w * (p.wx - v.x),
+      // it leaves the way it faces, `fling` m/s faster than the piece of car it sat on was going — and the car feels it go
+      const a = v.th + DIR_ANGLE[p.dir], f = p.def.fling || 0, cx = Math.cos(a) * f, cy = Math.sin(a) * f;
+      this.bombs.push({ id: this.nextId++, x: p.wx, y: p.wy, vx: v.vx - v.w * (p.wy - v.y) + cx, vy: v.vy + v.w * (p.wx - v.x) + cy,
         fuse: p.def.blast.fuse, blast: p.def.blast, owner: v.id, team: v.team });
+      if (f) this.push(v, p.wx, p.wy, -cx * p.def.mass, -cy * p.def.mass);
       v.stats.itemsUsed++;
     }
     this.destroy(v, p, null, 'jettisoned');
@@ -504,6 +507,14 @@ export class World {
       }
       if (tileCodeAt(this.map, b.x, b.y) === T.pit) continue;   // down the hole, harmlessly
       b.fuse -= dt;
+      // a keg that rolls into a car goes off on it, there and then — any car but the one that let it go
+      if (!b.barrel && b.fuse > 0) {
+        const reach = this.rules.bombTouch * this.rules.bombTouch;
+        touch: for (const v of this.vehicles) {
+          if (!v.alive || v.id === b.owner || (v.x - b.x) ** 2 + (v.y - b.y) ** 2 > (v.radius + 1) * (v.radius + 1)) continue;
+          for (const p of v.parts) if (p.alive && !p.decor && (p.wx - b.x) ** 2 + (p.wy - b.y) ** 2 < reach) { b.fuse = 0; b.touched = v.id; break touch; }
+        }
+      }
       if (b.fuse <= 0) this.pendingBlasts.push({ x: b.x, y: b.y, blast: b.blast, src: b.owner >= 0 ? this.vehicles[b.owner] : null });
       else keep.push(b);
     }
@@ -543,6 +554,11 @@ export class World {
           const j = want / k;
           this.push(a, pa.wx, pa.wy, nx * j, ny * j);
           this.push(b, pb.wx, pb.wy, -nx * j, -ny * j);
+        }
+        // a cable under load works the piece it is hooked into loose: held long enough, the piece comes away
+        if (rope.tear) {
+          this.damage(b, pb, rope.tear * dt, 'kinetic', a, undefined, 'torn');
+          if (!pb.alive) a.stats.piecesTorn++;
         }
       }
       keep.push(t);

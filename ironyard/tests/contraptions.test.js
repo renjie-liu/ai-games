@@ -125,8 +125,9 @@ test('powder keg: goes off where it sits or where it was dropped, spares nobody,
   assert.ok(q.burning > 0, 'and set alight');
   assert.ok(p.stats.byType.explosive > 150, 'the damage to the enemy is the carrier’s');
 
-  // jettison: the keg rolls on at the speed it was dropped at, then goes off; a hole swallows it
+  // jettison: the keg is flung the way it faces, on top of the speed the car had, rolls, then goes off; a hole swallows it
   const drop = duel(bomber, car(), { gap: 16 });
+  drop.q.y += 12; drop.w.updateCells(drop.q);      // out of its way
   drop.p.vx = 6;
   drop.w.setCommand(drop.p, { jettison: [piece(drop.p, 'keg').i], throttle: -1 });
   drop.run(0.05);
@@ -135,13 +136,33 @@ test('powder keg: goes off where it sits or where it was dropped, spares nobody,
   assert.equal(drop.p.stats.damageTaken, 0, 'letting go of it hurts nobody');
   const seen = drop.w.observeAll()[1].bombs;
   assert.equal(seen.length, 1, 'the other side can see it coming');
-  assert.ok(seen[0].fuse > 1.3 && seen[0].vx > 4 && seen[0].r === PARTS.keg.blast.r);
+  assert.ok(seen[0].fuse > PARTS.keg.blast.fuse - 0.2 && seen[0].vx > 6 + PARTS.keg.fling - 1 && seen[0].r === PARTS.keg.blast.r, `leaves at ${seen[0].vx} m/s`);
   assert.equal(drop.w.frame().k.length, 1);
   const x0 = drop.w.bombs[0].x;
-  drop.run(1.6);
+  drop.run(PARTS.keg.blast.fuse - 0.2);
+  assert.equal(drop.w.bombs.length, 1, 'with nothing in its way it rolls until the fuse runs out');
+  drop.run(0.3);
   assert.equal(drop.w.bombs.length, 0);
   const boom = drop.w.events.filter((e) => e.k === 'boom').pop();
   assert.ok(boom.x > x0 + 2 && boom.r === PARTS.keg.blast.r, `it went off ${(boom.x - x0).toFixed(1)} m further on`);
+  assert.equal(drop.q.stats.damageTaken, 0, 'and out of reach of the car it was meant for');
+
+  // one that faces backwards is left behind instead: a mine for whoever is following
+  const mine = duel(car([{ type: 'keg', x: 0, y: 2, z: 1, dir: 'S' }]), car(), { gap: 16 });
+  mine.p.vx = PARTS.keg.fling;
+  mine.w.setCommand(mine.p, { jettison: [piece(mine.p, 'keg').i] });
+  mine.run(0.05);
+  assert.ok(Math.abs(mine.w.bombs[0].vx) < 1.5, `lies about where it was let go (${mine.w.bombs[0].vx.toFixed(1)} m/s)`);
+
+  // let go at a car close enough to roll into, it goes off against that car — not against the one that let it go
+  const roll = duel(bomber, car(), { gap: 9 });
+  roll.p.vx = 9;
+  roll.w.setCommand(roll.p, { jettison: [piece(roll.p, 'keg').i], throttle: -1, brake: 1 });
+  roll.run(0.3);
+  assert.equal(roll.w.bombs.length, 1, 'its own car does not set it off');
+  roll.run(0.7);
+  assert.equal(roll.w.bombs.length, 0, 'the other car does, well inside the fuse');
+  assert.ok(roll.q.stats.damageTaken > 150 && roll.p.stats.byType.explosive > 150, `on contact (${roll.q.stats.damageTaken.toFixed(0)})`);
 
   const pit = duel(bomber, car(), { gap: 30, map: MAPS.sumo, at: { x: 14, y: 19 } });
   pit.p.vx = 9;
@@ -165,7 +186,8 @@ test('harpoon: ties two vehicles together; the cable only pulls, winds in, lets 
     ...[-1, 0, 1].flatMap((x) => [-2, -1, 0, 1, 2].map((y) => ({ type: 'armor', x, y, z: 0 }))),
     { type: 'track', x: -2, y: -1, z: 0 }, { type: 'track', x: 2, y: -1, z: 0 },
     { type: 'core', x: 0, y: 0, z: 1 }, { type: 'harpoon', x: 0, y: 1, z: 1, dir: 'N' }, { type: 'reactor', x: 0, y: -1, z: 1 }, { type: 'battery', x: 1, y: -1, z: 1 }]);
-  const { w, p, q, run } = duel(tug, car(), { gap: 8 });
+  const nosed = car([{ type: 'armor', x: 0, y: 3, z: 0 }]);   // something for the hook to hold on to: a cable tears plates off
+  const { w, p, q, run } = duel(tug, nosed, { gap: 8 });
   assert.ok(p.mass > q.mass * 2);
   w.setCommand(p, { fire: true, aim: { x: q.x, y: q.y } });
   run(0.5);
@@ -193,6 +215,7 @@ test('harpoon: ties two vehicles together; the cable only pulls, winds in, lets 
   run(1);
   assert.equal(w.tethers.length, 1);
   assert.equal(p.stats.hooks, 1);
+  assert.ok(q.parts[t.bi].type === 'armor' && q.parts[t.bi].alive && q.parts[t.bi].hp < q.parts[t.bi].maxHp, 'the pull has worked on the piece it holds');
   // release
   w.setCommand(p, { release: true });
   run(0.1);
@@ -212,6 +235,19 @@ test('harpoon: ties two vehicles together; the cable only pulls, winds in, lets 
   cut.w.destroy(cut.q, cut.q.parts[cut.w.tethers[0].bi], cut.p, 'test');
   cut.run(0.05);
   assert.equal(cut.w.tethers.length, 0);
+  // pulled tight, the cable tears the piece it bit into off the car
+  const rip = duel(tug, car(), { gap: 6 });
+  rip.w.setCommand(rip.p, { fire: true, aim: { x: rip.q.x, y: rip.q.y } });
+  rip.run(0.4);
+  const held = rip.q.parts[rip.w.tethers[0].bi];
+  assert.equal(held.type, 'plate');
+  rip.w.setCommand(rip.p, { brake: 1 });
+  rip.w.setCommand(rip.q, { throttle: -1 });
+  rip.run(0.8 + held.maxHp / PARTS.harpoon.rope.tear);
+  assert.equal(held.alive, false, 'the plate came away');
+  assert.ok(rip.w.events.some((e) => e.k === 'part' && e.v === rip.q.id && e.i === held.i && e.c === 'torn'));
+  assert.equal(rip.p.stats.piecesTorn, 1);
+  assert.equal(rip.w.tethers.length, 0, 'and the cable with it');
   // a shield turns the hook away
   const bubble = duel(tug, car([{ type: 'shieldgen', x: 1, y: 0, z: 1 }]), { gap: 6 });
   bubble.w.setCommand(bubble.p, { fire: true, aim: { x: bubble.q.x, y: bubble.q.y } });
@@ -245,7 +281,7 @@ test('piston: punches what is in front of it, takes the same shove back, breaks 
   depot.run(0.1);
   assert.equal(depot.p.stats.punches, 1);
   assert.equal(depot.p.vy, 0, 'a crate does not push back');
-  depot.run(2.3);
+  depot.run(PARTS.piston.punch.cooldown + 0.1);
   assert.equal(depot.p.stats.punches, 2);
   assert.equal(depot.w.map.tiles[22 * 32 + 8], 0, 'through');
   assert.equal(depot.p.stats.tilesBroken, 1);

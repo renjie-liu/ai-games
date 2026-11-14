@@ -1,4 +1,4 @@
-// BOXER — piston bruiser. Two piston rams either side of a plow, monster wheels, a booster, two machine guns.
+// BOXER — piston bruiser. Two piston rams either side of a plow, monster wheels, a booster, one machine gun.
 // A piston hits for little damage but throws what it hits: a 250 kg car leaves at 6 m/s.
 // So Boxer does not try to break anybody. It works out which way the nearest hole, lava
 // pool or powder barrel lies from its opponent, goes round to the other side, and punches.
@@ -8,7 +8,7 @@ const design = (ctx, api) => api.util.blueprint('Boxer', {
   deck: [
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  .  .  .  .  .  .',
-    '.  .  m^ /^ /^ /^ m^ .  .',
+    '.  .  m^ /^ /^ /^ .  .  .',
     '.  .  b  a  @  a  b  .  .',
     '.  .  .  b  b  b  .  .  .',
     '.  .  .  .  t  .  .  .  .',

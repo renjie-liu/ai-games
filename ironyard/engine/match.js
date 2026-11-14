@@ -8,7 +8,7 @@ import { World, WIRE_CAP } from './sim.js';
 import { controllerRealm, makeUtil, makeFollower } from './realm.js';
 import { WRAP_LINES } from './botwrap.js';
 
-export const ENGINE_VERSION = '0.4.0';
+export const ENGINE_VERSION = '0.5.0';
 
 export class MatchError extends Error {
   constructor(message, detail) { super(message); this.name = 'MatchError'; this.detail = detail; }
@@ -209,6 +209,8 @@ export function runMatch(o) {
         timeEnergyStarved: rnd(s.timeEnergyStarved), timeFireOutOfArc: rnd(s.timeFireOutOfArc),
         timeOutsideZone: rnd(s.timeOutsideZone), timeNoEnemyVisible: rnd(s.timeNoEnemyVisible),
         timeOn: { mud: rnd(s.timeOn.mud), ice: rnd(s.timeOn.ice), lava: rnd(s.timeOn.lava) },
+        timeBurning: rnd(s.timeBurning), piecesBurnt: s.piecesBurnt, tilesBroken: s.tilesBroken,
+        punches: s.punches, hooks: s.hooks, timeTethered: rnd(s.timeTethered), piecesTorn: s.piecesTorn,
       },
       cpu: now && c.calls ? { avgMs: Math.round((c.cpuTotal / c.calls) * 1000) / 1000, maxMs: Math.round(c.cpuMax * 100) / 100 } : null,
       violations: v.violations, cutOff: v.cutOff, errors: c.errors, logs: c.logs,

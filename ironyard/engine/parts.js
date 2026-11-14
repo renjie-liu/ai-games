@@ -184,20 +184,20 @@ export const PARTS = {
     name: 'Harpoon 1x2', zh: '鱼叉 1×2', cat: 'weapon', glyph: 'H', layer: 'deck', size: [1, 2], directional: true, lane: 'front', weapon: 'hook',
     cost: 90, mass: 10, hp: 120, burn: 0.4,
     dmg: 10, cooldown: 6, projSpeed: 32, range: 11, arc: deg(30), traverse: 3, energyShot: 10, dtype: 'kinetic',
-    rope: { min: 1.5, reel: 3, hold: 7, reelEnergy: 6 },
-    desc: 'Fires a hook on a cable. If it bites, the two vehicles are tied together for up to 7 s: neither gets further from the other than the cable is long, and `reel` winds it in at 3 m/s. The heavier one, or the one with more grip, decides where both go. `release` lets go. A shield turns the hook away.',
+    rope: { min: 1.5, reel: 3, hold: 7, reelEnergy: 6, tear: 45 },
+    desc: 'Fires a hook on a cable. If it bites, the two vehicles are tied together for up to 7 s: neither gets further from the other than the cable is long, and `reel` winds it in at 3 m/s. The heavier one, or the one with more grip, decides where both go. While the cable is pulled tight it works the piece it bit into loose at 45 hp/s (armour a quarter of that): held, the piece comes off, with whatever only it was holding on. `release` lets go. A shield turns the hook away.',
   },
   piston: {
     name: 'Piston ram', zh: '活塞锤', cat: 'weapon', glyph: 'U', layer: 'chassis', directional: true, lane: 'front',
     cost: 70, mass: 12, hp: 150,
-    punch: { impulse: 1300, dmg: 30, reach: 0.75, cooldown: 2.2, energy: 14 },
-    desc: 'Punches whatever is right in front of it: 30 damage and a 1300 N·s shove — a 250 kg car leaves at 5 m/s — with the same shove back on you. Fires by itself when an enemy, a crate or a rolling bomb is in reach (`melee: false` holds it).',
+    punch: { impulse: 1300, dmg: 24, reach: 0.75, cooldown: 2.4, energy: 14 },
+    desc: 'Punches whatever is right in front of it: 24 damage and a 1300 N·s shove — a 250 kg car leaves at 5 m/s — with the same shove back on you. Fires by itself when an enemy, a crate or a rolling bomb is in reach (`melee: false` holds it).',
   },
   keg: {
-    name: 'Powder keg', zh: '火药桶', cat: 'weapon', glyph: 'K', layer: 'any', max: 4,
-    cost: 40, mass: 8, hp: 70, burn: 2,
-    blast: { dmg: 85, r: 3.2, max: 10, fuse: 1.5 },
-    desc: 'A bomb you carry. `detonate` sets it off where it sits; `jettison` drops it, still rolling, to go off 1.5 s later. Either way the blast hits everything within 3.2 m, you and your team included, throws it back and sets it alight — and anything that destroys the keg, or sets it on fire, sets it off.',
+    name: 'Powder keg', zh: '火药桶', cat: 'weapon', glyph: 'K', layer: 'any', directional: true, max: 4,
+    cost: 40, mass: 8, hp: 110, burn: 1.5, fling: 8,
+    blast: { dmg: 70, r: 3.2, max: 8, fuse: 2 },
+    desc: 'A bomb you carry. `detonate` sets it off where it sits; `jettison` flings it the way it faces, 8 m/s faster than you were going: it rolls about 10 m, and goes off against the first other vehicle it reaches or after 2 s. Facing forward it is a torpedo, facing back a mine for whoever is chasing. Either way the blast hits everything within 3.2 m, you and your team included, throws it back and sets it alight — and anything that destroys the keg, or sets it on fire, sets it off.',
   },
 
   // ── utility ────────────────────────────────────────────────────────────
@@ -344,7 +344,8 @@ export const RULES = {
   heatDecay: 0.1,          // heat a piece loses per second; it ignites at heat 1
   lavaHeat: 1.2,           // heat per second lava gives the chassis pieces of a vehicle standing in it
   blastHeat: 0.35,         // heat an ordinary blast gives each piece it damages (kegs and barrels ignite outright)
-  bombDrag: 5,             // m/s² a dropped keg loses while it rolls
+  bombDrag: 3,             // m/s² a dropped keg loses while it rolls
+  bombTouch: 0.7,          // m: a rolling keg this close to a piece of another car goes off on it
   wreckTime: 3,            // seconds a vehicle may go on with nothing that moves it and nothing that can hurt, before it counts as destroyed
   tickBudgetMs: 3,         // advisory per-decision CPU budget
   maxViolations: 40,       // exceptions / gross overruns before the controller is cut off

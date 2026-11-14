@@ -8,7 +8,7 @@ const design = (ctx, api) => api.util.blueprint('Angler', {
   deck: [
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  /^ :  /^ .  .  .',
-    '.  .  m^ a  H^ a  m^ .  .',
+    '.  .  m^ a  H^ a  .  .  .',
     '.  .  .  a  @  a  .  .  .',
     '.  .  .  b  t  b  .  .  .',
     '.  .  .  .  .  .  .  .  .',

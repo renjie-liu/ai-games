@@ -37,7 +37,7 @@ const AI_TEMPLATES = {
   wasp: '悬浮风筝：离敌 15 到 22 m，车头对敌倒退着放导弹。适合悬浮垫 + 导弹。',
   medic: '支援：跟着最残的队友修理，顺手开枪。适合维修臂 + 护盾。',
   pyro: '放火：冲到 4 m 内绕着喷，烧起来就换下一个；自己着火就找维修台。适合喷火器。',
-  sapper: '投弹：全速冲向敌人，在火药桶正好能滚到的距离松手，急刹后退。适合火药桶 + 快车。',
+  sapper: '投弹：隔着 7 到 10 m 把车头对准敌人的去向，把朝前的火药桶甩过去，敌人逼近就边退边扔。适合装在车头、朝前的火药桶。',
   angler: '钩锯：进 11 m 放鱼叉，把缆收到底，顶着锯；背后有熔岩就往后拖。适合鱼叉 + 圆锯。',
   boxer: '拳击：绕到敌人背对坑、熔岩或火药桶的那一侧，一锤打进去。适合活塞锤。',
 };
@@ -267,7 +267,7 @@ function renderReport() {
     const s = v.stats;
     return el('tr', {},
       el('td', {}, el('b', { class: 't' + v.team, text: v.name }), el('div', { class: 'note', text: v.bot })),
-      el('td', { text: v.alive ? '存活' : `${v.deathT}s ${({ fell: '坠落', burn: '烧毁', ram: '撞毁', melee: '锯毁', kinetic: '击毁', explosive: '炸毁', energy: '熔毁', fire: '烧毁', wrecked: '报废' })[v.deathCause] || v.deathCause}` }),
+      el('td', { text: v.alive ? '存活' : `${v.deathT}s ${({ fell: '坠落', burn: '烧毁', ram: '撞毁', melee: '锯毁', kinetic: '击毁', explosive: '炸毁', energy: '熔毁', fire: '烧毁', wrecked: '报废', torn: '扯碎' })[v.deathCause] || v.deathCause}` }),
       el('td', { class: 'n', text: Math.round(v.hpFrac * 100) + '%' }), el('td', { class: 'n', text: Math.round(s.damageDealt) }), el('td', { class: 'n', text: Math.round(s.damageTaken) }),
       el('td', { class: 'n', text: s.kills }), el('td', { class: 'n', text: s.accuracy == null ? '–' : Math.round(s.accuracy * 100) + '%' }), el('td', { class: 'n', text: Math.round(s.distance) + ' m' }),
       el('td', { class: 'n', text: s.timeFireOutOfArc + 's' }), el('td', { class: 'n', text: s.timeEnergyStarved + 's' }), el('td', { class: 'n', text: Math.round(s.deflected || 0) }),
@@ -311,9 +311,9 @@ function bindArena() {
 
 const PART_CN = {
   flamer: '短程火流。火流本身伤害很小：它把扫到的每块零件加热到着火，火再一块传一块。装甲、履带、核心烧不着；护盾挡得住。',
-  harpoon: '发射带缆的钩子。钩住之后两辆车被拴在一起最多 7 秒：谁也跑不出缆长，reel 以 3 m/s 收缆。更重、抓地更好的那一方说了算。release 松钩。护盾会把钩子弹开。',
-  piston: '打正前方贴着的东西：30 伤害加 1300 N·s 的一推（250 kg 的车以 5 m/s 飞出去），自己也吃同样的反冲。敌人、木箱、滚过来的火药桶进了范围就自动出锤（melee: false 可以按住）。',
-  keg: '随车带的炸弹。detonate 原地引爆；jettison 松手让它带着车速滚出去，1.5 秒后爆。爆炸不分敌我，3.2 m 内全部挨炸、被掀开、被点着；谁把桶打坏或者点着，桶就当场炸。',
+  harpoon: '发射带缆的钩子。钩住之后两辆车被拴在一起最多 7 秒：谁也跑不出缆长，reel 以 3 m/s 收缆。更重、抓地更好的那一方说了算。缆绳绷紧时，被钩住的那块零件每秒掉 45 血（装甲只掉四分之一）：拉够久，零件连同只靠它挂着的东西一起被扯下来。release 松钩。护盾会把钩子弹开。',
+  piston: '打正前方贴着的东西：24 伤害加 1300 N·s 的一推（250 kg 的车以 5 m/s 飞出去），自己也吃同样的反冲。敌人、木箱、滚过来的火药桶进了范围就自动出锤（melee: false 可以按住）。',
+  keg: '随车带的炸弹。detonate 原地引爆；jettison 把它朝自己的朝向甩出去（比车速快 8 m/s，能滚十来米），碰到第一辆别人的车就炸，否则 2 秒后炸：朝前是鱼雷，朝后是留给追兵的地雷。爆炸不分敌我，3.2 m 内全部挨炸、被掀开、被点着；谁把桶打坏或者点着，桶就当场炸。',
   core: '座舱，每车必须有且只有一个；核心没了车就没了，和核心断开的零件会掉。', plate: '薄底板，便宜。铺在底盘上当地板；放在上层很矮，炮可以越过它打。', plate2: '一片顶两颗凸点，单价更低，但碎就整片碎。',
   plate4: '一片顶四颗凸点，铺地最快最省，也是最大的一块弱点。', brick: '整高的砖，比底板结实；在上层会挡住炮口。', brick2: '两颗凸点的砖。',
   armor: '装甲砖，动能和爆炸伤害每次减 2（至少吃 25%），机枪打它只有一半；激光、锯和灼烧无视。', armor2: '两颗凸点的装甲砖，比两块 1×1 便宜一点，但碎就是两格一起碎。',

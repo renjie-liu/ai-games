@@ -1,60 +1,56 @@
-// SAPPER — bomb runner. Four powder kegs in the tail, two machine guns up front, and a
-// booster. A keg that is let go keeps the speed the car had, so Sapper charges, lets one
-// roll at just the distance it will cover before its fuse runs out, stamps on the brakes
-// and backs off: wheels stop a car in about a metre, the keg carries on without it.
-// With the kegs gone it is a light gun car that keeps its distance.
-const meta = { name: 'Sapper', author: 'ironyard', notes: 'Bombs: charges, rolls a powder keg into the enemy, brakes and backs off; 2 MGs for afterwards.' };
+// SAPPER — bomb thrower. Four powder kegs in the nose under an armoured lid, facing
+// forward, and two machine guns. A keg that is let go is flung the way it faces and goes off
+// against the first other car it reaches, so Sapper holds off at seven to ten metres, turns
+// its nose onto where the other car is going to be, and lets one go — never from so close
+// that the blast would reach back to it. Whoever comes for it gets one in the face while
+// Sapper backs away. With the kegs gone it is a light gun car that keeps its distance.
+const meta = { name: 'Sapper', author: 'ironyard', notes: 'Bombs: flings powder kegs from the nose at 7-10 m, backs off from anything that closes; 2 MGs for afterwards.' };
 
 const design = (ctx, api) => api.util.blueprint('Sapper', {
   deck: [
     '.  .  .  .  .  .  .  .  .',
-    '.  .  .  .  .  .  .  .  .',
-    '.  .  .  /^ /^ /^ .  .  .',
+    '.  .  .  a  .  a  .  .  .',
+    '.  .  .  a  .  a  .  .  .',
     '.  .  m^ a  @  a  m^ .  .',
     '.  .  .  a  w  a  .  .  .',
     '.  .  .  .  .  .  .  .  .',
+    '.  .  .  .  F  .  .  .  .',
     '.  .  .  .  .  .  .  .  .',
-    '.  .  .  l> F  l< .  .  .',
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  .  .  .  .  .  .',
   ],
   chassis: [
     '.  .  .  .  .  .  .  .  .',
-    '.  .  .  .  .  .  .  .  .',
-    '.  :  p  p  p  p  p  :  .',
+    '.  .  .  K^ p  K^ .  .  .',
+    '.  :  p  K^ p  K^ p  :  .',
     '.  O  p  p  r  p  p  O  .',
     '.  .  .  p  e  p  .  .  .',
     '.  :  p  p  r  p  p  :  .',
     '.  O  p  p  g  p  p  O  .',
-    '.  .  K  K  J^ K  K  .  .',
+    '.  .  .  .  J^ .  .  .  .',
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  .  .  .  .  .  .',
   ],
 }, { paint: { accent: 'yellow' } });
 
-const FUSE = 1.5, DRAG = 5;            // api.parts.keg.blast.fuse, api.rules.bombDrag
-let route = null, backUntil = -1, backFrom = null, running = false;
+let route = null, holdUntil = -1;
 
 function tick(state, api) {
   const { self } = state, U = api.util, nav = api.nav;
   route ??= nav.follower();
   const cmd = { throttle: 0, steer: 0, fire: false, boost: 0 };
   const kegs = self.parts.filter((p) => p.type === 'keg' && p.alive);
+  const KEG = api.parts.keg, FUSE = KEG.blast.fuse, DRAG = api.rules.bombDrag;
 
   let foe = null, best = Infinity;
   for (const e of state.enemies) { const d = U.dist(self, e); if (d < best) { best = d; foe = e; } }
   if (foe) { cmd.aim = U.lead(self, foe, 28); cmd.fire = best < 13 + foe.radius && nav.los(self.x, self.y, foe.x, foe.y); }
 
-  // a keg of ours (or anybody's) about to go off nearby: get clear, backwards if that is quicker
-  const blast = U.threat(state, 1.6);
-  if (state.t < backUntil || blast) {
-    const from = blast || backFrom;
-    const away = blast ? blast.away : { x: self.x + (self.x - from.x), y: self.y + (self.y - from.y) };
-    Object.assign(cmd, U.driveTo(self, away, { reverse: true }));
-    return guard(state, api, cmd);
-  }
+  // a keg (ours or anybody's) or a mortar shell about to go off here: get clear, backwards if that is quicker
+  const blast = U.threat(state, 1.4);
+  if (blast) { Object.assign(cmd, U.driveTo(self, blast.away, { reverse: true })); return guard(state, api, cmd); }
 
   let goal = foe;
   if (!foe) {
@@ -64,39 +60,31 @@ function tick(state, api) {
   if (U.dist(self, state.zone) > state.zone.r - 4) goal = state.zone;
 
   if (foe && goal === foe) {
-    const los = nav.los(self.x, self.y, foe.x, foe.y), clear = los && nav.clear(self.x, self.y, foe.x, foe.y, { margin: 0.6 });
-    // run at where it will be when the keg gets there, not at where it is
-    const mark = { x: foe.x + foe.vx * 1.1, y: foe.y + foe.vy * 1.1 };
-    const d = U.dist(self, mark), bearing = U.angleTo(self, mark);
-    if (kegs.length && los && d < 26) {
-      // A run needs room to get up speed. Too close: open the distance first, guns still on the target.
-      if (!running && d < 10) {
-        const out = { x: self.x - Math.cos(bearing) * 8, y: self.y - Math.sin(bearing) * 8 };
-        if (nav.clear(self.x, self.y, out.x, out.y, { margin: 0.8 })) { Object.assign(cmd, U.driveTo(self, out)); return guard(state, api, cmd); }
+    const d = best, gap = d - foe.radius, los = nav.los(self.x, self.y, foe.x, foe.y);
+    const ux = (foe.x - self.x) / d, uy = (foe.y - self.y) / d;
+    const closing = -((foe.vx - self.vx) * ux + (foe.vy - self.vy) * uy);          // m/s the two of us are getting nearer
+    if (kegs.length && los && d < 24) {
+      // when a keg let go now would get there, where the other car will be by then, and how far from us that is
+      const tHit = gap / Math.max(3, KEG.fling + closing);
+      const mark = { x: foe.x + foe.vx * tHit, y: foe.y + foe.vy * tHit };
+      const err = U.angDiff(U.angleTo(self, mark), self.heading);
+      const apart = gap * KEG.fling / Math.max(3, KEG.fling + closing) - self.radius;   // from our nose to the blast
+      const reach = KEG.fling * Math.min(FUSE, 1.2) - 0.5 * DRAG * 1.44;               // what a keg covers in 1.2 s from a standstill
+      cmd.steer = U.clamp(err * 3 - self.angVel * 0.4, -1, 1);
+      cmd.throttle = d > 10 ? 1 : d < 7.5 || closing > 3 ? -1 : 0.15;                   // hold the range; give ground to a charge
+      if (d > 14) cmd.boost = Math.abs(err) < 0.3 ? 1 : 0;
+      const lined = Math.abs(err) < 0.07 && Math.abs(self.angVel) < 0.8;
+      if (state.t > holdUntil && lined && apart > KEG.blast.r + 0.4 && gap < reach + closing * 0.6
+        && nav.clear(self.x, self.y, mark.x, mark.y, { margin: 0.4 })) {
+        cmd.jettison = [kegs[0].i];
+        holdUntil = state.t + Math.max(0.8, tHit + 0.3);                               // see what that one does first
+        api.log('keg away at', d.toFixed(1), 'm, closing', closing.toFixed(1), 'm/s');
       }
-      if (clear) {
-        // the bombing run: straight at it, flat out
-        running = true;
-        const err = U.angDiff(bearing, self.heading);
-        cmd.steer = U.clamp(err * 2.6 - self.angVel * 0.35, -1, 1);
-        cmd.throttle = Math.abs(err) < 0.9 ? 1 : 0.2;
-        cmd.boost = Math.abs(err) < 0.3 && d > 8 ? 1 : 0;
-        // how far a keg let go now would get before it blows
-        const v = self.speed, t = Math.min(FUSE, v / DRAG), roll = v * t - 0.5 * DRAG * t * t;
-        const moving = Math.abs(U.angDiff(Math.atan2(self.vy, self.vx), bearing)) < 0.2;
-        if (v > 4.5 && moving && d - foe.radius < roll + 1.2) {
-          cmd.jettison = [kegs[0].i];
-          cmd.throttle = -1; cmd.brake = 1; cmd.boost = 0;
-          running = false;
-          backUntil = state.t + FUSE + 0.3; backFrom = { x: foe.x, y: foe.y };
-          api.log('keg away at', d.toFixed(1), 'm,', v.toFixed(1), 'm/s');
-        }
-        return guard(state, api, cmd);
-      }
+      return guard(state, api, cmd);
     }
-    running = false;
     if (los && d < 14) {
-      // no kegs left (or no clear run): circle at gun range
+      // no kegs left: circle at gun range
+      const bearing = U.angleTo(self, foe);
       const want = bearing + 1.2 + U.clamp((d - 10) * 0.25, -0.7, 0.4);
       const err = U.angDiff(want, self.heading);
       cmd.steer = U.clamp(err * 2.4 - self.angVel * 0.3, -1, 1);

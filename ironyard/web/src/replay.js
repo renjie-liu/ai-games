@@ -38,7 +38,7 @@ export function prepReplay(res, IY) {
   const feed = [];    // {t, text, team}
   const openItem = {}, openMine = {};
   const name = (id) => (id >= 0 && vehicles[id] ? vehicles[id].name : null);
-  const CAUSE = { fell: '坠落', burn: '烧毁', ram: '撞毁', melee: '锯毁', kinetic: '击毁', explosive: '炸毁', energy: '熔毁', fire: '烧毁', wrecked: '打成废铁' };
+  const CAUSE = { fell: '坠落', burn: '烧毁', ram: '撞毁', melee: '锯毁', kinetic: '击毁', explosive: '炸毁', energy: '熔毁', fire: '烧毁', wrecked: '打成废铁', torn: '扯碎' };
   for (const e of res.events) {
     if (e.k === 'part') {
       const v = vehicles[e.v], p = v.parts[e.i], d = IY.PARTS[p.type];
@@ -49,6 +49,7 @@ export function prepReplay(res, IY) {
       const cs = Math.cos(f[2]), sn = Math.sin(f[2]);
       v.deathT[e.i] = e.t; v.alive[e.i] = false;
       if (v.fireT1[e.i] > e.t) v.fireT1[e.i] = e.t;
+      if (e.c === 'torn') feed.push({ t: e.t, team: 1 - v.team, kind: 'item', text: `${v.name} 的${d.zh.replace(/\s.*$/, '')}被缆绳扯了下来` });
       if (!d.decor) {
         const left = v.parts.filter((q, i) => v.alive[i] && solid(q));
         if (left.length) { const a = IY.aggregate(left); v.com.push({ t: e.t, u: a.comU, v: a.comV, r: a.radius }); }

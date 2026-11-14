@@ -1,4 +1,4 @@
-# Ironyard — rules and controller contract (engine 0.4.0)
+# Ironyard — rules and controller contract (engine 0.5.0)
 
 Ironyard is a deterministic vehicle-combat arena. **You build the car and you write its brain.**
 Before a match you hand in ONE JavaScript file containing a blueprint (which bricks go where, within a
@@ -123,9 +123,9 @@ What happens under fire:
 | `saw` | S | 1x1 | 60 | 10 | 120 | chassis, dir, clear lane | 60 dps on contact, 4 energy/s while cutting, burns slowly | Grinds any enemy piece it touches for 60 dps. Ignores armor and shields, eats the chassis first. |
 | `spike` | V | 1x1 | 28 | 7 | 160 | chassis, dir, clear lane | ram dealt x3, taken x0.25, fireproof | Collisions through this stud deal x3 damage and you take only 25% back. |
 | `flamer` | Y | 1x1 | 100 | 9 | 90 | deck, dir, clear lane | 5 dps to each piece in a ±15° stream, heats them 1.25/s (a piece catches fire at heat 1), range 5.5 m, arc ±40°, traverse 4 rad/s, instant hit, 9 energy/s, fire, burns slowly | Short stream of fire. The stream itself does little: it heats every piece it washes over until they catch fire, and fire spreads from piece to piece. Armor, tracks and cores do not burn. Shields keep it off. |
-| `harpoon` | H | 1x2 | 90 | 10 | 120 | deck, dir, clear lane | 10 dmg / 6s (2 dps), range 11 m, arc ±30°, traverse 3 rad/s, shot speed 32 m/s, 10 energy/shot, cable holds 7 s, reels in 3 m/s down to 1.5 m, kinetic, burns slowly | Fires a hook on a cable. If it bites, the two vehicles are tied together for up to 7 s: neither gets further from the other than the cable is long, and `reel` winds it in at 3 m/s. The heavier one, or the one with more grip, decides where both go. `release` lets go. A shield turns the hook away. |
-| `piston` | U | 1x1 | 70 | 12 | 150 | chassis, dir, clear lane | 30 dmg and 1300 N·s per punch, reach 0.75 m, 2.2 s to reset, 14 energy/punch, fireproof | Punches whatever is right in front of it: 30 damage and a 1300 N·s shove — a 250 kg car leaves at 5 m/s — with the same shove back on you. Fires by itself when an enemy, a crate or a rolling bomb is in reach (`melee: false` holds it). |
-| `keg` | K | 1x1 | 40 | 8 | 70 | either layer | blast 85 dmg, 3.2 m, up to 10 pieces per vehicle, fuse 1.5 s when dropped, max 4, burns | A bomb you carry. `detonate` sets it off where it sits; `jettison` drops it, still rolling, to go off 1.5 s later. Either way the blast hits everything within 3.2 m, you and your team included, throws it back and sets it alight — and anything that destroys the keg, or sets it on fire, sets it off. |
+| `harpoon` | H | 1x2 | 90 | 10 | 120 | deck, dir, clear lane | 10 dmg / 6s (2 dps), range 11 m, arc ±30°, traverse 3 rad/s, shot speed 32 m/s, 10 energy/shot, cable holds 7 s, reels in 3 m/s down to 1.5 m, pulled tight it tears the hooked piece at 45 hp/s, kinetic, burns slowly | Fires a hook on a cable. If it bites, the two vehicles are tied together for up to 7 s: neither gets further from the other than the cable is long, and `reel` winds it in at 3 m/s. The heavier one, or the one with more grip, decides where both go. While the cable is pulled tight it works the piece it bit into loose at 45 hp/s (armour a quarter of that): held, the piece comes off, with whatever only it was holding on. `release` lets go. A shield turns the hook away. |
+| `piston` | U | 1x1 | 70 | 12 | 150 | chassis, dir, clear lane | 24 dmg and 1300 N·s per punch, reach 0.75 m, 2.4 s to reset, 14 energy/punch, fireproof | Punches whatever is right in front of it: 24 damage and a 1300 N·s shove — a 250 kg car leaves at 5 m/s — with the same shove back on you. Fires by itself when an enemy, a crate or a rolling bomb is in reach (`melee: false` holds it). |
+| `keg` | K | 1x1 | 40 | 8 | 110 | either layer, dir | blast 70 dmg, 3.2 m, up to 8 pieces per vehicle, let go, it is flung 8 m/s the way it faces and goes off on the first other vehicle it reaches, or after 2 s, max 4, burns | A bomb you carry. `detonate` sets it off where it sits; `jettison` flings it the way it faces, 8 m/s faster than you were going: it rolls about 10 m, and goes off against the first other vehicle it reaches or after 2 s. Facing forward it is a torpedo, facing back a mine for whoever is chasing. Either way the blast hits everything within 3.2 m, you and your team included, throws it back and sets it alight — and anything that destroys the keg, or sets it on fire, sets it off. |
 
 **Utility**
 
@@ -562,7 +562,7 @@ A mortar shell in `projectiles` tells you where and when it lands — drive out 
   target: id,                 // missile lock (enemy id) and/or repair-arm priority (ally id)
   shield: false, repair: false, melee: false, // switch those systems off to save energy (default on); melee covers saws and pistons
   detonate: true | [partIndex, ...],          // set off your kegs (all, or those) where they sit
-  jettison: [partIndex, ...],                 // let go of pieces (not the core): a keg rolls on and blows when its fuse is up, anything else is just gone
+  jettison: [partIndex, ...],                 // let go of pieces (not the core): a keg is flung the way it faces and blows on the first other vehicle it reaches or when its fuse is up; anything else is just gone
   reel:  0..1,                                // wind in your harpoon cable
   release: true,                              // let go of whatever your harpoon holds
   say: anyJSON,               // ≤ 256 chars; teammates read it next tick in state.messages
@@ -617,6 +617,8 @@ into pits, and picking the fight your build wins — out-range brawlers, out-tur
 against missiles and mortars, saw through shields.
 
 And the physical side: what on your vehicle burns and where the firebreaks are (`validate_design` reports the share of
-fireproof pieces); where your kegs sit when somebody shoots them; which way a blast or a punch will send you and
-what is behind you when it does; whether you are the heavier end of a cable. A vehicle that has lost its wheels and
+fireproof pieces); where your kegs sit when somebody shoots them, and which way they face — forward is a torpedo,
+backward a mine for whoever is chasing you; which way a blast or a punch will send you and what is behind you when it
+does; whether you are the heavier end of a cable, and what the hook has bitten into: a cable pulled tight tears that
+piece off, and everything only it was holding. A vehicle that has lost its wheels and
 its guns is out, so there are more ways to win than drilling for the core — and more ways to lose.
