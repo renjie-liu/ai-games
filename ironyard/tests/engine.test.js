@@ -147,6 +147,63 @@ test('watchdog kills a controller that never returns', async () => {
   } finally { await pool.close(); }
 });
 
+test('team play: slots count from 0, the dead say nothing, a repair arm does not wait on what cannot be mended', async () => {
+  const { World } = await import('../engine/index.js');
+  // slot is one number everywhere — in 2v2 too, where the team stands on the map's outer spawn points
+  const reporter = readBotSource('rookie').replace('function tick(state, api) {',
+    `let told = false;\nfunction init(info, api) { api.log('INIT', info.slot); }\nfunction tick(state, api) { if (!told) { told = true; api.log('TICK', state.self.slot, state.allies.map((a) => a.slot)); }`)
+    .replace(/const design = /, 'const design0 = ').concat('\nconst design = (ctx, api) => { api.log("DESIGN", ctx.slot); return typeof design0 === "function" ? design0(ctx, api) : design0; };');
+  for (const mode of ['2v2', '3v3']) {
+    const res = runMatch({ map: 'proving', mode, teams: [[makeBot('reporter', reporter)], [loadBot('rookie')]], seed: 2, record: false, maxTime: 0.2 });
+    const mine = res.vehicles.filter((v) => v.team === 0);
+    mine.forEach((v, k) => {
+      const others = mine.map((m) => m.slot).filter((sl) => sl !== k);
+      assert.deepEqual(v.logs.map((l) => l.replace(/^\[[^\]]*\] /, '')), [`DESIGN ${k}`, `INIT ${k}`, `TICK ${k} ${JSON.stringify(others)}`], `${mode} slot ${k}`);
+      assert.equal(v.slot, k);
+    });
+  }
+  const sp = MAPS.proving.spawns[0];
+  const two = runMatch({ map: 'proving', mode: '2v2', teams: [[loadBot('rookie')], [loadBot('rookie')]], seed: 2, maxTime: 0.05 });
+  assert.ok(Math.abs(two.frames[0].v[0][0] - sp[1].x) < 1 && Math.abs(two.frames[0].v[1][0] - sp[2].x) < 1, '2v2 still starts on the outer spawns');
+
+  const truck = validateDesign({ parts: [
+    { type: 'plate4', x: -1, y: 0, z: 0 }, { type: 'plate4', x: -1, y: -2, z: 0 }, { type: 'wheel', x: -2, y: 1, z: 0 }, { type: 'wheel', x: 1, y: 1, z: 0 },
+    { type: 'wheel', x: -2, y: -2, z: 0 }, { type: 'wheel', x: 1, y: -2, z: 0 }, { type: 'reactor', x: 1, y: 0, z: 0 },
+    { type: 'core', x: 0, y: 0, z: 1 }, { type: 'repairer', x: -1, y: 0, z: 1 }, { type: 'brick', x: -1, y: -1, z: 1 }, { type: 'brick', x: 0, y: -1, z: 1 }] });
+  assert.equal(truck.ok, true, truck.errors.join('; '));
+  const entries = [0, 1].flatMap((team) => [0, 1].map((slot) => ({ team, slot, spawn: slot + 1, design: truck.design })));
+  const w = new World({ map: MAPS.proving, seed: 1, entries });
+  const [a, b] = w.teams[0];
+
+  // a message is heard the tick after it is said, and not again once its author is gone
+  w.setCommand(a, { say: { focus: 3 } });
+  assert.deepEqual(w.observeAll()[b.id].messages, [{ from: 0, id: a.id, data: { focus: 3 } }]);
+  const foe = w.teams[1][0];
+  w.setCommand(foe, { say: 'last words' });
+  w.kill(foe, null, 'test');
+  assert.deepEqual(w.observeAll()[w.teams[1][1].id].messages, []);
+
+  // b parks beside a, missing a brick it will never get back; a is the one with a dent
+  b.x = a.x + 3; b.y = a.y; b.th = a.th;
+  w.updateCells(b);
+  w.destroy(b, b.parts.find((p) => p.type === 'brick'), null, 'test');
+  w.settle();
+  const dent = a.parts.find((p) => p.type === 'plate4');
+  w.damage(a, dent, 100, 'kinetic', null);
+  assert.ok(b.hpNow < b.hpMax && b.parts.every((p) => !p.alive || p.hp === p.maxHp), 'b has nothing that can be mended');
+  w.setCommand(a, { target: b.id });
+  const before = dent.hp;
+  for (let i = 0; i < 120; i++) w.step();
+  assert.ok(dent.hp > before + 10, `the arm mends its own vehicle meanwhile (${before} → ${dent.hp})`);
+  // …and the chosen ally does come first when it has something to mend
+  const scratch = b.parts.find((p) => p.type === 'plate4');
+  w.damage(b, scratch, 20, 'kinetic', null);
+  w.damage(a, dent, 100, 'kinetic', null);
+  const mine = dent.hp, theirs = scratch.hp;
+  for (let i = 0; i < 60; i++) w.step();
+  assert.ok(scratch.hp > theirs + 5 && dent.hp === mine, 'target first');
+});
+
 test('tournament bookkeeping', () => {
   const entrants = [{ id: 'a', bots: ['a'] }, { id: 'b', bots: ['b'] }, { id: 'c', bots: ['c'] }];
   const sched = makeSchedule({ entrants, maps: ['proving', 'sumo'], seeds: [1, 2] });

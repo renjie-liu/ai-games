@@ -132,7 +132,7 @@ export function runMatch(o) {
       const meta = plain(readJson(textOf(c.port.meta)));
       c.name = String(bot.name || meta.name || bot.id).slice(0, 32);
       ctl.push(c);
-      entries.push({ team: t, slot: slots[k], design: val.design, name: c.name, botId: bot.id });
+      entries.push({ team: t, slot: k, spawn: slots[k], design: val.design, name: c.name, botId: bot.id });
     });
   });
 

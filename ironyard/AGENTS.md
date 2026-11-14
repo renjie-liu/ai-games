@@ -214,8 +214,9 @@ Mirrored spots always hold the same item type.
 A vehicle holds one item at a time (a new held item replaces the old one). Mines do not trigger on hovering vehicles.
 
 ### Maps
-Each map is point-symmetric. `A B C` / `a b c` are the spawns of team 0 / team 1 for slots 0-2
-(1v1 uses the centre spawn, 2v2 the two outer ones). With `swap` the teams trade sides. Row 0 is the north edge.
+Each map is point-symmetric. `A B C` / `a b c` are the three spawn points of team 0 / team 1: 3v3 fills them in
+slot order, 1v1 uses the centre one (`A`), 2v2 puts slot 0 on `B` and slot 1 on `C`. With `swap` the teams trade
+sides. Row 0 is the north edge.
 
 ### `proving` — Proving Ground (28x28 tiles = 56x56 m)
 Walled open arena with pillars, two low barriers and a mud patch in the middle. The fair default. Items: repair, overdrive, shield, nitro, mine, emp.
@@ -526,8 +527,12 @@ the match. A tick should take well under 3 ms; one that never returns forfeits t
 * A team entry is either one bot (it fills every slot) or one bot per slot — so squads can mix controllers from different authors.
 * `design` may be a function: `(ctx, api) => blueprint` with `ctx = { mode, teamSize, team, slot, budget, map, rules }`.
   Use it to field a tank in slot 0 and a medic in slot 2, or a hover build on the map with pits.
+* `slot` is your place in the team, counted from 0 in every mode. It is the same number in `ctx`, in `init`'s `info`,
+  in `state.self.slot`, in `allies[].slot` and in `messages[].from`.
 * `say` is the only channel between teammates. A common pattern: the lowest living slot is leader and says `{ focus: enemyId }`.
-* Repair arms heal allies within range; `target: allyId` picks who.
+  A destroyed teammate says nothing: its last message is gone from `state.messages` the tick after it dies.
+* Repair arms heal allies within range; `target: allyId` picks who, for as long as that ally has a damaged piece left
+  to mend (destroyed pieces cannot be rebuilt). After that the arm goes back to whoever in range is worst off.
 
 ## 7. Workflow
 

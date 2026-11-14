@@ -55,7 +55,8 @@ export class World {
    * @param {object} o.map      built map (see maps.js)
    * @param {number} o.seed
    * @param {boolean} [o.swap]  swap spawn sides
-   * @param {Array}  o.entries  [{ team, slot, design, name, botId }] — slot = spawn slot 0..2
+   * @param {Array}  o.entries  [{ team, slot, spawn, design, name, botId }] — slot = place in the team, counted
+   *                            from 0; spawn = which of the map's three spawn points (default: the slot)
    */
   constructor({ map, seed = 0, swap = false, entries, rules = {} }) {
     this.map = map;
@@ -90,8 +91,9 @@ export class World {
 
     this.vehicles = entries.map((e, id) => {
       const side = swap ? 1 - e.team : e.team;
-      const sp = map.spawns[side][e.slot];
-      const j = jitter[e.slot], sgn = side === 0 ? 1 : -1;
+      const at = e.spawn ?? e.slot;
+      const sp = map.spawns[side][at];
+      const j = jitter[at], sgn = side === 0 ? 1 : -1;
       return this.makeVehicle(e, id, sp.x + j.dx * sgn, sp.y + j.dy * sgn, sp.heading + j.dth);
     });
     this.teams = [0, 1].map((t) => this.vehicles.filter((v) => v.team === t));
@@ -246,6 +248,7 @@ export class World {
     v.killedBy = src && src !== v ? src.id : -1;
     if (src && src !== v) src.stats.kills++;
     v.vx = v.vy = v.w = 0; v.shield = 0; v.overshield = 0;
+    v.said = undefined; // the dead say nothing: their last message is not repeated to the team every tick
     this.event({ k: 'death', v: v.id, by: v.killedBy, c: cause, x: r2(v.x), y: r2(v.y) });
   }
 
@@ -583,9 +586,11 @@ export class World {
         for (const a of this.teams[v.team]) {
           if (!a.alive) continue;
           if (a !== v && Math.hypot(a.x - v.x, a.y - v.y) > rp.def.healRange + a.radius) continue;
-          if (cmd.target !== null && a.id === cmd.target && a.hpNow < a.hpMax - 0.5) { target = a; break; }
           let f = 1;
           for (const q of a.parts) if (q.alive && !q.decor) f = Math.min(f, q.hp / q.maxHp);
+          // the chosen ally comes first for as long as a piece of it can be mended — lost pieces cannot,
+          // so an ally that is only missing some must not hold the arm
+          if (cmd.target !== null && a.id === cmd.target && f < 0.995) { target = a; break; }
           if (f < worst) { worst = f; target = a; }
         }
         if (!target) break;
