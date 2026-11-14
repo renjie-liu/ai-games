@@ -1,0 +1,12 @@
+{
+  "baseRefName": "feat/partition-escape-folder-20261114",
+  "comments": [],
+  "headRefName": "fix/live-start-cancellation-20261115",
+  "headRefOid": "afb3b374a55ffb6967eb23e427daf0a4cb8a0dd1",
+  "isDraft": true,
+  "number": 3,
+  "reviews": [],
+  "state": "OPEN",
+  "statusCheckRollup": [],
+  "url": "https://github.com/renjie-liu/ai-games/pull/3"
+}

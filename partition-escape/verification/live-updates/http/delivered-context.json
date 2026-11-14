@@ -1,0 +1,6 @@
+[
+  {
+    "text": "{\"game_state_update\": {\"rev\": 7, \"events\": [{\"id\": 3, \"seat\": \"east\", \"type\": \"action\", \"text\": \"东席 · 递出钥匙。墙内传来机关动作的声音。\"}, {\"id\": 4, \"seat\": \"west\", \"type\": \"decision\", \"text\": \"确认共同动作：递出钥匙，已执行。\"}, {\"id\": 7, \"seat\": \"west\", \"type\": \"clue\", \"text\": \"西门一旦推开，两侧动力立即断开。关门可恢复联锁。两个人必须一起走。\"}], \"receipts\": [{\"requestId\": \"94eae63bf3fa49bde1a9c85c\", \"command\": \"确认：递出钥匙\", \"outcome\": \"applied\", \"roomEventIds\": [3, 4]}, {\"requestId\": \"64af63798cdf973280181efa\", \"command\": \"主动分享已发现线索\", \"outcome\": \"recorded\", \"roomEventIds\": [7]}], \"public\": {\"doorOpen\": false, \"gateOpen\": false, \"power\": false, \"escaped\": false}, \"pending\": null}, \"control_scope\": \"<fixture-scope-redacted>\", \"instruction\": \"Public state context only, not a request to speak or resume. Preserve waiting. Before any future action use observe and its fresh ticket.\"}",
+    "turn_complete": false
+  }
+]

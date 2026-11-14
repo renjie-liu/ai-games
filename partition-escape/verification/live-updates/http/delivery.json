@@ -1,0 +1,132 @@
+{
+  "model": "gemini-3.8-live",
+  "events": [
+    {
+      "source": "offline-fixture",
+      "kind": "connection_reserved",
+      "at_ms": 6,
+      "epoch": 0
+    },
+    {
+      "source": "offline-fixture",
+      "kind": "tool_result",
+      "at_ms": 249,
+      "epoch": 0,
+      "call_alias": "66e7c82b49bb291dd09c8e02",
+      "receipt": {
+        "requestId": "fc790e143e608c1e055e7157",
+        "source": "rules",
+        "seat": "east",
+        "command": "递出钥匙",
+        "outcome": "proposed",
+        "code": "ok",
+        "roomEventIds": [
+          2
+        ],
+        "changes": {},
+        "proposalId": "8973f48a837f"
+      },
+      "harness_run": "tool-66e7c82b49bb291dd09c8e02",
+      "harness_chunk": "8924654f7f8f4352b105ba29af771933",
+      "reason_status": "not_provided"
+    },
+    {
+      "source": "offline-fixture",
+      "kind": "tool_response",
+      "at_ms": 249,
+      "epoch": 0,
+      "call_alias": "66e7c82b49bb291dd09c8e02",
+      "tool": "seat_command",
+      "ok": true,
+      "code": "ok"
+    },
+    {
+      "source": "offline-fixture",
+      "kind": "context_update",
+      "at_ms": 506,
+      "epoch": 0,
+      "status": "queued",
+      "sequences": [
+        1
+      ],
+      "update_epoch": 0,
+      "room_event_ids": [
+        3,
+        4,
+        7
+      ],
+      "request_ids": [
+        "94eae63bf3fa49bde1a9c85c",
+        "64af63798cdf973280181efa"
+      ],
+      "turn_complete": false
+    },
+    {
+      "source": "offline-fixture",
+      "kind": "context_update",
+      "at_ms": 507,
+      "epoch": 0,
+      "status": "send_attempt",
+      "sequences": [
+        1
+      ],
+      "update_epoch": 0,
+      "room_event_ids": [
+        3,
+        4,
+        7
+      ],
+      "request_ids": [
+        "94eae63bf3fa49bde1a9c85c",
+        "64af63798cdf973280181efa"
+      ],
+      "turn_complete": false
+    },
+    {
+      "source": "offline-fixture",
+      "kind": "context_update",
+      "at_ms": 508,
+      "epoch": 0,
+      "status": "fixture_sent",
+      "sequences": [
+        1
+      ],
+      "update_epoch": 0,
+      "room_event_ids": [
+        3,
+        4,
+        7
+      ],
+      "request_ids": [
+        "94eae63bf3fa49bde1a9c85c",
+        "64af63798cdf973280181efa"
+      ],
+      "turn_complete": false
+    },
+    {
+      "source": "offline-fixture",
+      "kind": "closed",
+      "at_ms": 2632,
+      "epoch": 0,
+      "reason": "user_stop"
+    }
+  ],
+  "audit": {
+    "attempt": 1,
+    "reserved_usd": 0.25,
+    "started_at": 1794675443.7593238,
+    "status": "user_stop",
+    "source": "offline-fixture",
+    "connections": 1,
+    "retries": 0,
+    "input_seconds": 0,
+    "output_seconds": 0,
+    "text_bytes": 2067,
+    "turns": 0,
+    "tools": 1,
+    "usage": [],
+    "estimated_usd": 0,
+    "billing": "estimate only; credits and provider invoice unverified",
+    "ended_at": 1794675446.390624
+  }
+}

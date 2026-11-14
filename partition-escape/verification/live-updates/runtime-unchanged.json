@@ -1,0 +1,22 @@
+{
+  "ledgerSha256": "b1c8f465ddbea2ce915274381e35e2cb1575ef1e6c60fbd42ded91df584909c6",
+  "ledgerUnchanged": true,
+  "health": {
+    "ok": true,
+    "localOnly": true,
+    "tts": "off",
+    "live": {
+      "enabled": true,
+      "runtimeReady": true,
+      "runtimeCode": "ready",
+      "fixture": false,
+      "model": "gemini-3.8-live",
+      "remaining": 0,
+      "seconds": 60,
+      "totalUsd": 0.5,
+      "creditsVerified": false
+    }
+  },
+  "sourceHead": "a2952a4c1372169535c3b05cd30c31152e67640f",
+  "note": "4174 process cwd remains ai-gaming/prototypes/partition-escape; no restart or deployment this turn"
+}

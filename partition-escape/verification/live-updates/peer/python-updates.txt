@@ -1,0 +1,16 @@
+test_busy_merges_until_actual_turn_complete (test_live_updates.UpdateTests.test_busy_merges_until_actual_turn_complete) ... ok
+test_duplicate_out_of_order_wrong_scope_and_schema_never_send (test_live_updates.UpdateTests.test_duplicate_out_of_order_wrong_scope_and_schema_never_send) ... ok
+test_epoch_or_stop_cancels_worker_queued_message (test_live_updates.UpdateTests.test_epoch_or_stop_cancels_worker_queued_message) ... ok
+test_existing_text_budget_debited_before_transport_no_retry (test_live_updates.UpdateTests.test_existing_text_budget_debited_before_transport_no_retry) ... ok
+test_inflight_send_cannot_be_recalled_or_retried (test_live_updates.UpdateTests.test_inflight_send_cannot_be_recalled_or_retried) ... ok
+test_rate_limit_wait_is_cancelable_no_timer_poll (test_live_updates.UpdateTests.test_rate_limit_wait_is_cancelable_no_timer_poll) ... ok
+test_same_session_context_only_with_ids_not_new_action (test_live_updates.UpdateTests.test_same_session_context_only_with_ids_not_new_action) ... ok
+test_send_failure_not_retried_and_merged_overflow_is_explicit (test_live_updates.UpdateTests.test_send_failure_not_retried_and_merged_overflow_is_explicit) ... ok
+test_speaking_tool_busy_and_tool_queue_hold_updates (test_live_updates.UpdateTests.test_speaking_tool_busy_and_tool_queue_hold_updates) ... ok
+test_three_batches_and_cumulative_notification_bytes (test_live_updates.UpdateTests.test_three_batches_and_cumulative_notification_bytes) ... ok
+test_wire_validation_rejects_private_fields_and_bad_references (test_live_updates.UpdateTests.test_wire_validation_rejects_private_fields_and_bad_references) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 0.032s
+
+OK

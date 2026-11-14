@@ -1,3 +1,4 @@
+import {PublicUpdates} from './live-updates.mjs';
 import {python,pythonEnv} from './harness-paths.mjs';
 // Local HTTP duplex bridge: authenticated NDJSON downlink + ordered PCM POST uplink.
 // Google WebSocket and credentials exist only in the Python worker.
@@ -28,7 +29,9 @@ export class LiveHub {
   }
   get(room){
     if(!this.jobs.has(room.id))this.jobs.set(room.id,{scope:id(),epoch:0,tickets:new Map(),started:false,ended:false,speaking:false,stream:null,worker:null,lastSeen:Date.now(),events:[]});
-    return this.jobs.get(room.id);
+    const j=this.jobs.get(room.id);
+    if(!j.updates)j.updates=new PublicUpdates(room,j,b=>this.write(room,b));
+    return j;
   }
   emit(room,e){const j=this.get(room);if(j.stream&&!j.stream.destroyed){if(j.stream.writableLength>1024*1024){this.stop(room,'client_backpressure');return;}j.stream.write(JSON.stringify(e)+'\n');}}
   attach(room,res){
@@ -52,13 +55,13 @@ export class LiveHub {
     let pending='';child.stdout.on('data',chunk=>{pending+=chunk;if(pending.length>2000000){this.stop(room,'worker_overflow');return;}
       let at;while((at=pending.indexOf('\n'))>=0){const line=pending.slice(0,at);pending=pending.slice(at+1);try{const e=JSON.parse(line);
         if(e.type==='tool'){j.events.push(e);if(j.events.length>40)j.events.shift();}
-        if(e.type==='closed'){j.ended=true;room.worker[seat]={source:j.fixture?'offline-fixture':'live',status:'stopped',message:e.reason};}
+        if(e.type==='closed'){j.updates.clear();j.ended=true;room.worker[seat]={source:j.fixture?'offline-fixture':'live',status:'stopped',message:e.reason};}
         this.emit(room,e);
       }catch{ /* Do not reflect arbitrary process output into the browser. */ }} });
     child.stdin.on('error',()=>this.stop(room,'worker_pipe_closed'));
     child.stderr.on('data',()=>{}); // SDK errors can include request metadata: never forward/log raw stderr.
-    child.on('error',()=>{j.ended=true;this.emit(room,{type:'closed',reason:'worker_start_failed'});});
-    child.on('exit',()=>{j.ended=true;clearInterval(j.timer);clearTimeout(j.deadline);this.emit(room,{type:'closed',reason:'worker_stopped'});});
+    child.on('error',()=>{j.updates.clear();j.ended=true;this.emit(room,{type:'closed',reason:'worker_start_failed'});});
+    child.on('exit',()=>{j.updates.clear();j.ended=true;clearInterval(j.timer);clearTimeout(j.deadline);this.emit(room,{type:'closed',reason:'worker_stopped'});});
     j.timer=setInterval(()=>{if(Date.now()-j.lastSeen>6000)this.stop(room,'client_heartbeat_lost');},1000);
     j.deadline=setTimeout(()=>this.stop(room,'session_deadline'),65000);
     room.worker[seat]={status:'running',source:fixture?'offline-fixture':'live'};
@@ -70,11 +73,17 @@ export class LiveHub {
     if(!['audio','start','end','text'].includes(b.type))throw Error('Invalid Live input');
     if(b.type==='audio'&&(typeof b.data!=='string'||b.data.length>10000||!/^[A-Za-z0-9+/]*={0,2}$/.test(b.data)))throw Error('Invalid PCM frame');
     if(b.type==='text'&&(typeof b.text!=='string'||b.text.length>500))throw Error('Invalid text');
-    if(b.type==='start'||b.type==='text'){j.scope=id();j.epoch++;j.tickets.clear();j.speaking=b.type==='start';this.emit(room,{type:'interrupted',epoch:j.epoch});}
+    if(b.type==='start'||b.type==='text'){j.updates.clear();j.scope=id();j.epoch++;j.tickets.clear();j.speaking=b.type==='start';this.emit(room,{type:'interrupted',epoch:j.epoch});}
     if(b.type==='end')j.speaking=false;
-    if(j.worker?.stdin.writable){if(j.worker.stdin.writableLength>150000){this.stop(room,'uplink_backpressure');return;}
-      j.worker.stdin.write(JSON.stringify({...b,scope:j.scope,epoch:j.epoch})+'\n');}
+    this.write(room,{...b,scope:j.scope,epoch:j.epoch});
   }
+  write(room,b){
+    const j=this.get(room);if(j.ended)return;
+    if(j.worker?.stdin.writable){if(j.worker.stdin.writableLength>150000){this.stop(room,'uplink_backpressure');return;}
+      j.worker.stdin.write(JSON.stringify(b)+'\n');}
+  }
+  notify(room,role,command,result){this.get(room).updates.enqueue(role,command,result);}
+
   observe(room,role,scope){
     const j=this.get(room);if(role!==j.seat||j.ended||j.speaking||scope!==j.scope)return {ok:false,code:'live_superseded'};
     const ticket=id();j.tickets.clear();j.tickets.set(ticket,{scope:j.scope,rev:room.rev,expires:Date.now()+15000});
@@ -91,10 +100,10 @@ export class LiveHub {
     // No await between gate and engine: interruption and dispatch serialize on Node's event loop.
     const result=room.command(role,b.command);return {...result,view:room.view(role)};
   }
-  stop(room,reason){const j=this.get(room);if(j.ended)return;j.ended=true;j.tickets.clear();clearInterval(j.timer);clearTimeout(j.deadline);
+  stop(room,reason){const j=this.get(room);if(j.ended)return;j.updates.clear();j.ended=true;j.tickets.clear();clearInterval(j.timer);clearTimeout(j.deadline);
     if(j.worker?.stdin.writable)j.worker.stdin.end(JSON.stringify({type:'stop',reason})+'\n');
     if(j.worker){const timer=setTimeout(()=>j.worker.kill('SIGTERM'),2000);j.worker.once('exit',()=>clearTimeout(timer));}
     this.emit(room,{type:'closed',reason});
   }
-  close(){for(const j of this.jobs.values()){clearInterval(j.timer);clearTimeout(j.deadline);j.worker?.kill('SIGTERM');j.stream?.end();}}
+  close(){for(const j of this.jobs.values()){j.updates.clear();clearInterval(j.timer);clearTimeout(j.deadline);j.worker?.kill('SIGTERM');j.stream?.end();}}
 }

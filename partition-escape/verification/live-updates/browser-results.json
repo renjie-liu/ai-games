@@ -1,0 +1,64 @@
+{
+  "realModelRequests": 0,
+  "microphoneRequested": false,
+  "errors": [],
+  "external": [],
+  "results": [
+    {
+      "scenario": "delivery",
+      "width": 1440,
+      "fixture": true,
+      "overflow": false,
+      "passed": true
+    },
+    {
+      "scenario": "pause-before-flush",
+      "width": 1440,
+      "fixture": true,
+      "overflow": false,
+      "passed": true
+    },
+    {
+      "scenario": "speech-before-flush",
+      "width": 1440,
+      "fixture": true,
+      "overflow": false,
+      "passed": true
+    },
+    {
+      "scenario": "stop-before-flush",
+      "width": 1440,
+      "fixture": true,
+      "overflow": false,
+      "passed": true
+    },
+    {
+      "scenario": "delivery",
+      "width": 390,
+      "fixture": true,
+      "overflow": false,
+      "passed": true
+    },
+    {
+      "scenario": "pause-before-flush",
+      "width": 390,
+      "fixture": true,
+      "overflow": false,
+      "passed": true
+    },
+    {
+      "scenario": "speech-before-flush",
+      "width": 390,
+      "fixture": true,
+      "overflow": false,
+      "passed": true
+    },
+    {
+      "scenario": "stop-before-flush",
+      "width": 390,
+      "fixture": true,
+      "overflow": false,
+      "passed": true
+    }
+  ]
+}

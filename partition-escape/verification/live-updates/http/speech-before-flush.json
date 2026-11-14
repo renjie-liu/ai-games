@@ -1,0 +1,76 @@
+{
+  "model": "gemini-3.8-live",
+  "events": [
+    {
+      "source": "offline-fixture",
+      "kind": "connection_reserved",
+      "at_ms": 0,
+      "epoch": 0
+    },
+    {
+      "source": "offline-fixture",
+      "kind": "tool_result",
+      "at_ms": 165,
+      "epoch": 0,
+      "call_alias": "66e7c82b49bb291dd09c8e02",
+      "receipt": {
+        "requestId": "3b529deb377418fc44f5d994",
+        "source": "rules",
+        "seat": "east",
+        "command": "递出钥匙",
+        "outcome": "proposed",
+        "code": "ok",
+        "roomEventIds": [
+          2
+        ],
+        "changes": {},
+        "proposalId": "a43d4d3e3a13"
+      },
+      "harness_run": "tool-66e7c82b49bb291dd09c8e02",
+      "harness_chunk": "973c5902dc7e40dc8e419352ee2791c2",
+      "reason_status": "not_provided"
+    },
+    {
+      "source": "offline-fixture",
+      "kind": "tool_response",
+      "at_ms": 166,
+      "epoch": 0,
+      "call_alias": "66e7c82b49bb291dd09c8e02",
+      "tool": "seat_command",
+      "ok": true,
+      "code": "ok"
+    },
+    {
+      "source": "offline-fixture",
+      "kind": "interrupted",
+      "at_ms": 187,
+      "epoch": 1,
+      "trigger": "local_voice"
+    },
+    {
+      "source": "offline-fixture",
+      "kind": "closed",
+      "at_ms": 547,
+      "epoch": 1,
+      "reason": "user_stop"
+    }
+  ],
+  "audit": {
+    "attempt": 1,
+    "reserved_usd": 0.25,
+    "started_at": 1794675449.385559,
+    "status": "user_stop",
+    "source": "offline-fixture",
+    "connections": 1,
+    "retries": 0,
+    "input_seconds": 0,
+    "output_seconds": 0,
+    "text_bytes": 1125,
+    "turns": 0,
+    "tools": 1,
+    "usage": [],
+    "estimated_usd": 0,
+    "billing": "estimate only; credits and provider invoice unverified",
+    "ended_at": 1794675449.931753
+  }
+}
