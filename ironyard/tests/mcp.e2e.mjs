@@ -92,7 +92,10 @@ async function exercise(client, label) {
 
   const name = 'e2e-' + label;
   const saved = JSON.parse(text(await client.callTool({ name: 'submit_bot', arguments: { name, source: BOT } })));
-  assert.equal(saved.saved, name); assert.equal(saved.smokeTest.length, 6);
+  assert.equal(saved.saved, name);
+  assert.equal(saved.smokeTest.length, 1, 'one vehicle, fielded everywhere');
+  assert.deepEqual(saved.smokeTest[0].fieldedAs, ['1v1 slot 0', '2v2 slot 0', '2v2 slot 1', '3v3 slot 0', '3v3 slot 1', '3v3 slot 2']);
+  assert.equal(saved.smokeTest[0].weapons.cannon, 3);
 
   const bots = JSON.parse(text(await client.callTool({ name: 'list_bots', arguments: {} })));
   assert.ok(bots.bots.some((b) => b.name === name && b.kind === 'user'));
@@ -114,6 +117,19 @@ async function exercise(client, label) {
 
   const unknown = await client.callTool({ name: 'run_match', arguments: { team_a: ['nope'], team_b: ['rookie'] } });
   assert.equal(unknown.isError, true); assert.match(text(unknown), /unknown bot/);
+  // arguments an agent gets nearly right are taken as meant; the rest are refused in words it can act on
+  const loose = JSON.parse(text(await client.callTool({ name: 'run_match', arguments: { team_a: name, team_b: 'rookie', map: 'canyon', seed: '5' } })));
+  assert.equal(loose.duration, m2.duration);
+  const asText = JSON.parse(text(await client.callTool({ name: 'validate_design', arguments: { design: JSON.stringify({ parts: [{ type: 'plate', x: 0, y: 0, z: 0 }, { type: 'core', x: 0, y: 0, z: 1 }] }) } })));
+  assert.equal(asText.ok, true);
+  const refuse = async (tool, args, re) => { const r = await client.callTool({ name: tool, arguments: args }); assert.equal(r.isError, true); assert.match(text(r), re); };
+  await refuse('run_match', { team_a: [name], team_b: ['rookie'], maps: ['sumo'] }, /run_match has no argument "maps"\. It takes: team_a \(required\), team_b \(required\), mode, map/);
+  await refuse('run_match', { team_a: [name], team_b: ['rookie'], mode: '5v5' }, /argument "mode" must be one of 1v1, 2v2, 3v3, got "5v5"/);
+  await refuse('run_match', { team_b: ['rookie'] }, /missing required argument "team_a"/);
+  await refuse('validate_design', { design: { parts: [] }, budget: 50 }, /argument "budget" must be between 100 and 5000, got 50/);
+  await refuse('submit_bot', { name: 'Bad Name', source: 'x' }, /argument "name" must match/);
+  await refuse('submit_bot', { name: 'crasher', source: BOT.replace('const foe = state.enemies[0];', 'const foe = state.enemy[0];') }, /not saved — the controller failed in the smoke test: 1v1 slot 0: tick threw at t=0\.00: Cannot read properties of undefined \(reading '0'\) \(line \d+\)/);
+  await refuse('submit_bot', { name: 'broken', source: BOT.replace('function tick(state, api) {', 'function tick(state, api) {\n  const = 1;') }, /failed to compile: .* \(line \d+\)/);
 
   const prompts = await client.listPrompts();
   assert.equal(prompts.prompts[0].name, 'build-a-bot');
@@ -143,6 +159,23 @@ async function exercise(client, label) {
     await client.close();
     const evil = await fetch(`http://127.0.0.1:${port}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://evil.example' }, body: '{}' });
     assert.equal(evil.status, 403);
+  } finally { child.kill(); }
+}
+// Streamable HTTP behind a token
+{
+  const port = 18788, url = `http://127.0.0.1:${port}/mcp`;
+  const child = spawn(process.execPath, [path.join(root, 'node/mcp-server.js'), '--http', String(port)], { env: { ...env, IRONYARD_TOKEN: 'open-sesame' }, stdio: ['ignore', 'ignore', 'pipe'] });
+  await new Promise((resolve, reject) => { child.stderr.on('data', (d) => /ready/.test(String(d)) && resolve()); child.on('exit', () => reject(new Error('server exited'))); });
+  try {
+    const ping = (headers) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }) });
+    assert.equal((await ping({})).status, 401);
+    assert.equal((await ping({ authorization: 'Bearer wrong' })).status, 401);
+    assert.equal((await ping({ authorization: 'Bearer open-sesame' })).status, 200);
+    const client = new Client({ name: 'e2e', version: '1.0.0' });
+    await client.connect(new StreamableHTTPClientTransport(new URL(url), { requestInit: { headers: { authorization: 'Bearer open-sesame' } } }));
+    assert.equal((await client.listTools()).tools.length, 10);
+    await client.close();
+    console.log('http with a token: ok');
   } finally { child.kill(); }
 }
 fs.rmSync(tmp, { recursive: true, force: true });

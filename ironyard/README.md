@@ -46,6 +46,17 @@ claude mcp add --transport http ironyard http://127.0.0.1:8787/mcp
 
 还带一个 `build-a-bot` 提示词模板和 `ironyard://rules` 资源。环境变量：`IRONYARD_BOTS_DIR`、`IRONYARD_REPLAY_DIR`、`IRONYARD_MATCH_TIMEOUT_MS`。
 
+给 Agent 的几处照顾：参数差一点的按本意处理（该给列表的地方给了一个名字、数字或对象写成了字符串），其余的拒绝时会说清楚要什么（拼错的参数名会列出这个工具有哪些参数）；控制器出错时报的是它自己文件里的行号；返回的 JSON 能放一行的就放一行，省 token。
+
+HTTP 端点默认只听 `127.0.0.1`。要让别的机器上的 Agent 接进来，用 `--host 0.0.0.0` 并设 `IRONYARD_TOKEN`，客户端带 `Authorization: Bearer <token>`：
+
+```bash
+IRONYARD_TOKEN=换成你自己的口令 node node/mcp-server.js --http 8787 --host 0.0.0.0
+claude mcp add --transport http ironyard http://服务器地址:8787/mcp --header "Authorization: Bearer 换成你自己的口令"
+```
+
+口令只有一个，所有接进来的人共用一个 bot 目录：可以互相覆盖同名 bot，也能用 `get_bot` 读到别人的源码。按玩家分开身份和目录还没做。
+
 ## 写一个 bot
 
 一个 JS 文件，顶层定义 `design`（蓝图对象，或 `(ctx, api) => 蓝图`）和 `tick(state, api)`。完整字段见 [AGENTS.md](AGENTS.md)，`bots/` 里是 9 个带注释的样板，设计思路见 [docs/DESIGN.md](docs/DESIGN.md)：

@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
 import readline from 'node:readline';
+import crypto from 'node:crypto';
 import {
   MAPS, MAP_IDS, MODES, PARTS, ITEMS, TILES, RULES, BUDGETS, DEFAULT_BUDGET, CELL, GRID_HX, GRID_HY, GRID_W, GRID_L, PAINTS, DECOR_LIMIT,
   validateDesign, parseBlueprint, renderDesign, makeSchedule, standings, ENGINE_VERSION,
@@ -152,24 +153,31 @@ const TOOLS = [
       if (!BOT_NAME_RE.test(name)) throw new Error('name must match ^[a-z0-9][a-z0-9_-]{0,39}$');
       if (fs.existsSync(path.join(BUILTIN_DIR, name + '.js'))) throw new Error(`"${name}" is a built-in bot; pick another name`);
       makeBot(name, String(source)); // syntax check
-      const report = [];
+      // one row per different vehicle the file fields, with every mode and slot it was fielded in
+      const rows = new Map(), runtime = [];
       let fatal = null;
       for (const mode of modeEnum) {
         try {
           const s = await pool.run({ map: 'proving', mode, seed: 7, budget: budget ?? DEFAULT_BUDGET, maxTime: 8, want: 'summary',
             teams: [[{ id: name, source }], [{ id: 'rookie', source: readBotSource('rookie') }]] });
           for (const v of s.vehicles.filter((x) => x.team === 0)) {
-            report.push({ mode, slot: v.slot, vehicle: v.name, cost: v.design.cost, massKg: v.design.mass, weightClass: v.design.weightClass, topSpeed: v.design.topSpeed, turnRate: v.design.turnRate, dps: v.design.dps,
-              weapons: v.design.weapons, runtimeErrors: v.errors, cpuMs: v.cpu, log: v.logs.slice(0, 5) });
+            const d = v.design;
+            const what = { vehicle: v.name, cost: d.cost, massKg: d.mass, weightClass: d.weightClass, topSpeed: d.topSpeed, turnRate: d.turnRate, dps: d.dps, weapons: d.weapons };
+            const key = JSON.stringify(what);
+            const row = rows.get(key) || { fieldedAs: [], ...what, cpuMs: { avgMs: 0, maxMs: 0 }, log: [] };
+            rows.set(key, row);
+            row.fieldedAs.push(`${mode} slot ${v.slot}`);
+            if (v.cpu) { row.cpuMs.avgMs = Math.max(row.cpuMs.avgMs, v.cpu.avgMs); row.cpuMs.maxMs = Math.max(row.cpuMs.maxMs, v.cpu.maxMs); }
+            for (const line of v.logs) if (row.log.length < 5) row.log.push(line);
+            for (const e of v.errors) runtime.push(`${mode} slot ${v.slot}: ${e}`);
           }
         } catch (e) { fatal = `${mode}: ${e.message}`; break; }
       }
       if (fatal) throw new Error(`not saved — ${fatal}`);
-      const runtime = report.flatMap((r) => r.runtimeErrors);
-      if (runtime.length) throw new Error(`not saved — tick() failed in the smoke test: ${runtime.slice(0, 3).join(' | ')}`);
+      if (runtime.length) throw new Error(`not saved — the controller failed in the smoke test: ${runtime.slice(0, 3).join(' | ')}`);
       fs.mkdirSync(USER_DIR, { recursive: true });
       fs.writeFileSync(path.join(USER_DIR, name + '.js'), source);
-      return { saved: name, smokeTest: report, next: `run_match { team_a: ["${name}"], team_b: ["rookie"] } then evaluate_bot { name: "${name}" }` };
+      return { saved: name, smokeTest: [...rows.values()], next: `run_match { team_a: ["${name}"], team_b: ["rookie"] } then evaluate_bot { name: "${name}" }` };
     },
   },
   {
@@ -331,6 +339,61 @@ function promptText({ mode = '1v1', idea } = {}) {
 Finish by reporting the final bot name, its design picture, the strategy in three sentences, and its evaluate_bot table.`;
 }
 
+// ── results ─────────────────────────────────────────────────────────────
+// JSON an agent pays for by the token: anything that fits on a line stays on one.
+function pretty(v, indent = '', width = 120) {
+  const flat = JSON.stringify(v);
+  if (flat === undefined) return 'null';
+  if (v === null || typeof v !== 'object' || flat.length <= width - indent.length) return flat;
+  const inner = indent + ' ';
+  if (Array.isArray(v)) return `[\n${v.map((x) => inner + pretty(x, inner, width)).join(',\n')}\n${indent}]`;
+  return `{\n${Object.entries(v).filter(([, x]) => x !== undefined).map(([k, x]) => `${inner}${JSON.stringify(k)}: ${pretty(x, inner, width)}`).join(',\n')}\n${indent}}`;
+}
+
+// ── arguments ───────────────────────────────────────────────────────────
+// Agents get argument shapes slightly wrong in a handful of predictable ways: one name where a list
+// is wanted, a number or an object sent as text, a misspelt optional argument that then silently
+// does nothing. The first three are taken as meant; everything else is refused with a message that
+// says what was expected, so the next call can be right.
+function fit(name, schema, v) {
+  const say = (what) => { throw new Error(`argument "${name}" ${what}, got ${JSON.stringify(v) === undefined ? typeof v : JSON.stringify(v).slice(0, 80)}`); };
+  if (typeof v === 'string' && (schema.type === 'object' || schema.type === 'array' || schema.type === 'integer' || schema.type === 'boolean')) {
+    const t = v.trim();
+    if (schema.type === 'array' && !t.startsWith('[')) v = [v];
+    else { try { v = JSON.parse(t); } catch { say(`must be ${schema.type === 'integer' ? 'a whole number' : `a JSON ${schema.type}`}`); } }
+  }
+  if (schema.type === 'string') {
+    if (typeof v !== 'string') say('must be a string');
+    if (schema.enum && !schema.enum.includes(v)) say(`must be one of ${schema.enum.join(', ')}`);
+    if (schema.pattern && !new RegExp(schema.pattern).test(v)) say(`must match ${schema.pattern}`);
+  } else if (schema.type === 'integer') {
+    if (!Number.isInteger(v)) say('must be a whole number');
+    if ((schema.minimum !== undefined && v < schema.minimum) || (schema.maximum !== undefined && v > schema.maximum)) say(`must be between ${schema.minimum ?? '-∞'} and ${schema.maximum ?? '∞'}`);
+  } else if (schema.type === 'boolean') {
+    if (typeof v !== 'boolean') say('must be true or false');
+  } else if (schema.type === 'array') {
+    if (!Array.isArray(v)) say('must be a list');
+    if ((schema.minItems !== undefined && v.length < schema.minItems) || (schema.maxItems !== undefined && v.length > schema.maxItems)) say(`must have ${schema.minItems ?? 0} to ${schema.maxItems ?? 'any number of'} entries`);
+    if (schema.items) v = v.map((x, i) => fit(`${name}[${i}]`, schema.items, x));
+  } else if (schema.type === 'object') {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) say('must be an object');
+  }
+  return v;
+}
+function checkArgs(tool, given) {
+  const props = tool.inputSchema.properties || {};
+  if (typeof given === 'string') { try { given = JSON.parse(given); } catch { given = null; } }
+  const args = given && typeof given === 'object' && !Array.isArray(given) ? given : {};
+  const out = {};
+  for (const [k, v] of Object.entries(args)) {
+    if (v === undefined || v === null) continue;
+    if (!props[k]) throw new Error(`${tool.name} has no argument "${k}". It takes: ${Object.keys(props).map((p) => p + ((tool.inputSchema.required || []).includes(p) ? ' (required)' : '')).join(', ') || 'nothing'}`);
+    out[k] = fit(k, props[k], v);
+  }
+  for (const req of tool.inputSchema.required || []) if (out[req] === undefined) throw new Error(`missing required argument "${req}": ${props[req].description || ''}`);
+  return out;
+}
+
 // ── JSON-RPC plumbing ───────────────────────────────────────────────────
 const rpcError = (id, code, message, data) => ({ jsonrpc: '2.0', id: id ?? null, error: { code, message, ...(data ? { data } : {}) } });
 
@@ -358,13 +421,10 @@ async function handle(msg) {
       case 'tools/call': {
         const tool = TOOL_BY_NAME[params.name];
         if (!tool) return rpcError(id, -32602, `Unknown tool: ${params.name}`);
-        const args = params.arguments && typeof params.arguments === 'object' ? params.arguments : {};
-        for (const req of tool.inputSchema.required || []) {
-          if (args[req] === undefined) return ok({ content: [{ type: 'text', text: `Missing required argument "${req}".` }], isError: true });
-        }
         try {
+          const args = checkArgs(tool, params.arguments);
           const out = await tool.run(args);
-          return ok({ content: [{ type: 'text', text: typeof out === 'string' ? out : JSON.stringify(out, null, 1) }] });
+          return ok({ content: [{ type: 'text', text: typeof out === 'string' ? out : pretty(out) }] });
         } catch (e) {
           return ok({ content: [{ type: 'text', text: `Error: ${e && e.message ? e.message : e}` }], isError: true });
         }
@@ -410,16 +470,21 @@ function serveStdio() {
 
 function serveHttp(port, host) {
   const localOrigin = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
+  // IRONYARD_TOKEN: when set, every call to /mcp must carry `Authorization: Bearer <token>`
+  const token = process.env.IRONYARD_TOKEN || '';
+  const want = token ? crypto.createHash('sha256').update('Bearer ' + token).digest() : null;
+  const allowed = (req) => !want || crypto.timingSafeEqual(want, crypto.createHash('sha256').update(String(req.headers.authorization || '')).digest());
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
     const origin = req.headers.origin;
     if (origin && !localOrigin.test(origin) && process.env.IRONYARD_ALLOW_ORIGIN !== '*' && process.env.IRONYARD_ALLOW_ORIGIN !== origin) {
       res.writeHead(403, { 'content-type': 'text/plain' }).end('origin not allowed'); return;
     }
-    const cors = origin ? { 'access-control-allow-origin': origin, 'access-control-allow-headers': 'content-type, accept, mcp-protocol-version, mcp-session-id', 'access-control-allow-methods': 'POST, GET, OPTIONS' } : {};
+    const cors = origin ? { 'access-control-allow-origin': origin, 'access-control-allow-headers': 'content-type, accept, authorization, mcp-protocol-version, mcp-session-id', 'access-control-allow-methods': 'POST, GET, OPTIONS' } : {};
     if (req.method === 'OPTIONS') { res.writeHead(204, cors).end(); return; }
     if (url.pathname === '/health') { res.writeHead(200, { 'content-type': 'application/json', ...cors }).end(JSON.stringify({ ok: true, ...SERVER })); return; }
     if (url.pathname !== '/mcp') { res.writeHead(404, cors).end('not found'); return; }
+    if (!allowed(req)) { res.writeHead(401, { 'content-type': 'text/plain', 'www-authenticate': 'Bearer', ...cors }).end('this server wants `Authorization: Bearer <token>`'); return; }
     if (req.method !== 'POST') { res.writeHead(405, { allow: 'POST', ...cors }).end('this server answers POST only (no server-initiated stream)'); return; }
     let body = '';
     req.setEncoding('utf8');
@@ -434,13 +499,18 @@ function serveHttp(port, host) {
       res.writeHead(200, { 'content-type': 'application/json', ...cors }).end(JSON.stringify(out));
     });
   });
-  server.listen(port, host, () => log(`Streamable HTTP ready on http://${host}:${port}/mcp — ${TOOLS.length} tools, bots in ${USER_DIR}`));
+  server.listen(port, host, () => {
+    log(`Streamable HTTP ready on http://${host}:${port}/mcp — ${TOOLS.length} tools, bots in ${USER_DIR}${token ? ', token required' : ''}`);
+    if (!token && !/^(127\.|localhost$|::1$|\[::1\]$)/.test(host)) {
+      log(`WARNING: listening on ${host} with no IRONYARD_TOKEN — anyone who can reach this port can submit controllers and have them run here.`);
+    }
+  });
 }
 
 const argv = process.argv.slice(2);
 const hi = argv.indexOf('--http');
 if (argv.includes('--help')) {
-  console.log('ironyard-mcp            stdio transport\nironyard-mcp --http 8787 [--host 127.0.0.1]   Streamable HTTP at /mcp');
+  console.log('ironyard-mcp            stdio transport\nironyard-mcp --http 8787 [--host 127.0.0.1]   Streamable HTTP at /mcp\n\nenvironment: IRONYARD_BOTS_DIR, IRONYARD_REPLAY_DIR, IRONYARD_MATCH_TIMEOUT_MS,\n  IRONYARD_TOKEN (HTTP: require `Authorization: Bearer <token>`), IRONYARD_ALLOW_ORIGIN (HTTP: a browser origin to accept, or *)');
 } else if (hi >= 0) {
   const hostI = argv.indexOf('--host');
   serveHttp(Number(argv[hi + 1] || 8787), hostI >= 0 ? argv[hostI + 1] : '127.0.0.1');
