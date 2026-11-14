@@ -21,7 +21,7 @@ const TEAM_CN = ['橙队', '蓝队'];
 const TEAM_COL = ['var(--hazard)', 'var(--coolant)'];
 const ABBR = { core: '核', plate: '板', plate2: '板', plate4: '板', brick: '砖', brick2: '砖', armor: '甲', armor2: '甲', slope: '斜', plow: '铲',
   wheel: '轮', bigwheel: '巨', track: '履', hover: '浮', thruster: '推', gyro: '陀', blower: '增', spoiler: '翼',
-  mg: '枪', cannon: '炮', railgun: '轨', laser: '激', missile: '弹', mortar: '迫', saw: '锯', spike: '角',
+  mg: '枪', cannon: '炮', railgun: '轨', laser: '激', missile: '弹', mortar: '迫', saw: '锯', spike: '角', flamer: '火', harpoon: '叉', piston: '锤', keg: '桶',
   battery: '电', reactor: '堆', radar: '雷', shieldgen: '盾', repairer: '修', tile: '饰', fin: '鳍', pipe: '管', lamp: '灯', flag: '旗' };
 const CAT_CN = { structure: '结构 / 防御', mobility: '机动 / 转向', weapon: '武器', utility: '功能', decor: '装饰（免费）' };
 const ARROW = { N: '↑', E: '→', S: '↓', W: '←' };
@@ -36,6 +36,10 @@ const AI_TEMPLATES = {
   hornet: '左舷绕圈：让敌人始终在车的左边，7 m 逆时针环绕。武器要朝左（←）装。',
   wasp: '悬浮风筝：离敌 15 到 22 m，车头对敌倒退着放导弹。适合悬浮垫 + 导弹。',
   medic: '支援：跟着最残的队友修理，顺手开枪。适合维修臂 + 护盾。',
+  pyro: '放火：冲到 4 m 内绕着喷，烧起来就换下一个；自己着火就找维修台。适合喷火器。',
+  sapper: '投弹：全速冲向敌人，在火药桶正好能滚到的距离松手，急刹后退。适合火药桶 + 快车。',
+  angler: '钩锯：进 11 m 放鱼叉，把缆收到底，顶着锯；背后有熔岩就往后拖。适合鱼叉 + 圆锯。',
+  boxer: '拳击：绕到敌人背对坑、熔岩或火药桶的那一侧，一锤打进去。适合活塞锤。',
 };
 const STORE_KEY = 'ironyard.v2';
 
@@ -263,7 +267,7 @@ function renderReport() {
     const s = v.stats;
     return el('tr', {},
       el('td', {}, el('b', { class: 't' + v.team, text: v.name }), el('div', { class: 'note', text: v.bot })),
-      el('td', { text: v.alive ? '存活' : `${v.deathT}s ${({ fell: '坠落', burn: '烧毁', ram: '撞毁', melee: '锯毁', kinetic: '击毁', explosive: '炸毁', energy: '熔毁' })[v.deathCause] || v.deathCause}` }),
+      el('td', { text: v.alive ? '存活' : `${v.deathT}s ${({ fell: '坠落', burn: '烧毁', ram: '撞毁', melee: '锯毁', kinetic: '击毁', explosive: '炸毁', energy: '熔毁', fire: '烧毁', wrecked: '报废' })[v.deathCause] || v.deathCause}` }),
       el('td', { class: 'n', text: Math.round(v.hpFrac * 100) + '%' }), el('td', { class: 'n', text: Math.round(s.damageDealt) }), el('td', { class: 'n', text: Math.round(s.damageTaken) }),
       el('td', { class: 'n', text: s.kills }), el('td', { class: 'n', text: s.accuracy == null ? '–' : Math.round(s.accuracy * 100) + '%' }), el('td', { class: 'n', text: Math.round(s.distance) + ' m' }),
       el('td', { class: 'n', text: s.timeFireOutOfArc + 's' }), el('td', { class: 'n', text: s.timeEnergyStarved + 's' }), el('td', { class: 'n', text: Math.round(s.deflected || 0) }),
@@ -306,6 +310,10 @@ function bindArena() {
 }
 
 const PART_CN = {
+  flamer: '短程火流。火流本身伤害很小：它把扫到的每块零件加热到着火，火再一块传一块。装甲、履带、核心烧不着；护盾挡得住。',
+  harpoon: '发射带缆的钩子。钩住之后两辆车被拴在一起最多 7 秒：谁也跑不出缆长，reel 以 3 m/s 收缆。更重、抓地更好的那一方说了算。release 松钩。护盾会把钩子弹开。',
+  piston: '打正前方贴着的东西：30 伤害加 1300 N·s 的一推（250 kg 的车以 5 m/s 飞出去），自己也吃同样的反冲。敌人、木箱、滚过来的火药桶进了范围就自动出锤（melee: false 可以按住）。',
+  keg: '随车带的炸弹。detonate 原地引爆；jettison 松手让它带着车速滚出去，1.5 秒后爆。爆炸不分敌我，3.2 m 内全部挨炸、被掀开、被点着；谁把桶打坏或者点着，桶就当场炸。',
   core: '座舱，每车必须有且只有一个；核心没了车就没了，和核心断开的零件会掉。', plate: '薄底板，便宜。铺在底盘上当地板；放在上层很矮，炮可以越过它打。', plate2: '一片顶两颗凸点，单价更低，但碎就整片碎。',
   plate4: '一片顶四颗凸点，铺地最快最省，也是最大的一块弱点。', brick: '整高的砖，比底板结实；在上层会挡住炮口。', brick2: '两颗凸点的砖。',
   armor: '装甲砖，动能和爆炸伤害每次减 2（至少吃 25%），机枪打它只有一半；激光、锯和灼烧无视。', armor2: '两颗凸点的装甲砖，比两块 1×1 便宜一点，但碎就是两格一起碎。',
@@ -653,7 +661,8 @@ function renderRules() {
 const ITEM_CN = { 'Repair kit': '所有受损（没掉）的零件立刻回 35% 血。', Overshield: '获得 100 点临时护盾，持续 12 秒，没有护盾发生器也能用。', Overdrive: '8 秒内所有伤害 ×1.5。', Nitro: '6 秒内驱动和推进力 ×1.6。',
   Mines: '2 发。在车尾丢下一枚，0.8 秒后生效，第一个压上来的敌人吃爆炸（悬浮车不触发）。', EMP: '1 发。7 m 内所有敌人瘫痪 2.2 秒、护盾清零、掉 40 能量。' };
 const TILE_CN = { floor: '普通地面。', wall: '挡车、挡子弹、挡光束。', barrier: '只挡车，子弹从上面飞过去。', pit: '重心进坑直接出局，除非在悬浮。地图外面也算坑。', mud: '轮子牵引力掉 60%，履带只掉 15%，悬浮无视。',
-  ice: '几乎没有侧向抓地，轮子牵引力掉 65%，履带好一些。', lava: '每个零件每秒掉 12 血，悬浮时 3。', pad: '维修台：车速低于 2 m/s 停在上面每秒回 25 血，池子 150，每秒回充 6。' };
+  ice: '几乎没有侧向抓地，轮子牵引力掉 65%，履带好一些。', lava: '每个零件每秒掉 12 血，悬浮时 3。', pad: '维修台：车速低于 2 m/s 停在上面每秒回 25 血，池子 150，每秒回充 6。停上去还能灭火。',
+  crate: '能打碎的墙：150 血。子弹、爆炸、火、活塞锤、高速撞上去都算，碎了就是平地。', barrel: '挡路，直到被碰炸：40 血，然后 3 m 内不分敌我全部挨炸、被掀开、被点着。一桶会引爆旁边的桶。' };
 
 function renderMcp() {
   const tools = [['get_rules', '读完整规则书和控制器约定'], ['list_parts', '零件、道具、地形、常量的 JSON 表'], ['list_maps', '地图 ASCII 和坐标'], ['list_bots / get_bot', '看有哪些 bot，读它们的源码'],
@@ -695,5 +704,5 @@ function start(data) {
   runMatch();
   try { window.claude?.hot?.snapshot(() => ({ custom: S.custom, setup: S.setup, tab: S.tab })); } catch { /* not in the viewer */ }
 }
-window.__ironyard = { get renderer() { return renderer; }, get replay() { return rp; }, state: S }; // for tests and the console
+window.__ironyard = { get renderer() { return renderer; }, get replay() { return rp; }, state: S, setup: renderSetup }; // for tests and the console
 if (window.claude?.hot?.ready) window.claude.hot.ready(start); else start(window.claude?.hot?.data ?? {});

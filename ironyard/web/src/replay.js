@@ -23,15 +23,22 @@ export function prepReplay(res, IY) {
       odo[i] = odo[i - 1] + (q[0] - p[0]) * Math.cos(q[2]) + (q[1] - p[1]) * Math.sin(q[2]);
     }
     return { ...v, parts, deathT: parts.map(() => Infinity), com: [{ t: -1, u: a.comU, v: a.comV, r: a.radius }], weaponIdx, odo,
+      fireT0: parts.map(() => Infinity), fireT1: parts.map(() => Infinity),   // a piece burns once: from, to
       alive: parts.map(() => true), diedAt: v.deathT === null ? Infinity : v.deathT };
   });
   const fx = [];      // {k, t, x, y, ...}
   const items = [];   // {s, type, x, y, t0, t1}
   const mines = [];   // {id, x, y, team, t0, t1}
+  const tiles = [];   // crates and barrels: {tx, ty, kind, t} — t = when it broke (Infinity if it never did)
+  const T = map.tile;
+  for (let ty = 0; ty < map.h; ty++) for (let tx = 0; tx < map.w; tx++) {
+    const kind = IY.TILE_NAME[map.tiles[ty * map.w + tx]];
+    if (kind === 'crate' || kind === 'barrel') tiles.push({ tx, ty, kind, t: Infinity, x: (tx + 0.5) * T, y: (ty + 0.5) * T });
+  }
   const feed = [];    // {t, text, team}
   const openItem = {}, openMine = {};
   const name = (id) => (id >= 0 && vehicles[id] ? vehicles[id].name : null);
-  const CAUSE = { fell: '坠落', burn: '烧毁', ram: '撞毁', melee: '锯毁', kinetic: '击毁', explosive: '炸毁', energy: '熔毁' };
+  const CAUSE = { fell: '坠落', burn: '烧毁', ram: '撞毁', melee: '锯毁', kinetic: '击毁', explosive: '炸毁', energy: '熔毁', fire: '烧毁', wrecked: '打成废铁' };
   for (const e of res.events) {
     if (e.k === 'part') {
       const v = vehicles[e.v], p = v.parts[e.i], d = IY.PARTS[p.type];
@@ -41,6 +48,7 @@ export function prepReplay(res, IY) {
       const u = cy * IY.CELL - c.u, l = -cx * IY.CELL - c.v;
       const cs = Math.cos(f[2]), sn = Math.sin(f[2]);
       v.deathT[e.i] = e.t; v.alive[e.i] = false;
+      if (v.fireT1[e.i] > e.t) v.fireT1[e.i] = e.t;
       if (!d.decor) {
         const left = v.parts.filter((q, i) => v.alive[i] && solid(q));
         if (left.length) { const a = IY.aggregate(left); v.com.push({ t: e.t, u: a.comU, v: a.comV, r: a.radius }); }
@@ -66,9 +74,19 @@ export function prepReplay(res, IY) {
     else if (e.k === 'mine') { const m = { id: e.id, x: e.x, y: e.y, team: e.team, t0: e.t, t1: Infinity }; mines.push(m); openMine[e.id] = m; }
     else if (e.k === 'mineboom') { if (openMine[e.id]) openMine[e.id].t1 = e.t; }
     else if (e.k === 'cutoff') feed.push({ t: e.t, team: vehicles[e.v].team, kind: 'death', text: `${vehicles[e.v].name} 控制器出错被切断` });
+    else if (e.k === 'fire') { const v = vehicles[e.v]; v.fireT0[e.i] = e.t; if (!v.lit) { v.lit = true; feed.push({ t: e.t, team: v.team, kind: 'item', text: `${v.name} 着火了` }); } }
+    else if (e.k === 'out') { const v = vehicles[e.v]; if (v.fireT1[e.i] > e.t) v.fireT1[e.i] = e.t; }
+    else if (e.k === 'tile') {
+      const tl = tiles.find((x) => x.tx === e.tx && x.ty === e.ty && x.t === Infinity);
+      if (tl) tl.t = e.t;
+      const wood = e.was === 'crate';
+      fx.push({ k: 'debris', t: e.t, x: (e.tx + 0.5) * T, y: (e.ty + 0.5) * T, h: 0.9, color: wood ? [0x9a6a3a, 0x6b4a2a, 0xd9b27a] : [0xb3261e, 0x2a2d31, 0xf5cd2f], n: 5, seed: e.tx * 91 + e.ty * 17 });
+      fx.push({ k: 'debris', t: e.t, x: (e.tx + 0.5) * T + 0.5, y: (e.ty + 0.5) * T - 0.4, h: 0.5, color: wood ? [0x9a6a3a, 0xd9b27a] : [0xb3261e, 0x2a2d31], n: 5, seed: e.tx * 37 + e.ty * 53 });
+    } else if (e.k === 'punch') fx.push({ k: 'punch', t: e.t, x: e.x, y: e.y, a: e.a });
+    else if (e.k === 'hook') feed.push({ t: e.t, team: vehicles[e.a].team, kind: 'item', text: `${vehicles[e.a].name} 钩住了 ${vehicles[e.b].name}` });
   }
   const duration = frames[frames.length - 1].t;
-  return { res, map, frames, fdt, duration, vehicles, fx, items, mines, feed, zone: map.zone };
+  return { res, map, frames, fdt, duration, vehicles, fx, items, mines, tiles, feed, zone: map.zone };
 }
 
 /** Interpolated world state at time t (seconds). */
@@ -88,7 +106,7 @@ export function viewAt(rp, t) {
       id, team: v.team, name: v.name, alive: t < v.diedAt,
       x: a[0] + (b[0] - a[0]) * k, y: a[1] + (b[1] - a[1]) * k, th: lerpAng(a[2], b[2], k),
       energy: a[3], shield: a[4], hp: a[5], flags: a[6], item: a[7] || null, angles, com,
-      deathT: v.deathT, odo: v.odo[i0] + (v.odo[i1] - v.odo[i0]) * k,
+      deathT: v.deathT, fireT0: v.fireT0, fireT1: v.fireT1, odo: v.odo[i0] + (v.odo[i1] - v.odo[i0]) * k,
     };
   });
   const next = new Map();
@@ -114,8 +132,13 @@ export function viewAt(rp, t) {
     }
     return o;
   });
+  // kegs on the ground and cables: move with the frames either side when both have them
+  const nextKeg = new Map((f1.k || []).map((b) => [b[0], b]));
+  const bombs = (f0.k || []).map((b) => { const q = nextKeg.get(b[0]); return q ? { id: b[0], x: b[1] + (q[1] - b[1]) * k, y: b[2] + (q[2] - b[2]) * k, fuse: b[3] + (q[3] - b[3]) * k } : { id: b[0], x: b[1], y: b[2], fuse: b[3] }; });
+  const r0 = f0.r || [], r1 = f1.r || [];
+  const ropes = r0.map((r, i) => { const q = r1.length === r0.length ? r1[i] : r; return { x1: r[0] + (q[0] - r[0]) * k, y1: r[1] + (q[1] - r[1]) * k, x2: r[2] + (q[2] - r[2]) * k, y2: r[3] + (q[3] - r[3]) * k, team: r[4], taut: !!r[5] }; });
   return {
-    t, vehicles, projectiles, flashes, trails, beams: f0.b, zoneR: f0.z + (f1.z - f0.z) * k,
+    t, vehicles, projectiles, flashes, trails, bombs, ropes, tiles: rp.tiles, beams: f0.b, zoneR: f0.z + (f1.z - f0.z) * k,
     items: rp.items.filter((it) => it.t0 <= t && t < it.t1),
     mines: rp.mines.filter((m) => m.t0 <= t && t < m.t1),
     fx: rp.fx.filter((e) => e.t <= t && t - e.t < 1.6),

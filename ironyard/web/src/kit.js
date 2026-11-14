@@ -240,6 +240,41 @@ function model(type, z, team, accentHex, def) {
       box(b, 0.14, 0.26, 0.34, -0.12, Y0 + 0.18, 0, C.dark);
       cone(b, 0.15, 0.5, 0.18, Y0 + 0.18, 0, C.chrome, 'x');
       break;
+    case 'flamer': {
+      cyl(b, 0.17, 0.08, 0, base + 0.04, 0, C.dark, 'y', 14);
+      const t = tur(base + 0.08);
+      cyl(t.body, 0.095, 0.24, -0.07, 0.15, 0, C.red, 'x', 12);          // fuel tank, lying along the barrel
+      cyl(t.body, 0.1, 0.02, -0.07, 0.15, 0, C.yellow, 'x', 12);          // band round it
+      cyl(t.body, 0.04, 0.32, 0.15, 0.09, 0, C.dark, 'x', 10);            // lance
+      cyl(t.body, 0.07, 0.07, 0.31, 0.09, 0, C.black, 'x', 10, 0.045);    // flared nozzle
+      cyl(t.glow, 0.03, 0.03, 0.345, 0.09, 0, 0xff8a1e, 'x', 8);          // pilot light
+      break;
+    }
+    case 'harpoon': { // 2 studs along X
+      box(b, L - 0.06, 0.08, 0.3, 0, base + 0.04, 0, C.dark);
+      const t = tur(base + 0.08);
+      cyl(t.body, 0.11, 0.2, -0.2, 0.13, 0, C.mid, 'z', 14);              // winch drum, axle across
+      for (const s of [-1, 1]) cyl(t.body, 0.13, 0.025, -0.2, 0.13, s * 0.105, C.black, 'z', 14);
+      box(t.body, 0.52, 0.06, 0.1, 0.1, 0.1, 0, C.dark);                  // launch rail
+      cyl(t.body, 0.022, 0.5, 0.2, 0.17, 0, C.chrome, 'x', 8);            // shaft
+      cone(t.body, 0.07, 0.17, 0.52, 0.17, 0, C.chrome, 'x');             // head
+      for (const s of [-1, 1]) box(t.body, 0.1, 0.02, 0.05, 0.4, 0.17, s * 0.05, C.chrome, 0, s * 0.5);   // barbs
+      break;
+    }
+    case 'piston':
+      box(b, 0.3, 0.26, 0.34, -0.05, Y0 + 0.18, 0, C.dark);               // housing
+      box(b, 0.31, 0.05, 0.35, -0.05, Y0 + 0.3, 0, C.mid);
+      cyl(b, 0.07, 0.2, 0.16, Y0 + 0.18, 0, C.chrome, 'x', 10);           // rod
+      box(b, 0.08, 0.32, 0.37, 0.29, Y0 + 0.18, 0, C.yellow);             // hammer face
+      for (const s of [-1, 1]) box(b, 0.085, 0.05, 0.375, 0.29, Y0 + 0.18 + s * 0.09, 0, C.black);
+      break;
+    case 'keg':
+      cyl(b, 0.165, H - 0.04, 0, base + (H - 0.04) / 2, 0, 0x7a4a26, 'y', 12);
+      for (const k of [0.18, 0.82]) cyl(b, 0.172, 0.035, 0, base + (H - 0.04) * k, 0, C.black, 'y', 12);
+      cyl(b, 0.05, 0.03, 0.05, base + H - 0.03, 0, C.black, 'y', 8);      // bung
+      cyl(b, 0.014, 0.1, 0.05, base + H + 0.02, 0, C.light, 'y', 6);      // fuse
+      ball(o.glow, 0.03, 0.05, base + H + 0.08, 0, 0xff5a1f);
+      break;
     case 'battery':
       box(b, 0.34, H - 0.06, 0.34, 0, base + (H - 0.06) / 2, 0, C.black);
       box(b, 0.35, 0.07, 0.35, 0, base + H * 0.5, 0, C.yellow);

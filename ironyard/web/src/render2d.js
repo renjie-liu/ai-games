@@ -35,8 +35,9 @@ export class Render2D {
     const c = off.getContext('2d');
     c.fillStyle = '#05090f'; c.fillRect(0, 0, off.width, off.height);
     for (let ty = 0; ty < m.h; ty++) for (let tx = 0; tx < m.w; tx++) {
-      const id = IY.TILE_NAME[m.tiles[ty * m.w + tx]];
+      let id = IY.TILE_NAME[m.tiles[ty * m.w + tx]];
       if (id === 'pit') continue;
+      if (id === 'crate' || id === 'barrel') id = 'floor';   // those are drawn every frame, for as long as they stand
       c.fillStyle = TILE_COL[id][(tx + ty) % 2];
       c.fillRect(tx * px, (m.h - 1 - ty) * px, px, px);
       if (id === 'pad') { c.fillStyle = '#6dffb0'; c.fillRect(tx * px + 6, (m.h - 1 - ty) * px + 2, 4, 12); c.fillRect(tx * px + 2, (m.h - 1 - ty) * px + 6, 12, 4); }
@@ -58,6 +59,14 @@ export class Render2D {
       x.strokeStyle = 'rgba(255,77,77,0.8)'; x.lineWidth = 1.5; x.beginPath(); x.arc(cx, cy, view.zoneR * s, 0, 6.3); x.stroke();
     }
     for (const sp of m.itemSpawns) { const [a, b] = P(sp.x, sp.y); x.strokeStyle = 'rgba(143,166,189,0.4)'; x.lineWidth = 1; x.beginPath(); x.arc(a, b, 0.6 * s, 0, 6.3); x.stroke(); }
+    for (const tl of view.tiles || []) {
+      if (t >= tl.t) continue;
+      const [a, b] = P(tl.x - 1, tl.y + 1), w = 2 * s;
+      if (tl.kind === 'crate') { x.fillStyle = '#9a6a3a'; x.fillRect(a + 1, b + 1, w - 2, w - 2); x.strokeStyle = '#5a3c1e'; x.lineWidth = 1; x.strokeRect(a + 1.5, b + 1.5, w - 3, w - 3); x.beginPath(); x.moveTo(a + 1, b + 1); x.lineTo(a + w - 1, b + w - 1); x.stroke(); }
+      else { x.fillStyle = '#b3261e'; x.beginPath(); x.arc(a + w / 2, b + w / 2, w * 0.36, 0, 6.3); x.fill(); x.fillStyle = '#f5cd2f'; x.fillRect(a + w * 0.2, b + w * 0.44, w * 0.6, w * 0.12); }
+    }
+    for (const r of view.ropes || []) { const [a, b] = P(r.x1, r.y1), [c, d] = P(r.x2, r.y2); x.strokeStyle = r.taut ? '#e8edf2' : '#8a949e'; x.lineWidth = r.taut ? 1.6 : 1; x.beginPath(); x.moveTo(a, b); x.lineTo(c, d); x.stroke(); }
+    for (const bm of view.bombs || []) { const [a, b] = P(bm.x, bm.y); x.fillStyle = '#7a4a26'; x.beginPath(); x.arc(a, b, 0.32 * s + 1, 0, 6.3); x.fill(); if (Math.sin(t * (6 + 30 * (1.5 - bm.fuse))) > 0) { x.fillStyle = '#ff5a1f'; x.beginPath(); x.arc(a, b, 0.14 * s + 0.6, 0, 6.3); x.fill(); } }
     for (const mn of view.mines) { const [a, b] = P(mn.x, mn.y); x.fillStyle = '#30363d'; x.beginPath(); x.arc(a, b, 0.35 * s, 0, 6.3); x.fill(); x.fillStyle = TEAM[mn.team]; x.beginPath(); x.arc(a, b, 0.12 * s, 0, 6.3); x.fill(); }
     x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = `${Math.max(11, 1.3 * s)}px sans-serif`;
     for (const it of view.items) { const [a, b] = P(it.x, it.y); x.fillStyle = 'rgba(8,16,26,0.85)'; x.beginPath(); x.arc(a, b, 0.8 * s, 0, 6.3); x.fill(); x.fillStyle = '#fff'; x.fillText(IY.ITEMS[it.type].icon, a, b + 1); }
@@ -80,6 +89,11 @@ export class Render2D {
         x.fillRect(u - hl + inset, -lft - hw + inset, l * cell - inset * 2, w * cell - inset * 2);
         x.globalAlpha = 1;
         if (p.type === 'core') { x.fillStyle = TEAM[v.team]; x.fillRect(u - cell / 4, -lft - cell / 4, cell / 2, cell / 2); }
+        if (t >= v.fireT0[i] && t < v.fireT1[i]) {   // on fire: a flickering flame on the piece
+          const fl = 0.55 + 0.25 * Math.sin(t * 23 + i * 1.7);
+          x.fillStyle = '#ff6a1a'; x.beginPath(); x.arc(u, -lft, cell * fl, 0, 6.3); x.fill();
+          x.fillStyle = '#ffd27a'; x.beginPath(); x.arc(u, -lft, cell * fl * 0.5, 0, 6.3); x.fill();
+        }
       }
       // turrets
       const widx = rp.vehicles[id].weaponIdx;
@@ -103,7 +117,10 @@ export class Render2D {
       if (p.kind === 3) { x.strokeStyle = '#ffb347'; x.lineWidth = 1; x.stroke(); }
     }
     const line = (x1, y1, x2, y2, col, w, al) => { const [a, b] = P(x1, y1), [c, d] = P(x2, y2); x.globalAlpha = al; x.strokeStyle = col; x.lineWidth = w; x.beginPath(); x.moveTo(a, b); x.lineTo(c, d); x.stroke(); x.globalAlpha = 1; };
-    for (const b of view.beams) line(b[0], b[1], b[2], b[3], b[4] === 2 ? '#6dffb0' : TEAM[b[5]], 2, 0.9);
+    for (const b of view.beams) {
+      if (b[4] === 3) { line(b[0], b[1], b[2], b[3], '#ff7a1e', Math.max(3, 0.9 * s), 0.45 + 0.2 * Math.sin(t * 40)); line(b[0], b[1], (b[0] + b[2]) / 2, (b[1] + b[3]) / 2, '#ffd27a', Math.max(2, 0.4 * s), 0.8); }
+      else line(b[0], b[1], b[2], b[3], b[4] === 2 ? '#6dffb0' : TEAM[b[5]], 2, 0.9);
+    }
     for (const e of view.fx) {
       const age = t - e.t;
       const ring = (r, life, col) => { if (age > life) return; const [a, b] = P(e.x, e.y); x.globalAlpha = 1 - age / life; x.fillStyle = col; x.beginPath(); x.arc(a, b, Math.max(1, r * (0.3 + 0.7 * age / life) * s), 0, 6.3); x.fill(); x.globalAlpha = 1; };
@@ -111,6 +128,7 @@ export class Render2D {
       else if (e.k === 'boom') ring(e.r, 0.5, '#ffb347');
       else if (e.k === 'death') ring(3, 1, '#ff8b2b');
       else if (e.k === 'ram') ring(0.5, 0.3, '#fff3c4');
+      else if (e.k === 'punch') ring(0.9, 0.25, '#ffffff');
       else if (e.k === 'emp' && age < 0.7) { const [a, b] = P(e.x, e.y); x.globalAlpha = 1 - age / 0.7; x.strokeStyle = '#c084fc'; x.lineWidth = 2; x.beginPath(); x.arc(a, b, e.r * (age / 0.7) * s, 0, 6.3); x.stroke(); x.globalAlpha = 1; }
     }
   }

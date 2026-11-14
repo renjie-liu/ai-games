@@ -245,6 +245,8 @@ export const THEMES = {
     sky: [0x10141c, 0x4a2c20, 0x1a1614], sun: [0xe6ecff, 1.25, 0.6, 0.95], hemi: [0x9aa8c0, 0x4a3024, 0.42], fog: [110, 480], tint: [1.25, 1.22, 1.18], apron: [0.6, 0.6, 0.6], lava: 2.6, exposure: 1.0 },
   skybridge: { base: ['concrete'], wall: ['wallConcrete', 'hazard'], wallTop: ['concrete'], wallH: 2.4, barrier: ['barrierHazard'], marks: 'yard', void: true, below: 'clouds', slab: ['wallConcrete'],
     sky: [0x27407a, 0xf6b48a, 0x8a6f86], sun: [0xffc79a, 1.7, -0.6, 0.4], hemi: [0xb4c6f0, 0x5a4a5c, 0.36], fog: [170, 560], tint: [0.86, 0.84, 0.82], exposure: 0.95 },
+  depot: { base: ['asphalt'], wall: ['wallCorrugated', 96, 84, 70], wallTop: ['concrete'], wallH: 2.6, wallMetal: 0.3, barrier: ['barrierHazard'], marks: 'yard', props: true,
+    sky: [0x6a7f96, 0xe8c9a0, 0x7a6a58], sun: [0xffe6c0, 1.55, -0.8, 0.6], hemi: [0xd6e0f0, 0x5a4c3e, 0.38], fog: [150, 540], tint: [1.05, 1.02, 0.98], apron: [0.66, 0.64, 0.6], exposure: 0.95 },
   bog: { base: ['grass'], wall: ['wallConcrete', '', 1], wallTop: ['concrete'], wallH: 2.4, barrier: ['sandbag', 118, 116, 84], marks: 'dirt',
     rut: 'rgba(52,40,26,0.45)', patch: ['rgba(40,34,22,0.2)', 'rgba(130,140,70,0.10)'],
     sky: [0x76909a, 0xc6d2c8, 0x55603f], sun: [0xfff2d2, 1.3, 0.9, 0.7], hemi: [0xcfe0d6, 0x3f4a30, 0.4], fog: [90, 460], tint: [0.9, 0.9, 0.9], apron: [0.82, 0.84, 0.8], exposure: 0.95 },

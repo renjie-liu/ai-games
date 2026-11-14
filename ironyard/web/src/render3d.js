@@ -5,7 +5,7 @@
 import { Kit, S, TEAM_HEX, makeEnvironment, studTextures, glowTexture } from './kit.js';
 import { buildArena, scorchTexture } from './terrain.js';
 
-const FLAG = { alive: 1, boost: 2, stun: 4, hover: 8, overdrive: 16, nitro: 32, overshield: 64, saw: 128, repair: 256 };
+const FLAG = { alive: 1, boost: 2, stun: 4, hover: 8, overdrive: 16, nitro: 32, overshield: 64, saw: 128, repair: 256, fire: 512 };
 const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
 const L = (hex) => new THREE.Color(hex).convertSRGBToLinear();
 function hash01(n) { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
@@ -200,7 +200,26 @@ export class Render3D {
     w.smoke = im(new THREE.SphereGeometry(0.2, 8, 6), new THREE.MeshBasicMaterial({ color: L(0xc9d2dc), transparent: true, opacity: 0.32, depthWrite: false }), 300);
     w.debris = im(new THREE.BoxGeometry(0.2, 0.16, 0.2), new THREE.MeshStandardMaterial({ color: L(0xffffff), roughness: 0.4, envMap: this.env, envMapIntensity: 0.6 }), 240, true);
     w.debris.castShadow = true;
+    // fire: flames on burning pieces and the stream of a flamethrower are the same flickering tongues
+    w.fires = im(new THREE.ConeGeometry(0.5, 1, 7).translate(0, 0.5, 0), new THREE.MeshBasicMaterial({ color: L(0xffffff), ...add, opacity: 0.6 }), 420, true);
+    w.hooks = im(new THREE.ConeGeometry(0.09, 0.4, 6).rotateZ(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: L(0xd3d8de), roughness: 0.3, metalness: 0.8, envMap: this.env }), 8);
+    // crates and barrels: one instance each, shrunk to nothing once the replay has passed the moment they broke
+    const tiles = rp.tiles || [], nc = Math.max(1, tiles.filter((x) => x.kind === 'crate').length), nbar = Math.max(1, tiles.filter((x) => x.kind === 'barrel').length);
+    const wood = new THREE.MeshStandardMaterial({ color: L(0xffffff), roughness: 0.85, envMap: this.env, envMapIntensity: 0.25 });
+    w.crates = im(new THREE.BoxGeometry(1.86, 1.5, 1.86).translate(0, 0.75, 0), wood, nc, true);
+    w.crateBands = im(new THREE.BoxGeometry(1.94, 0.16, 1.94), new THREE.MeshStandardMaterial({ color: L(0x5a3c1e), roughness: 0.9 }), nc * 2);
+    w.crateLids = im(new THREE.BoxGeometry(1.6, 0.06, 1.6), new THREE.MeshStandardMaterial({ color: L(0x7a5230), roughness: 0.9 }), nc);
+    w.drums = im(new THREE.CylinderGeometry(0.42, 0.42, 1.15, 14).translate(0, 0.575, 0), new THREE.MeshStandardMaterial({ color: L(0xb3261e), roughness: 0.45, metalness: 0.3, envMap: this.env, envMapIntensity: 0.5 }), nbar * 3);
+    w.drumBands = im(new THREE.CylinderGeometry(0.435, 0.435, 0.2, 14), new THREE.MeshStandardMaterial({ color: L(0xf5cd2f), roughness: 0.6 }), nbar * 3);
+    for (const m of [w.crates, w.crateBands, w.crateLids, w.drums, w.drumBands]) { m.castShadow = true; m.receiveShadow = true; }
+    w.tileState = null;   // which tiles were standing at the last draw
     const pool = (n, make) => Array.from({ length: n }, () => { const m = make(); m.visible = false; root.add(m); return m; });
+    w.ropes = pool(8, () => new THREE.Mesh(this.g('rope', () => new THREE.CylinderGeometry(1, 1, 1, 6).rotateZ(Math.PI / 2)), new THREE.MeshStandardMaterial({ color: L(0x23272c), roughness: 0.7 })));
+    w.kegs = pool(12, () => { const g = new THREE.Group();
+      const d = new THREE.Mesh(this.g('keg', () => new THREE.CylinderGeometry(0.3, 0.3, 0.5, 12).rotateX(Math.PI / 2)), new THREE.MeshStandardMaterial({ color: L(0x7a4a26), roughness: 0.8 })); d.position.y = 0.3; d.castShadow = true;
+      const h = new THREE.Mesh(this.g('keghoop', () => new THREE.CylinderGeometry(0.315, 0.315, 0.3, 12).rotateX(Math.PI / 2)), new THREE.MeshStandardMaterial({ color: L(0x1a1c20), roughness: 0.6 })); h.position.y = 0.3;
+      const l = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex.glow, color: L(0xff7a2e), ...add })); l.position.y = 0.7;
+      g.add(d, h, l); g.userData = { roll: d, hoop: h, spark: l }; return g; });
     const beamGeo = new THREE.BoxGeometry(1, 1, 1);
     w.beams = pool(28, () => new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color: L(0xffffff), ...add })));
     w.booms = pool(30, () => new THREE.Mesh(this.g('boom', () => new THREE.SphereGeometry(1, 16, 12)), new THREE.MeshBasicMaterial({ color: L(0xffb347), ...add })));
@@ -227,6 +246,7 @@ export class Render3D {
   draw(view) {
     const w = this.world; if (!w) return;
     const t = view.t, d = this.dummy, col = this.col;
+    const fires = [];   // world positions of the pieces that are alight: [x, top, z, seed]
     view.vehicles.forEach((v, id) => {
       const o = w.vehicles[id];
       o.root.visible = v.alive;
@@ -249,17 +269,24 @@ export class Render3D {
           else pc.spin.node.rotation.y = t * 2.4;
         }
         if (pc.flame) { pc.flame.visible = !!boosting; if (boosting) pc.flame.scale.set(0.75 + 0.35 * Math.sin(t * 70 + i), 1, 1); }
+        if (t >= v.fireT0[i] && t < v.fireT1[i]) {
+          if (!o.fresh) { o.root.updateMatrixWorld(true); o.fresh = true; }
+          const p = pc.node.getWorldPosition(this.v3);
+          fires.push([p.x, p.y + (w.rp.vehicles[id].parts[i].z ? 0.95 : 0.5), p.z, id * 61 + i]);
+        }
       }
+      o.fresh = false;
       const sh = v.shield > 0;
       o.bubble.visible = sh;
       if (sh) { const r = v.com.r + 0.4; o.bubble.scale.set(r, r * 0.62, r); o.bubble.position.y = 0.35; o.bubble.rotation.y = t * 0.3; o.b1.material.opacity = 0.05 + Math.min(0.09, v.shield / 1400); }
     });
 
     // projectiles
-    let nb = 0, ns = 0, nm = 0, nl = 0;
+    let nb = 0, ns = 0, nm = 0, nl = 0, nh = 0;
     d.scale.set(1, 1, 1);
     for (const p of view.projectiles) {
       d.rotation.set(0, p.ang, 0);
+      if (p.kind === 4) { if (nh < 8) { d.position.set(p.x, 0.8, -p.y); d.updateMatrix(); w.hooks.setMatrixAt(nh++, d.matrix); } continue; }
       if (p.kind === 0 && nb < 400) { d.position.set(p.x, 0.72, -p.y); d.updateMatrix(); w.tracers.setMatrixAt(nb, d.matrix); w.tracers.setColorAt(nb++, col.setHex(p.team === 0 ? 0xffb055 : 0x7fd4ff).convertSRGBToLinear()); }
       else if (p.kind === 1 && ns < 80) { d.position.set(p.x, 0.75, -p.y); d.updateMatrix(); w.shells.setMatrixAt(ns++, d.matrix); }
       else if (p.kind === 2 && nm < 60) { d.position.set(p.x, 1.0, -p.y); d.updateMatrix(); w.missiles.setMatrixAt(nm++, d.matrix); }
@@ -268,8 +295,8 @@ export class Render3D {
         d.position.set(p.x, 0.03, -p.y); d.rotation.set(0, 0, 0); d.updateMatrix(); w.lobShadows.setMatrixAt(nl++, d.matrix);
       }
     }
-    w.tracers.count = nb; w.shells.count = ns; w.missiles.count = nm; w.lobs.count = nl; w.lobShadows.count = nl;
-    for (const m of [w.tracers, w.shells, w.missiles, w.lobs, w.lobShadows]) m.instanceMatrix.needsUpdate = true;
+    w.tracers.count = nb; w.shells.count = ns; w.missiles.count = nm; w.lobs.count = nl; w.lobShadows.count = nl; w.hooks.count = nh;
+    for (const m of [w.tracers, w.shells, w.missiles, w.lobs, w.lobShadows, w.hooks]) m.instanceMatrix.needsUpdate = true;
     if (w.tracers.instanceColor) w.tracers.instanceColor.needsUpdate = true;
 
     // smoke trails
@@ -281,7 +308,89 @@ export class Render3D {
       d.position.set(s.x + (hash01(sn) - 0.5) * 0.1, (s.kind === 3 ? 0.8 + s.h : 1.0) + k * 0.25, -s.y); d.scale.setScalar(sc * (1 - k * 0.55)); d.updateMatrix();
       w.smoke.setMatrixAt(sn++, d.matrix);
     }
+    for (let i = 0; i < fires.length && sn < 296; i += 2) {   // every other burning piece smokes
+      const f = fires[i];
+      for (let j = 0; j < 2; j++) {
+        const ph = (t * 0.8 + hash01(f[3] + j * 7)) % 1;
+        d.position.set(f[0] + (hash01(f[3] + j) - 0.5) * 0.3 + ph * 0.4, f[1] + 0.5 + ph * 2.2, f[2] + (hash01(f[3] * 3 + j) - 0.5) * 0.3); d.scale.setScalar((0.7 + ph * 1.6) * (1 - ph * 0.5)); d.updateMatrix();
+        w.smoke.setMatrixAt(sn++, d.matrix);
+      }
+    }
     w.smoke.count = sn; w.smoke.instanceMatrix.needsUpdate = true;
+
+    // fire: tongues on every burning piece, and along the stream of every flamethrower
+    let nf = 0;
+    const tongue = (x, y, z, wid, len, ry, lying, hot) => {
+      if (nf >= 420) return;
+      d.position.set(x, y, z); d.rotation.set(0, ry, lying ? -Math.PI / 2 : 0); d.scale.set(wid, len, wid); d.updateMatrix();
+      w.fires.setMatrixAt(nf, d.matrix); w.fires.setColorAt(nf++, col.setHex(hot > 0.75 ? 0xffd27a : hot > 0.45 ? 0xff9a2e : hot > 0.2 ? 0xf2601a : 0xa8300c).convertSRGBToLinear());
+    };
+    for (const f of fires) {
+      const fl = Math.sin(t * 19 + f[3]) * 0.5 + 0.5, fl2 = Math.sin(t * 31 + f[3] * 1.7) * 0.5 + 0.5;
+      tongue(f[0], f[1] - 0.12, f[2], 0.3 + 0.08 * fl2, 0.6 + 0.45 * fl, f[3], false, 0.3);
+      tongue(f[0] + (fl2 - 0.5) * 0.14, f[1] - 0.1, f[2] + (fl - 0.5) * 0.14, 0.2, 0.45 + 0.35 * fl2, f[3] * 2, false, 0.6);
+      tongue(f[0] - (fl - 0.5) * 0.1, f[1] - 0.08, f[2] + (fl2 - 0.5) * 0.1, 0.11, 0.3 + 0.25 * fl, f[3] * 3, false, 0.9);
+    }
+    for (const b of view.beams) {
+      if (b[4] !== 3) continue;
+      const dx = b[2] - b[0], dy = b[3] - b[1], len = Math.hypot(dx, dy), ang = Math.atan2(dy, dx);
+      for (let k = 0; k < 10; k++) {
+        const f = ((k + (t * 7) % 1) / 10), wob = Math.sin(t * 27 + k * 2.1) * 0.12 * f;
+        const px = b[0] + dx * f - (dy / len) * wob, py = b[1] + dy * f + (dx / len) * wob;
+        tongue(px, 0.8 + f * 0.2, -py, 0.1 + 0.5 * f, 0.7 + 0.8 * f, ang, true, 1 - f);
+      }
+    }
+    w.fires.count = nf; w.fires.instanceMatrix.needsUpdate = true; if (w.fires.instanceColor) w.fires.instanceColor.needsUpdate = true;
+    d.rotation.set(0, 0, 0); d.scale.set(1, 1, 1);
+
+    // cables, kegs on the ground
+    w.ropes.forEach((m, i) => {
+      const r = (view.ropes || [])[i];
+      m.visible = !!r; if (!r) return;
+      const len = Math.hypot(r.x2 - r.x1, r.y2 - r.y1), th = r.taut ? 0.028 : 0.04;
+      m.position.set((r.x1 + r.x2) / 2, 0.82, -(r.y1 + r.y2) / 2); m.rotation.y = Math.atan2(r.y2 - r.y1, r.x2 - r.x1); m.scale.set(len, th, th);
+    });
+    w.kegs.forEach((g, i) => {
+      const k = (view.bombs || [])[i];
+      g.visible = !!k; if (!k) return;
+      g.position.set(k.x, 0, -k.y);
+      g.userData.roll.rotation.z = g.userData.hoop.rotation.z = -(k.x + k.y) * 2.2;
+      const blink = Math.sin(t * (10 + 40 * Math.max(0, 1.5 - k.fuse))) > 0;
+      g.userData.spark.visible = blink; g.userData.spark.scale.setScalar(0.5 + (1.5 - Math.min(1.5, k.fuse)) * 0.5);
+    });
+
+    // crates and barrels still standing
+    const tiles = view.tiles || [];
+    let key = '';
+    for (const tl of tiles) key += t < tl.t ? '1' : '0';
+    if (key !== w.tileState) {
+      w.tileState = key;
+      let ci = 0, bi2 = 0;
+      for (let i = 0; i < tiles.length; i++) {
+        const tl = tiles[i], up = t < tl.t ? 1 : 0, h = hash01(tl.tx * 13 + tl.ty * 7);
+        if (tl.kind === 'crate') {
+          d.rotation.set(0, (h - 0.5) * 0.08, 0); d.scale.setScalar(up || 1e-4);
+          d.position.set(tl.x, 0, -tl.y); d.updateMatrix(); w.crates.setMatrixAt(ci, d.matrix);
+          w.crates.setColorAt(ci, col.setHex(h > 0.66 ? 0xa9753f : h > 0.33 ? 0x9a6a3a : 0x8a5c32).convertSRGBToLinear());
+          d.position.set(tl.x, 0.32 * up, -tl.y); d.updateMatrix(); w.crateBands.setMatrixAt(ci * 2, d.matrix);
+          d.position.set(tl.x, 1.18 * up, -tl.y); d.updateMatrix(); w.crateBands.setMatrixAt(ci * 2 + 1, d.matrix);
+          d.position.set(tl.x, 1.52 * up, -tl.y); d.updateMatrix(); w.crateLids.setMatrixAt(ci, d.matrix);
+          ci++;
+        } else {
+          for (let j = 0; j < 3; j++) {
+            const a = h * 6.283 + j * 2.094, ox = Math.cos(a) * 0.46, oz = Math.sin(a) * 0.46;
+            d.rotation.set(0, a, 0); d.scale.setScalar(up || 1e-4);
+            d.position.set(tl.x + ox, 0, -tl.y + oz); d.updateMatrix(); w.drums.setMatrixAt(bi2 * 3 + j, d.matrix);
+            d.position.set(tl.x + ox, 0.78 * up, -tl.y + oz); d.updateMatrix(); w.drumBands.setMatrixAt(bi2 * 3 + j, d.matrix);
+          }
+          bi2++;
+        }
+      }
+      w.crates.count = ci; w.crateBands.count = ci * 2; w.crateLids.count = ci; w.drums.count = bi2 * 3; w.drumBands.count = bi2 * 3;
+      for (const m of [w.crates, w.crateBands, w.crateLids, w.drums, w.drumBands]) m.instanceMatrix.needsUpdate = true;
+      if (w.crates.instanceColor) w.crates.instanceColor.needsUpdate = true;
+      d.rotation.set(0, 0, 0); d.scale.set(1, 1, 1);
+    }
 
     // beams (lasers, repair) + rail flashes
     let bi = 0, fi = 0;
@@ -296,6 +405,7 @@ export class Render3D {
       const s = w.flashes[fi++]; s.visible = true; s.position.set(x, h, -y); s.scale.set(size, size, 1); s.material.color.setHex(color).convertSRGBToLinear(); s.material.opacity = opacity;
     };
     for (const b of view.beams) {
+      if (b[4] === 3) { flash(b[0], b[1], 0.8, 1.1 + 0.3 * Math.sin(t * 60), 0xffb040, 0.9); continue; }   // a flamethrower: drawn above as fire
       const c = b[4] === 2 ? 0x6dffb0 : b[5] === 0 ? 0xff8a50 : 0x66d4ff;
       beam(b[0], b[1], b[2], b[3], c, 0.07, 0.95, 0.72); beam(b[0], b[1], b[2], b[3], c, 0.2, 0.25, 0.72);
       if (b[4] !== 2) flash(b[2], b[3], 0.72, 0.9 + 0.3 * Math.sin(t * 50), c, 0.8);
@@ -318,7 +428,12 @@ export class Render3D {
     for (const e of view.fx) {
       const age = t - e.t;
       if (e.k === 'rail' && age < 0.45) { const k = 1 - age / 0.45; beam(e.x1, e.y1, e.x2, e.y2, 0xd6f1ff, 0.05 + 0.14 * k, k, 0.72); beam(e.x1, e.y1, e.x2, e.y2, e.team === 0 ? 0xff9a50 : 0x66c8ff, 0.4 * k, 0.3 * k, 0.72); if (age < 0.12) flash(e.x1, e.y1, 0.75, 2.4, 0xbfe9ff, 1); }
-      else if (e.k === 'boom' && age < 0.55) { boom(e.x, e.y, e.r * 1.15, age, 0.55, 0xffb347); if (age < 0.4) ring(e.x, e.y, e.r * 1.5, age, 0.4, 0xffd9a0, 0.6); if (age < 0.1) flash(e.x, e.y, 0.8, e.r * 3.2, 0xfff0c8, 1); }
+      else if (e.k === 'boom' && age < (e.r >= 2.5 ? 0.9 : 0.55)) {
+        if (age < 0.55) boom(e.x, e.y, e.r * 1.15, age, 0.55, 0xffb347);
+        if (e.r >= 2.5) { boom(e.x, e.y, e.r * 0.85, age, 0.9, 0xff5a14, 1.3); if (age < 0.7) ring(e.x, e.y, e.r * 2.1, age, 0.7, 0xffe0b0, 0.5); }   // a keg or a barrel: a fireball that hangs
+        if (age < 0.4) ring(e.x, e.y, e.r * 1.5, age, 0.4, 0xffd9a0, 0.6); if (age < 0.1) flash(e.x, e.y, 0.8, e.r * 3.2, 0xfff0c8, 1);
+      }
+      else if (e.k === 'punch' && age < 0.28) { ring(e.x + Math.cos(e.a) * 0.5, e.y + Math.sin(e.a) * 0.5, 1.5, age, 0.28, 0xffffff, 0.9); if (age < 0.09) flash(e.x + Math.cos(e.a) * 0.4, e.y + Math.sin(e.a) * 0.4, 0.5, 1.8, 0xfff3c4, 1); }
       else if (e.k === 'death' && age < 1.3) { boom(e.x, e.y, 3.4, age, 1.3, 0xff8b2b, 0.9); if (age < 0.6) boom(e.x, e.y, 1.9, age, 0.6, 0xfff3c4, 0.9); ring(e.x, e.y, 6, age, 1.0, TEAM_HEX[e.team], 0.8); if (age < 0.16) flash(e.x, e.y, 1, 9, 0xfff0c8, 1); }
       else if (e.k === 'spark' && age < 0.2) flash(e.x, e.y, 0.8, 1.1 * (1 - age / 0.2), 0x9ad7ff, 0.9);
       else if (e.k === 'ram' && age < 0.25) flash(e.x, e.y, 0.5, (0.9 + Math.min(1.6, e.d / 50)) * (1 - age / 0.25), 0xfff3c4, 0.9);
