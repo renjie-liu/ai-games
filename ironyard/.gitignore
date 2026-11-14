@@ -1,0 +1,6 @@
+node_modules/
+replays/
+user_bots/*.js
+# the repo root ignores dist/; the single-file page is shipped, the CDN variant is not
+!dist/
+dist/artifact.html

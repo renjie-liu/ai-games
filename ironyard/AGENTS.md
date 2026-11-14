@@ -1,0 +1,538 @@
+# Ironyard — rules and controller contract (engine 0.2.0)
+
+Ironyard is a deterministic vehicle-combat arena. **You build the car and you write its brain.**
+Before a match you hand in ONE JavaScript file containing a blueprint (which bricks go where, within a
+budget) and a `tick` function (what the car does each decision step). Matches then run with no model
+in the loop: same files + same seed = same result, every time.
+
+Modes: `1v1`, `2v2`, `3v3`. A team wins by destroying every enemy core. Budget per vehicle:
+light 800 / standard 1200 / heavy 1800 credits (default standard).
+
+## 1. Your file
+
+```js
+// mybot.js — top-level names the engine looks for (the `export` keyword is optional and ignored)
+const meta = { name: 'My Bot', author: 'me', model: 'which LLM wrote this', notes: 'one-line idea' };
+
+// A blueprint object, or a function (ctx, api) => blueprint so you can adapt to mode / slot / map.
+const design = {
+  name: 'Starter',
+  paint: { accent: 'yellow' },
+  parts: [
+    // chassis layer (z: 0): what touches the ground
+    { type: 'plate', x: 0,  y: 0, z: 0 }, { type: 'plate', x: 0, y: 1, z: 0 },
+    { type: 'wheel', x: -1, y: 0, z: 0 }, { type: 'wheel', x: 1, y: 0, z: 0 },
+    // deck layer (z: 1): what rides on top
+    { type: 'core',  x: 0,  y: 0, z: 1 },
+    { type: 'mg',    x: 0,  y: 1, z: 1, dir: 'N' },
+  ],
+};
+
+function init(info, api) { /* optional, once before the match */ }
+
+function tick(state, api) {           // called at 20 Hz
+  const foe = state.enemies[0];
+  if (!foe) return { throttle: 1 };
+  return { ...api.util.driveTo(state.self, foe), aim: foe, fire: true };
+}
+```
+
+Rules for the file: plain JavaScript, no `import`/`require`, no network, no clock (`Date`, timers and
+the usual globals are undefined), `Math.random` is replaced by a seeded generator. Keep state in
+top-level variables — every vehicle gets its own private copy of your file, so teammates do **not**
+share variables; use `say` (section 6) to coordinate.
+
+## 2. Building the vehicle
+
+The kit works like a box of bricks: a stud grid, two layers that stack, and pieces of different sizes.
+
+* **Stud grid:** 9 studs wide by 11 long, one stud = 0.4 m. Coordinates are integers,
+  `x ∈ [-4, 4]`, `y ∈ [-5, 5]`. **`y+` is the FRONT, `x+` is the RIGHT side.**
+* **Two layers:** `z: 0` is the **chassis** (running gear, floor, rams), `z: 1` is the **deck** (cockpit, turrets,
+  superstructure). Each piece says which layer it may go on. A piece listed as "either layer" needs an explicit `z`.
+* **Multi-stud pieces:** a piece covers `studs` = across x along (when facing N). `x, y` is the **lowest-x, lowest-y
+  stud** of its footprint. `dir` (`'N'` front, `'E'` right, `'S'` rear, `'W'` left) turns it; E/W swap the footprint.
+  Wheels and tracks always run lengthwise.
+* **Stacking:** every deck piece needs at least one stud on top of a chassis piece (overhang is fine).
+* **Connection:** exactly one `core`; every piece must reach it through pieces that touch edge-to-edge on a layer or sit on top of each other.
+* **Clear lane:** on its own layer, every stud in front of a gun, saw, spike or plow (along `dir`, out to the grid edge)
+  must be empty. Thrusters need the studs *behind* them empty. On the deck, **low** pieces (plates, slopes, tiles, radar,
+  spoiler) do not block — so a slope in front of a turret is legal, and it takes the hit first.
+* **Budget:** total cost ≤ budget. Up to 8 decor pieces are free and weightless.
+* **Paint:** `paint: { accent }` picks the trim colour (white, black, grey, yellow, lime, red, azure, purple, pink, sand). The hull is always your team colour.
+
+What happens under fire:
+
+* Each piece has its own hp. At 0 it breaks off and its function is gone. Anything no longer connected to
+  the core falls off with it. The vehicle dies when the core dies.
+* **Shots, beams and blasts hit the deck piece of a stud column first**, then the chassis piece under it.
+  **Rams, saws and mines hit the chassis piece first.** A shot travelling across the vehicle hits whatever column it enters first.
+* Slopes: a kinetic or explosive hit arriving against the slope's facing (within 60°) only does 45%.
+* Decor is not solid: shots pass through it, and it is shaken off when the piece under it takes 20 damage.
+
+**Structure & defence**
+
+| type | glyph | studs | cost | mass kg | hp | placement | numbers | notes |
+|---|---|---|---|---|---|---|---|---|
+| `core` | @ | 1x1 | 0 | 20 | 400 | either layer | +100 energy cap, +5 energy/s, sensor 22 m, max 1 | The cockpit. Exactly one per vehicle; when it dies the vehicle dies. Pieces no longer connected to it fall off. |
+| `plate` | p | 1x1 | 6 | 3 | 45 | either layer, low |  | Thin cheap plate. On the chassis it carries things; on the deck it is flat enough to shoot over. |
+| `plate2` | q | 1x2 | 10 | 5 | 85 | either layer, low |  | Two studs of plate in one piece: cheaper per stud, but it is lost as a unit. |
+| `plate4` | Q | 2x2 | 18 | 9 | 160 | either layer, low |  | Four studs of plate in one piece. Fast, cheap floor — and one big thing to lose. |
+| `brick` | b | 1x1 | 9 | 4 | 70 | either layer |  | Full-height brick. Tougher than plate; on the deck it blocks firing lanes. |
+| `brick2` | B | 1x2 | 16 | 7 | 130 | either layer |  | Two-stud brick. |
+| `armor` | a | 1x1 | 26 | 13 | 200 | either layer | armor 2 | Heavy brick. Subtracts 2 from every kinetic/explosive hit (min 25% gets through), so it halves machine-gun fire. Lasers, saws and burn ignore it. |
+| `armor2` | A | 1x2 | 48 | 24 | 380 | either layer | armor 2 | Two-stud armor brick. Stagger them like a brick wall. |
+| `slope` | / | 1x1 | 30 | 9 | 150 | either layer, low, dir | armor 1, frontal shots x0.45 | Wedge that faces `dir`. Shots arriving against its face only do 45% (ricochet). Low: guns behind it fire over it. |
+| `plow` | P | 3x1 | 95 | 34 | 520 | chassis, dir, clear lane | armor 1, ram dealt x1.3, taken x0.3 | Three-stud-wide ram blade. Takes 30% collision damage and shoves whatever it hits 60% harder. Must face an open edge. |
+
+**Mobility & steering**
+
+| type | glyph | studs | cost | mass kg | hp | placement | numbers | notes |
+|---|---|---|---|---|---|---|---|---|
+| `wheel` | o | 1x1 | 30 | 6 | 70 | chassis | 380 N drive, grip 1 | Drive wheel. Left/right placement gives differential steering: the wider apart, the faster you turn. Bogs in mud, slides on ice. |
+| `bigwheel` | O | 1x2 | 58 | 13 | 160 | chassis, always lengthwise | 660 N drive, grip 1.25 | Two studs long. Nearly twice a wheel, tougher, and it keeps 75% traction in mud. |
+| `track` | T | 1x3 | 125 | 34 | 380 | chassis, always lengthwise | 1080 N drive, grip 1.6 | Three studs of all-terrain drive. Almost ignores mud, keeps some grip on ice, hard to shove sideways. |
+| `hover` | h | 1x1 | 50 | 5 | 50 | chassis | 210 N drive, grip 0.22, lift 75 kg, 1.2 energy/s | Lifts 75 kg each. If total lift >= vehicle mass (and energy > 0) you float: immune to mud/ice/pits/mines, lava hurts 75% less — but you drift and are easy to shove. |
+| `thruster` | J | 1x1 | 55 | 5 | 45 | either layer, dir, clear exhaust | 1000 N thrust, 16 energy/s | Burst rocket, pushes the vehicle toward `dir`. Works on any terrain. Needs clear exhaust: nothing tall behind it on its own layer. |
+| `gyro` | g | 1x1 | 45 | 5 | 50 | either layer | 300 N·m steering torque | Adds 300 N·m of steering torque regardless of wheels or terrain. |
+| `blower` | w | 1x1 | 60 | 6 | 50 | deck | +14% drive force, max 2 | Blower through the hood: +14% force from every wheel, track and hover pad. Up to two. |
+| `spoiler` | W | 3x1 | 40 | 5 | 60 | deck, low | +60% side grip, max 1 | Downforce: +60% side grip, so fast light cars stop sliding wide. Low piece. |
+
+**Weapons**
+
+| type | glyph | studs | cost | mass kg | hp | placement | numbers | notes |
+|---|---|---|---|---|---|---|---|---|
+| `mg` | m | 1x1 | 70 | 6 | 90 | deck, dir, clear lane | 4 dmg / 0.125s (32 dps), range 13 m, arc ±50°, traverse 5 rad/s, shot speed 28 m/s, 0.7 energy/shot, kinetic | Wide-arc turret, 32 dps. Shreds plates and wheels; armor halves it. |
+| `cannon` | C | 1x2 | 110 | 13 | 170 | deck, dir, clear lane | 30 dmg / 1.4s (21 dps), range 19 m, arc ±20°, traverse 2.2 rad/s, shot speed 24 m/s, 9 energy/shot, splash 0.75 m x0.3, kinetic | Slow heavy shell with small splash. Narrow arc: point the car. |
+| `railgun` | R | 1x3 | 170 | 16 | 160 | deck, dir, clear lane | 64 dmg / 4.4s (15 dps), range 24 m, arc ±8°, traverse 1.2 rad/s, instant hit, 30 energy/shot, kinetic | Instant-hit sniper, three studs long. Punches through 2 pieces (the second takes half). Nearly fixed mount, hungry for energy. |
+| `laser` | L | 1x1 | 120 | 8 | 90 | deck, dir, clear lane | 22 dps beam, range 10 m, arc ±35°, traverse 4 rad/s, instant hit, 11 energy/s, energy | Continuous beam that ignores armor and slopes. Short range and drains energy fast. |
+| `missile` | M | 2x2 | 170 | 15 | 200 | deck, dir, clear lane | 30 dmg x2 / 3.6s (17 dps), range 40 m, arc ±60°, traverse 6 rad/s, shot speed 13 m/s, 16 energy/shot, splash 1.1 m x0.6, explosive | Fires two homing missiles with splash. Slow enough to dodge behind walls. |
+| `mortar` | N | 2x2 | 150 | 18 | 160 | deck, dir | 46 dmg / 4.4s (10 dps), range 6-24 m, arc 360°, traverse 2.5 rad/s, shot speed 15 m/s, 14 energy/shot, blast 2 m, up to 7 pieces, explosive | Lobs a shell OVER walls to the point you aim at (give `aim` as {x, y}). 2 m blast. Cannot hit closer than 6 m; needs no clear lane. |
+| `saw` | S | 1x1 | 60 | 10 | 120 | chassis, dir, clear lane | 60 dps on contact, 4 energy/s while cutting | Grinds any enemy piece it touches for 60 dps. Ignores armor and shields, eats the chassis first. |
+| `spike` | V | 1x1 | 28 | 7 | 160 | chassis, dir, clear lane | ram dealt x3, taken x0.25 | Collisions through this stud deal x3 damage and you take only 25% back. |
+
+**Utility**
+
+| type | glyph | studs | cost | mass kg | hp | placement | numbers | notes |
+|---|---|---|---|---|---|---|---|---|
+| `battery` | e | 1x1 | 35 | 9 | 60 | either layer | +140 energy cap | +140 energy capacity. |
+| `reactor` | r | 1x1 | 75 | 12 | 70 | either layer | +20 energy cap, +8 energy/s | +8 energy/s. Volatile: when destroyed it blasts every piece touching it (sides, above, below) for 35. |
+| `radar` | d | 1x1 | 40 | 3 | 35 | deck, low | sensor +16 m, max 1 | +16 m sensor range (shared with the team) and reveals enemy mines. |
+| `shieldgen` | G | 1x1 | 130 | 12 | 70 | deck | 120 shield, +10/s after 3s, 2.5 energy/s, max 1 | Bubble that absorbs 120 projectile/beam/blast damage, recharging after 3 s without a hit. Rams and saws go straight through. |
+| `repairer` | + | 1x1 | 90 | 8 | 50 | deck | 9 hp/s heal within 5 m, 6 energy/s, max 2 | Heals the most damaged piece on you or an ally within 5 m for 9 hp/s. Cannot rebuild destroyed pieces. |
+
+**Decor (free)**
+
+| type | glyph | studs | cost | mass kg | hp | placement | numbers | notes |
+|---|---|---|---|---|---|---|---|---|
+| `tile` | t | 1x1 | 0 | 0 | 20 | deck, low |  | Smooth tile in your accent colour. |
+| `fin` | f | 1x1 | 0 | 0 | 20 | deck, low, dir |  | A fin. It does nothing and looks fast. |
+| `pipe` | i | 1x1 | 0 | 0 | 20 | deck, low |  | Twin chrome stacks. |
+| `lamp` | l | 1x1 | 0 | 0 | 20 | deck, low, dir |  | Glowing lamps facing `dir`. |
+| `flag` | F | 1x1 | 0 | 0 | 20 | deck, low |  | Antenna with a pennant in your accent colour. |
+
+ASCII shortcut — the same two pictures the tools print back to you:
+
+```js
+const E = '.  .  .  .  .  .  .  .  .';
+const design = (ctx, api) => api.util.blueprint('Tankette', {   // 11 rows each, first row = FRONT, 9 tokens per row
+  deck: [ E, E,
+    '.  .  .  .  /^ .  .  .  .',     // a slope facing forward, in front of…
+    '.  .  .  .  :  .  .  .  .',     // …a 1x2 cannon: ":" marks the rest of a multi-stud piece
+    '.  .  .  a  C^ a  .  .  .',     //    and its glyph sits on its lowest-x, lowest-y stud
+    '.  .  .  a  @  a  .  .  .',
+    E, E, E, E, E ],
+  chassis: [ E, E,
+    '.  .  .  .  p  .  .  .  .',
+    '.  .  :  p  p  p  :  .  .',     // two 1x3 track units, one per side
+    '.  .  :  p  r  p  :  .  .',
+    '.  .  T  p  p  p  T  .  .',
+    E, E, E, E, E ],
+}, { paint: { accent: 'yellow' } });
+```
+
+Tokens: `.` empty, `:` rest of a multi-stud piece, otherwise the glyph plus an optional arrow `^ > v <` for its direction.
+
+### How the numbers turn into motion
+
+* **Drive:** each wheel/track pushes along the hull's forward axis with `force x command`, where the
+  command is `throttle - steer` for movers left of the centre of mass and `throttle + steer` for
+  movers right of it (clamped to ±1; reverse is 70% as strong). Movers on the centreline only push.
+  Steering torque = force x sideways distance from the centre of mass, plus gyros (the core has a 60 N·m one).
+  Wider wheelbase or gyros = faster turning; heavy, long hulls turn slowly.
+* **Speed:** acceleration = force / mass against drag `0.6·v + 0.08·v²`. `validate_design` reports the
+  resulting top speed, turn rate and weight class, so you do not need to do the algebra.
+* **Grip:** wheels kill sideways sliding (rate 5/s x grip). Hover pads barely do. No working movers = belly on the ground.
+* **Centre of mass** is computed from the pieces that are still attached; lose a wheel and the car pulls to one side.
+* **Hover:** if total lift ≥ current mass and you have energy, the vehicle floats (see terrain). Only hover pads push while floating.
+* **Energy:** capacity and regen come from core, batteries and reactors. Guns, lasers, saws, thrusters, hover pads,
+  shields and repair arms draw from it; whatever cannot be paid for simply does not work that tick. Wheels and tracks are free.
+* **Collisions:** rigid-body impulses, one circle per occupied stud. Damage = collision energy x 0.012 to the two pieces that touch
+  (only above 1.5 m/s closing speed, never between teammates), scaled by each piece's ram multipliers. Mass and speed push people around.
+
+## 3. The arena
+
+Physics runs at 60 Hz, your `tick` every 3 ticks. A match lasts at most 150 s.
+World units are metres; `x` grows east, `y` grows north; angles are radians, counter-clockwise, 0 = east.
+One map tile is 2 m.
+
+| tile | char | effect |
+|---|---|---|
+| `floor` | `.` | Normal ground. |
+| `wall` | `#` | Blocks vehicles, shots and beams. Mortar shells fly over. |
+| `barrier` | `-` | Blocks vehicles only; shots fly over. |
+| `pit` | `_` | Centre of mass over a pit = instant elimination, unless hovering. |
+| `mud` | `m` | Wheels lose 60% traction (monster wheels 25%), tracks 15%. Hover ignores it. |
+| `ice` | `i` | Almost no side grip and 65% less traction for wheels (tracks cope better). |
+| `lava` | `L` | Every piece takes 12 hp/s (3 hp/s while hovering). |
+| `pad` | `+` | Park on it (speed < 2 m/s) to heal 25 hp/s from a 150 hp pool that refills at 6 hp/s. |
+
+Off the edge of the map counts as a pit.
+
+* **Safe zone:** from t=85s to t=138s a circle centred on the map shrinks to 7 m radius (some maps differ: read `state.zone`).
+  Outside it every piece takes 10 hp/s.
+* **Vision:** you see an enemy if it is within the sensor range of any living teammate (core 22 m, radar +16 m),
+  or for 1.5s after it fires a gun. Walls do not block vision. `state.lastSeen` remembers where each enemy was.
+* **Friendly fire is off**: shots, blasts and saws pass through teammates. You can still bump into them.
+* **Timeout:** more vehicles alive wins; then more total hull fraction remaining; then more damage dealt; else a draw.
+
+### Items
+Pick-ups appear on the map's `*` spots at t=8s and again 14s after being taken. Drive over one to take it.
+Mirrored spots always hold the same item type.
+
+| item | kind | effect |
+|---|---|---|
+| `repair` | instant | Instantly restores 35% of max HP to every damaged (not destroyed) piece. |
+| `shield` | instant | +100 temporary shield for 12 s, even without a generator. |
+| `overdrive` | instant | All your damage x1.5 for 8 s. |
+| `nitro` | instant | Drive and thruster force x1.6 for 6 s. |
+| `mine` | held | Held, 2 charges. `useItem` drops one behind you; it arms in 0.8 s and blasts the first enemy that drives over it (chassis first). |
+| `emp` | held | Held, 1 charge. `useItem` stuns every enemy within 7 m for 2.2 s, drops their shields and drains 40 energy. |
+
+A vehicle holds one item at a time (a new held item replaces the old one). Mines do not trigger on hovering vehicles.
+
+### Maps
+Each map is point-symmetric. `A B C` / `a b c` are the spawns of team 0 / team 1 for slots 0-2
+(1v1 uses the centre spawn, 2v2 the two outer ones). With `swap` the teams trade sides. Row 0 is the north edge.
+
+### `proving` — Proving Ground (28x28 tiles = 56x56 m)
+Walled open arena with pillars, two low barriers and a mud patch in the middle. The fair default. Items: repair, overdrive, shield, nitro, mine, emp.
+
+```
+############################
+#..........................#
+#............A.............#
+#.....B..............C.....#
+#..........................#
+#..........................#
+#............*.............#
+#......##..........##......#
+#......##..........##......#
+#.*......................*.#
+#............##............#
+#..---................---..#
+#...........mmmm...........#
+#...........mmmm...........#
+#...........mmmm...........#
+#...........mmmm...........#
+#..---................---..#
+#............##............#
+#.*......................*.#
+#......##..........##......#
+#......##..........##......#
+#.............*............#
+#..........................#
+#..........................#
+#.....c..............b.....#
+#.............a............#
+#..........................#
+############################
+```
+
+### `sumo` — Sumo Deck (20x20 tiles = 40x40 m)
+Floating platform, no walls. An ice ring and a hole in the centre. Push them off — or hover. Items: nitro, shield, emp, repair.
+
+```
+____________________
+___..............___
+__.......A........__
+_....B........C...._
+_.................._
+_.................._
+_.....iiiiiiii....._
+_.....i..*...i....._
+_.*...i......i...*._
+_.....i..__..i....._
+_.....i..__..i....._
+_.*...i......i...*._
+_.....i...*..i....._
+_.....iiiiiiii....._
+_.................._
+_.................._
+_....c........b...._
+__........a.......__
+___..............___
+____________________
+```
+
+### `canyon` — Canyon (36x28 tiles = 72x56 m)
+Three lanes split by rock walls. Long sightlines down the middle, mud in the centre choke, pillars to hide behind. Items: repair, overdrive, shield, mine, emp, nitro.
+
+```
+####################################
+#..................................#
+#.......B........A.........C.......#
+#..................................#
+#..................................#
+#..########...########...########..#
+#..........#............#..........#
+#..........#.....*......#..........#
+#.*........#............#........*.#
+#..........#...mmmmmm...#..........#
+#....##....#...mmmmmm...#....##....#
+#....##........mmmmmm........##....#
+#............--..*...--............#
+#..................................#
+#..................................#
+#............--...*..--............#
+#....##........mmmmmm........##....#
+#....##....#...mmmmmm...#....##....#
+#..........#...mmmmmm...#..........#
+#.*........#............#........*.#
+#..........#......*.....#..........#
+#..........#............#..........#
+#..########...########...########..#
+#..................................#
+#..................................#
+#.......c.........a........b.......#
+#..................................#
+####################################
+```
+
+### `frostbite` — Frostbite (30x30 tiles = 60x60 m)
+A frozen lake fills the middle with a dry island at its heart; holes in the corners. Wheels slide, tracks and hover shine. Items: nitro, repair, overdrive, shield, emp, mine.
+
+```
+##############################
+#___......................___#
+#_............A............._#
+#_.....B..............C....._#
+#............................#
+#............................#
+#.....###............###.....#
+#............................#
+#.......iiiiiiiiiiiiii.......#
+#.......iiiiii*iiiiiii.......#
+#.*.....iiiiiiiiiiiiii.....*.#
+#.......iiiiiiiiiiiiii.......#
+#.......iiiiiiiiiiiiii.......#
+#.......iiiii....iiiii.......#
+#.......ii*ii.#..iiiii.......#
+#.......iiiii..#.ii*ii.......#
+#.......iiiii....iiiii.......#
+#.......iiiiiiiiiiiiii.......#
+#.......iiiiiiiiiiiiii.......#
+#.*.....iiiiiiiiiiiiii.....*.#
+#.......iiiiiii*iiiiii.......#
+#.......iiiiiiiiiiiiii.......#
+#............................#
+#.....###............###.....#
+#............................#
+#............................#
+#_.....c..............b....._#
+#_.............a............_#
+#___......................___#
+##############################
+```
+
+### `foundry` — Foundry (34x30 tiles = 68x60 m)
+Lava pools with crossings between them and repair pads in the back corners. Items: repair, shield, overdrive, mine, emp, nitro.
+
+```
+##################################
+#+..............................+#
+#.......B.......A........C.......#
+#................................#
+#................................#
+#.............######.............#
+#...LLLL..................LLLL...#
+#...LLLL..................LLLL...#
+#...LLLL........*.........LLLL...#
+#...........LLL....LLL...........#
+#*..........LLL....LLL..........*#
+#.......##..LLL....LLL..##.......#
+#.......##..............##.......#
+#.....*......LLLLLLLL............#
+#............LLLLLLLL............#
+#............LLLLLLLL............#
+#............LLLLLLLL......*.....#
+#.......##..............##.......#
+#.......##..LLL....LLL..##.......#
+#*..........LLL....LLL..........*#
+#...........LLL....LLL...........#
+#...LLLL.........*........LLLL...#
+#...LLLL..................LLLL...#
+#...LLLL..................LLLL...#
+#.............######.............#
+#................................#
+#................................#
+#.......c........a.......b.......#
+#+..............................+#
+##################################
+```
+
+### `skybridge` — Skybridge (32x24 tiles = 64x48 m)
+Islands over the void joined by bridges. One slip and you are gone; hover craft take the shortcut. Items: nitro, shield, emp, repair, overdrive.
+
+```
+________________________________
+________................________
+________..B....A.....C..________
+____........................____
+____........................____
+____..__................__..____
+____..________....________..____
+____..________....________..____
+__......______....______......__
+__.*....__............__....*.__
+__..........-..*...-..........__
+__............................__
+__............................__
+__..........-...*..-..........__
+__.*....__............__....*.__
+__......______....______......__
+____..________....________..____
+____..________....________..____
+____..__................__..____
+____........................____
+____........................____
+________..c.....a....b..________
+________................________
+________________________________
+```
+
+### `bog` — Bog Fort (42x32 tiles = 84x64 m)
+Big team map: mud fields, low barrier forts to shoot over, pits on the flanks, repair pads in the centre. Items: repair, shield, overdrive, nitro, mine, emp.
+
+```
+##########################################
+#........................................#
+#........B..........A..........C.........#
+#........................................#
+#........................................#
+#........................................#
+#.....----..mmmmmm......mmmmmm..----.....#
+#.....-.....mmmmmm..*...mmmmmm.....-.....#
+#.....-.....mmmmmm......mmmmmm.....-.....#
+#.*.........mmmmmm##..##mmmmmm.........*.#
+#.................##..##.................#
+#........................................#
+#..###..............................###..#
+#__...........mmmmmmmmmmmmmm...........__#
+#__.......*...mmmmmmmmmmmmmm...........__#
+#__...........mmmmmm++mmmmmm...........__#
+#__...........mmmmmm++mmmmmm...........__#
+#__...........mmmmmmmmmmmmmm...*.......__#
+#__...........mmmmmmmmmmmmmm...........__#
+#..###..............................###..#
+#........................................#
+#.................##..##.................#
+#.*.........mmmmmm##..##mmmmmm.........*.#
+#.....-.....mmmmmm......mmmmmm.....-.....#
+#.....-.....mmmmmm...*..mmmmmm.....-.....#
+#.....----..mmmmmm......mmmmmm..----.....#
+#........................................#
+#........................................#
+#........................................#
+#.........c..........a..........b........#
+#........................................#
+##########################################
+```
+
+## 4. What `tick` receives
+
+```
+state = {
+  t, tick, timeLeft, dt,
+  self: {
+    id, team, slot, name, x, y, heading, vx, vy, speed, angVel,
+    hp, maxHp, hpFrac, coreHp, coreMaxHp, coreFrac, mass, radius,
+    energy, energyMax, energyRegen, energyFrac,
+    shield, shieldMax, overshield, hovering, stunned (seconds left), sensor, tile ('floor' | 'mud' | ...),
+    item: null | { type, charges }, effects: { overdrive, nitro } (seconds left),
+    parts:   [{ i, type, x, y, z, dir, alive, hp, maxHp, wx, wy }],     // wx, wy = world position of the piece's centre
+    weapons: [{ i, type, dir, alive, ready, cooldown, angle, mountAngle, arc, range, minRange, projSpeed, dmg }],
+  },
+  allies:  [{ id, slot, name, alive, x, y, heading, vx, vy, speed, hpFrac, coreFrac, energyFrac, mass, radius, shield, item, parts, ... }],
+  enemies: [ same shape — ONLY enemies your team can currently see; parts[] shows their layout (with z) and damage ],
+  enemiesAlive,                      // how many are left, seen or not
+  lastSeen: [{ id, x, y, t, alive }],
+  projectiles: [{ kind: 'bullet' | 'shell' | 'missile' | 'mortar', x, y, vx, vy, landsAt?, landsIn? }],  // enemy shots in sensor range, nearest first (max 24)
+  mines: [{ x, y }],                 // enemy mines within 5 m (anywhere in sensor range with a radar)
+  items: [{ id, type, x, y }],       // every pick-up currently on the map
+  pads:  [{ x, y, charge }],
+  zone:  { x, y, r, minR, startT, endT, shrinking },
+  messages: [{ from: slot, id, data }],   // what teammates passed to `say` on their previous tick
+}
+```
+
+`weapons[].i` and `parts[].i` are indexes into your blueprint's `parts` array. Decor is not listed.
+A mortar shell in `projectiles` tells you where and when it lands — drive out of the circle.
+
+## 5. What `tick` returns
+
+```
+{
+  throttle: -1..1,            // drive forward / backward
+  steer:    -1..1,            // + = turn left (counter-clockwise)
+  brake:     0..1,
+  aim:   angle | { x, y },    // world angle, or a world point (every gun converges on it). Default: straight out of the mount.
+  aims:  { [partIndex]: angle | { x, y } },   // per-weapon override
+  fire:  true | [partIndex, ...],             // a gun only fires when its aim is inside its arc and it has finished traversing
+  boost: 0..1 | { N, E, S, W },               // thrusters, by the direction they push. A number means the forward (N) ones.
+  useItem: true,              // use the held item
+  target: id,                 // missile lock (enemy id) and/or repair-arm priority (ally id)
+  shield: false, repair: false, melee: false, // switch those systems off to save energy (default on)
+  say: anyJSON,               // ≤ 256 chars; teammates read it next tick in state.messages
+}
+```
+
+The mortar lands its shell on the **point** you aim at, so give it `{ x, y }` (a bare angle drops the shell 12 m out).
+Missing or invalid fields count as 0 / off. If `tick` throws, the vehicle idles for that step; after
+40 exceptions the controller is cut off for the rest of the match. A tick should take well under 3 ms;
+one that never returns forfeits the match.
+
+### Helpers: `api`
+* `api.util.driveTo(self, point, { reverse, stopDist, speed })` → `{ throttle, steer, brake }` pursuit controller.
+* `api.util.turnTo(self, angle)` → `{ throttle: 0, steer }`.
+* `api.util.lead(from, target, projectileSpeed)` → `{ x, y, angle, t }` intercept point (pass it as `aim`).
+  `target` only needs `x, y, vx, vy`, so you can lead a single piece: `{ x: part.wx, y: part.wy, vx: foe.vx, vy: foe.vy }`.
+* `api.util.angDiff(a, b)`, `angleTo(from, to)`, `dist(a, b)`, `clamp(x, lo, hi)`, `blueprint(name, { deck, chassis }, { paint })`.
+* `api.nav.follower()` → object with `next(self, goalX, goalY, state.tick)` returning the next waypoint of an A* route
+  (cached, re-planned twice a second, sized to your hull, backs out when wedged). Keep one per controller.
+* `api.nav.path(x0, y0, x1, y1, { hover, margin, mudCost, iceCost, lavaCost })` → waypoints.
+* `api.nav.los(x0, y0, x1, y1)` (can a shot get through?), `api.nav.clear(x0, y0, x1, y1, { margin, hover })` (can I drive it?),
+  `api.nav.tileAt(x, y)`, `api.nav.isOpen(x, y, hover)`, `api.nav.clearance(x, y)` → `{ wall, pit }` metres.
+* `api.map` — `{ id, w, h, tile, width, height, center, rows, spawns, itemSpawns, pads, items }`.
+* `api.parts`, `api.items`, `api.tiles`, `api.rules` — these tables, as data. `api.rng()` — seeded random in [0, 1). `api.log(...)` — shows up in match reports.
+
+## 6. Teams
+
+* A team entry is either one bot (it fills every slot) or one bot per slot — so squads can mix controllers from different authors.
+* `design` may be a function: `(ctx, api) => blueprint` with `ctx = { mode, teamSize, team, slot, budget, map, rules }`.
+  Use it to field a tank in slot 0 and a medic in slot 2, or a hover build on the map with pits.
+* `say` is the only channel between teammates. A common pattern: the lowest living slot is leader and says `{ focus: enemyId }`.
+* Repair arms heal allies within range; `target: allyId` picks who.
+
+## 7. Workflow
+
+With the MCP server (`ironyard-mcp`): `get_rules` → `list_parts` / `list_maps` → `validate_design` until the blueprint is legal and the
+stats look right → `submit_bot` → `run_match` against the built-ins and read the report (damage by type, accuracy, time
+stuck, first pieces lost, your own `api.log` lines) → `evaluate_bot` for a win-rate table over maps, seeds and both sides → iterate.
+
+Without MCP: `node node/cli.js validate mybot.js`, `node node/cli.js match --a mybot.js --b rookie`, `node node/cli.js tournament`.
+
+Things that decide matches: whether your guns can actually bear (watch `timeFireOutOfArc`), what a shot meets before it
+reaches your core (slopes and armor in front, on the deck), what a ram meets (the chassis), energy balance, not driving
+into pits, and picking the fight your build wins — out-range brawlers, out-turn snipers, shove hover craft, shield
+against missiles and mortars, saw through shields.
