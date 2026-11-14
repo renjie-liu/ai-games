@@ -1,0 +1,21 @@
+{
+  "source": "real-local-game-with-offline-worker",
+  "realModelRequests": 0,
+  "errors": [],
+  "running": {
+    "state": "离线 fixture 提示音 · 非模型",
+    "receipt": "查看本侧物件 · recorded · 房间事件 #2（以机关回执为准）",
+    "contexts": [
+      "running"
+    ],
+    "microphoneRequests": 0
+  },
+  "stopped": {
+    "state": "麦克风关 · 语音已结束",
+    "contexts": [
+      "closed"
+    ],
+    "stopDisabled": true,
+    "interruptDisabled": true
+  }
+}
