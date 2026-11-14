@@ -65,17 +65,17 @@ claude mcp add --transport http ironyard http://127.0.0.1:8787/mcp
 ## 目录
 
 ```
-engine/   确定性引擎（零件表、蓝图校验、物理、武器、道具、地图、寻路、比赛、赛程）
+engine/   确定性引擎（零件表、蓝图校验、物理、武器、道具、地图、寻路、比赛、赛程、控制器的围栏）
 docs/     DESIGN.md：积木套件的调研和设计取舍
 bots/     内置 bot
 node/     cli.js、mcp-server.js、带看门狗的工作线程池
 web/      网页端源码和构建脚本（three.js r128；kit.js 是积木模型，terrain.js 是程序化场地，render3d.js 是场景）
 dist/     构建好的单文件网页
-tests/    引擎单测、MCP 端到端（官方 SDK 客户端，stdio + HTTP）、网页端到端（无头 Chrome）
+tests/    引擎单测、控制器围栏的测试、MCP 端到端（官方 SDK 客户端，stdio + HTTP）、网页端到端（无头 Chrome）
 ```
 
 ```bash
-npm test                 # 引擎单测，不需要装依赖
+npm test                 # 引擎和围栏的测试，不需要装依赖
 npm install              # 下面两个和重新构建网页才需要
 npm run test:mcp
 npm run test:ui          # 需要本机有 Chrome，可用 CHROME=/path/to/chrome 指定
@@ -85,7 +85,10 @@ node tests/maps.mjs      # 给每张地图截远景和近景（需要 Chrome）�
 
 ## 现在的边界
 
-- 控制器跑在 Node `vm` 上下文 + 工作线程里（浏览器里是 Web Worker），死循环会被看门狗杀掉并判负。`vm` 不是对抗恶意代码的沙箱：现在适合本机和自己信任的 Agent。开放给陌生人提交之前，要换成 QuickJS / isolated-vm 或容器隔离。
+- 每辆车的控制器跑在自己的 `vm` 上下文里（`engine/realm.js`、`node/loader.js`）。引擎和它之间只来回传字符串和数字，不给它任何引擎自己的对象，所以它拿不到 `process`、`require`、文件和网络，改不了引擎或别的车看到的东西，没有时钟，回合之外不会有它的代码在跑；死循环和吃光内存由工作线程的看门狗处理，记到那个控制器头上。`tests/realm.test.js` 逐条验证这些。
+- 这比 v0.3 的“只防君子”强得多，但 Node 的 `vm` 不是进程或容器那样的安全边界：V8 或这里的代码有一个漏洞就够了。对陌生人开放提交时，仍然要把整个服务放进容器。
+- 隔离的代价是速度：每辆车每回合拿到一份只属于自己的观测。同样的 1v1 循环赛用时约为 v0.3 的 1.7 倍，3v3 约 2 倍；比赛结果逐字节不变。
+- 浏览器里引擎和控制器在同一个 Web Worker 里，走的是同一套协议，但没有隔离：那里跑的是你自己贴进去的代码。
 - CPU 预算目前只统计并上报（`cpu.avgMs`），没有做成确定性的指令计数。
 - 三角函数用的是宿主 JS 引擎的实现：同一台机器上完全可复现；不同引擎（V8 / JavaScriptCore）之间理论上可能有末位浮点差异，回放文件本身不受影响。
 - 平衡性只用内置 9 个 bot 的循环赛粗调过（1v1 七张图：longshot 约 71%，其余 41% 到 58%，rookie 是故意留的低预算靶子）；狙击流偏强，是留给新 bot 的靶子。

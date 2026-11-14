@@ -7,13 +7,14 @@ import { readBotSource } from './loader.js';
 const WORKER_URL = new URL('./worker.js', import.meta.url);
 
 export class MatchPool {
-  constructor({ size = Math.max(1, Math.min(4, os.cpus().length)), timeoutMs = 60_000 } = {}) {
-    this.size = size; this.timeoutMs = timeoutMs;
+  constructor({ size = Math.max(1, Math.min(4, os.cpus().length)), timeoutMs = 60_000, memoryMb = 512 } = {}) {
+    this.size = size; this.timeoutMs = timeoutMs; this.memoryMb = memoryMb;
     this.idle = []; this.queue = []; this.all = new Set(); this.nextId = 1; this.closed = false;
   }
 
   spawn() {
-    const w = new Worker(WORKER_URL);
+    // a controller that allocates without end takes its worker down, not the process
+    const w = new Worker(WORKER_URL, { resourceLimits: { maxOldGenerationSizeMb: this.memoryMb } });
     w.unref();
     this.all.add(w);
     return w;
@@ -45,15 +46,24 @@ export class MatchPool {
         if (m.id !== id) return;
         finish(() => (m.ok ? job.resolve(m.result) : job.reject(Object.assign(new Error(m.error), { detail: m.detail }))), true);
       };
-      const onErr = (e) => finish(() => job.reject(e), false);
-      const timer = setTimeout(() => {
+      // whose controller was running when the worker stopped answering (the worker keeps the vehicle's id in `trace`)
+      const running = () => {
         const vid = trace[0];
-        const flat = job.spec.teams.flat();
+        if (vid < 0) return null;
         const size = job.spec.teams[0].length === 1 && job.spec.mode && job.spec.mode !== '1v1' ? Number(job.spec.mode[0]) : job.spec.teams[0].length;
-        let culprit = null;
-        if (vid >= 0) { const team = vid < size ? 0 : 1; const members = job.spec.teams[team]; culprit = members[members.length === 1 ? 0 : vid - team * size]?.id ?? flat[0].id; }
+        const team = vid < size ? 0 : 1, members = job.spec.teams[team];
+        return members[members.length === 1 ? 0 : vid - team * size]?.id ?? job.spec.teams[0][0].id;
+      };
+      const onErr = (e) => {
+        const culprit = running();
+        if (e && e.code === 'ERR_WORKER_OUT_OF_MEMORY') {
+          finish(() => job.reject(Object.assign(new Error(`match ran out of memory (${this.memoryMb} MB)${culprit ? `: controller "${culprit}" was running` : ''}`), { detail: { memory: true, bot: culprit } })), false);
+        } else finish(() => job.reject(e), false);
+      };
+      const timer = setTimeout(() => {
+        const culprit = running();
         finish(() => job.reject(Object.assign(new Error(culprit
-          ? `match timed out after ${job.timeoutMs} ms: controller "${culprit}" did not return from tick() (infinite loop?)`
+          ? `match timed out after ${job.timeoutMs} ms: controller "${culprit}" did not return (infinite loop?)`
           : `match timed out after ${job.timeoutMs} ms`), { detail: { timeout: true, bot: culprit } })), false);
       }, job.timeoutMs);
       w.on('message', onMsg); w.on('error', onErr);

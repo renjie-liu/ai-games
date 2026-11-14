@@ -1,12 +1,20 @@
-// Node-side bot loading: reads controller files and compiles them in a fresh
-// `vm` context per vehicle so instances cannot share state behind the engine's back.
-// NOTE: `vm` keeps honest code honest; it is not a hardened security sandbox.
-// Only run controllers you would be willing to run as a normal script.
+// Node-side bot loading: reads controller files and gives every vehicle its own
+// sealed realm — a fresh `vm` context that is handed text and numbers, never an
+// engine object (see engine/realm.js for the protocol).
+//
+// What that buys: a controller cannot reach `process`, `require`, the file system
+// or the network through anything the engine gives it, cannot rewrite what the
+// engine or another controller sees, cannot tell the time, and cannot leave work
+// running after its turn. What it does not buy: Node's `vm` is not a security
+// boundary the way a separate process or a container is — a bug in V8 or in this
+// file is all it takes — and a controller can still burn CPU and memory until the
+// watchdog in runner.js ends the match. Run strangers' controllers in a container.
 import vm from 'node:vm';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { wrapBotSource } from '../engine/botwrap.js';
+import { wrapBotSource, WRAP_LINES } from '../engine/botwrap.js';
+import { realmSource } from '../engine/realm.js';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const BUILTIN_DIR = path.join(ROOT, 'bots');
@@ -37,20 +45,47 @@ export function readBotSource(id) {
   throw new Error(`unknown bot "${id}". Known bots: ${listBots().map((b) => b.id).join(', ')}`);
 }
 
-/** Compile a controller source into a bot { id, factory } usable by runMatch. */
+// The language itself and nothing else. Whatever V8 or Node adds to a fresh context later
+// (a clock, a locale service, threads, a way to watch the garbage collector) stays out
+// until someone adds it here on purpose.
+const KEEP = ['Object', 'Function', 'Array', 'Number', 'parseFloat', 'parseInt', 'Infinity', 'NaN', 'undefined', 'Boolean', 'String',
+  'Symbol', 'Promise', 'RegExp', 'Error', 'AggregateError', 'EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError',
+  'URIError', 'globalThis', 'JSON', 'Math', 'ArrayBuffer', 'Uint8Array', 'Int8Array', 'Uint16Array', 'Int16Array', 'Uint32Array',
+  'Int32Array', 'Float32Array', 'Float64Array', 'Uint8ClampedArray', 'BigUint64Array', 'BigInt64Array', 'DataView', 'Map', 'BigInt',
+  'Set', 'WeakMap', 'WeakSet', 'Proxy', 'Reflect', 'isFinite', 'isNaN', 'Iterator'];
+const STRIP = new vm.Script(`(function () {
+"use strict";
+const keep = ${JSON.stringify(KEEP)};
+for (const name of Object.getOwnPropertyNames(globalThis)) if (!keep.includes(name)) delete globalThis[name];
+Math.random = function () { return 0.5; }; // a controller's Math is a copy with the seeded source; this one is never reached
+})()`, { filename: 'ironyard-realm-setup.js' });
+const REALM = new vm.Script(realmSource(), { filename: 'ironyard-realm.js' });
+
+/**
+ * Compile a controller source into a bot usable by runMatch: { id, file, open }.
+ * `open(host, boot)` builds a new sealed realm and loads the controller in it; the engine
+ * calls it once per vehicle, so no two vehicles share anything.
+ */
 export function makeBot(id, source) {
+  const file = `${id}.js`;
   let script;
   try {
-    script = new vm.Script(wrapBotSource(source), { filename: `${id}.js` });
+    script = new vm.Script(wrapBotSource(source), { filename: file });
   } catch (e) {
-    throw new Error(`bot "${id}" failed to compile: ${e.message}`);
+    // a SyntaxError's stack starts with "file.js:LINE"
+    const at = e && typeof e.stack === 'string' && e.stack.startsWith(file + ':') ? parseInt(e.stack.slice(file.length + 1), 10) - WRAP_LINES : NaN;
+    throw new Error(`bot "${id}" failed to compile: ${e.message}${at > 0 ? ` (line ${at})` : ''}`);
   }
-  const factory = (env) => {
-    const context = vm.createContext({}, { codeGeneration: { strings: false, wasm: false } });
-    const fn = script.runInContext(context, { timeout: 1000 });
-    return fn(env);
+  const open = (host, boot) => {
+    // No strings-to-code, no WebAssembly, and a microtask queue of its own that nobody drains:
+    // a promise a controller makes never settles, so nothing of its runs after its turn.
+    const context = vm.createContext({}, { codeGeneration: { strings: false, wasm: false }, microtaskMode: 'afterEvaluate' });
+    STRIP.runInContext(context);
+    const realm = REALM.runInContext(context);
+    const factory = script.runInContext(context, { timeout: 1000 });
+    return realm(factory, host, boot);
   };
-  return { id, factory };
+  return { id, file, open };
 }
 
 const cache = new Map();

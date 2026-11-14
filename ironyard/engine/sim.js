@@ -15,13 +15,22 @@ const RC = CELL * 0.56;               // collision radius of one stud column
 const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
 export const angDiff = (a, b) => { let d = (a - b) % TAU; if (d > PI) d -= TAU; else if (d < -PI) d += TAU; return d; };
 const wrap = (a) => angDiff(a, 0);
-const r2 = (x) => Math.round(x * 100) / 100;
-const r3 = (x) => Math.round(x * 1000) / 1000;
+// Rounding for everything a controller or a replay reads. The `+ 0` turns -0 into 0, so an
+// observation holds only values that survive JSON unchanged (see observeWire).
+const r2 = (x) => Math.round(x * 100) / 100 + 0;
+const r3 = (x) => Math.round(x * 1000) / 1000 + 0;
+const ri = (x) => Math.round(x) + 0;
 const inGrid = (x, y) => x >= -GRID_HX && x <= GRID_HX && y >= -GRID_HY && y <= GRID_HY;
 
 const LOCAL_DIR = { N: [1, 0], W: [0, 1], S: [-1, 0], E: [0, -1] }; // (forward, left) components
 const NEIGH = [[0, 1], [1, 0], [0, -1], [-1, 0]];
 const PROJ_KIND = { bullet: 0, shell: 1, missile: 2, lob: 3 };
+
+// The numeric form of an observation (World.observeWire; decoded by realm.js).
+export const WIRE_CAP = 8192;                               // numbers one observation may take
+const PUB_N = 18;                                           // numbers in a vehicle's public block, before its pieces
+const PROJ_NAME = ['bullet', 'shell', 'missile', 'mortar']; // what a controller calls each projectile kind
+const ITEM_INDEX = Object.fromEntries(Object.keys(ITEMS).map((id, i) => [id, i + 1])); // 0 = none
 
 export const FLAG = { alive: 1, boost: 2, stun: 4, hover: 8, overdrive: 16, nitro: 32, overshield: 64, saw: 128, repair: 256 };
 
@@ -335,6 +344,31 @@ export class World {
   }
 
   // ── commands ──────────────────────────────────────────────────────────
+  /**
+   * The command a realm wrote as numbers (realm.js, `encode`), as the object setCommand
+   * takes; null for "no command". `C` is the engine's view of the memory the realm wrote.
+   *   0 present · 1 throttle · 2 steer · 3 brake · 4 aim kind (0 none, 1 angle, 2 point) · 5, 6 aim
+   *   7 fire (0 no, 1 all, 2 listed) · 8 boost kind (0 none, 1 one number, 2 per direction) · 9-12 boost N E S W
+   *   13 useItem · 14 shield · 15 repair · 16 melee · 17 target · 18 guns listed · 19 aims listed
+   *   20… the listed guns, then 4 numbers per listed aim: piece index, kind, and the aim
+   * A number that was `true` on the other side arrives as Infinity, anything that was not a number as NaN.
+   */
+  readCommand(C, say) {
+    if (C[0] !== 1) return null;
+    const aim = (kind, a, b) => (kind === 1 ? a : kind === 2 ? { x: a, y: b } : null);
+    const nFire = Math.min(64, C[18] >>> 0), nAims = Math.min(64, C[19] >>> 0);
+    const raw = {
+      throttle: C[1], steer: C[2], brake: C[3], aim: aim(C[4], C[5], C[6]),
+      fire: C[7] === 1, boost: C[8] === 1 ? C[9] : C[8] === 2 ? { N: C[9], E: C[10], S: C[11], W: C[12] } : null,
+      useItem: C[13] === 1, shield: C[14] !== 0, repair: C[15] !== 0, melee: C[16] !== 0, target: C[17], say,
+    };
+    let k = 20;
+    if (C[7] === 2) { raw.fire = []; for (let i = 0; i < nFire; i++) raw.fire.push(C[k + i]); }
+    k += nFire;
+    if (nAims) { raw.aims = {}; for (let i = 0; i < nAims; i++, k += 4) raw.aims[C[k]] = aim(C[k + 1], C[k + 2], C[k + 3]); }
+    return raw;
+  }
+
   setCommand(v, raw) {
     if (!raw || typeof raw !== 'object') { v.cmd = IDLE; v.said = undefined; return; }
     const num = (x, lo, hi) => (typeof x === 'number' && x === x ? clamp(x, lo, hi) : x === true ? hi : 0);
@@ -983,36 +1017,94 @@ export class World {
     return false;
   }
 
-  publicSnapshot(v) {
+  /** What anyone who can see `v` learns about it, apart from its pieces. */
+  snapCore(v) {
     const weapons = {};
     let maxRange = 0;
-    const parts = [];
     for (const p of v.parts) {
-      if (p.decor) continue;
-      if (p.alive && p.def.weapon) {
-        weapons[p.type] = (weapons[p.type] || 0) + 1;
-        maxRange = Math.max(maxRange, p.def.range || p.def.reach || 0);
-      }
-      parts.push(Object.freeze({ i: p.i, type: p.type, x: p.x, y: p.y, z: p.z, dir: p.dir, alive: p.alive,
-        hpFrac: r3(p.hp / p.maxHp), wx: r2(p.wx), wy: r2(p.wy) }));
+      if (p.decor || !p.alive || !p.def.weapon) continue;
+      weapons[p.type] = (weapons[p.type] || 0) + 1;
+      maxRange = Math.max(maxRange, p.def.range || p.def.reach || 0);
     }
-    return Object.freeze({
+    return {
       id: v.id, team: v.team, slot: v.slot, name: v.name, alive: v.alive,
       x: r2(v.x), y: r2(v.y), heading: r3(v.th), vx: r2(v.vx), vy: r2(v.vy), speed: r2(Math.hypot(v.vx, v.vy)), angVel: r3(v.w),
       hpFrac: r3(Math.max(0, v.hpNow / v.hpMax)), coreFrac: r3(Math.max(0, v.core.hp / v.core.maxHp)),
       energyFrac: v.energyMax ? r3(v.energy / v.energyMax) : 0,
-      mass: Math.round(v.mass), radius: r2(v.radius), shield: Math.round(v.shield + v.overshield),
+      mass: ri(v.mass), radius: r2(v.radius), shield: ri(v.shield + v.overshield),
       hovering: v.hovering, stunned: v.stun > 0 ? r2(v.stun) : 0,
-      item: v.item ? v.item.type : null, weapons: Object.freeze(weapons), maxRange,
-      parts: Object.freeze(parts),
-    });
+      item: v.item ? v.item.type : null, weapons, maxRange,
+    };
   }
 
-  /** Build the observation every controller receives. Call once per decision tick. */
+  /** What a vehicle knows about itself on top of snapCore (its own pieces aside). */
+  selfExtras(v) {
+    const od = v.overdrive > 0 ? ITEMS.overdrive.mult : 1;
+    return {
+      hp: ri(v.hpNow), maxHp: v.hpMax, coreHp: ri(v.core.hp), coreMaxHp: v.core.maxHp,
+      energy: r2(v.energy), energyMax: v.energyMax, energyRegen: v.energyRegen,
+      shieldMax: v.shieldMax, overshield: ri(v.overshield), sensor: v.sensor,
+      item: v.item ? { type: v.item.type, charges: v.item.charges } : null,
+      effects: { overdrive: v.overdrive > 0 ? r2(v.overdrive) : 0, nitro: v.nitro > 0 ? r2(v.nitro) : 0 },
+      tile: TILE_NAME[tileCodeAt(this.map, v.x, v.y)],
+      weapons: v.parts.filter((p) => p.def.weapon && p.def.weapon !== 'melee').map((p) => ({
+        i: p.i, type: p.type, dir: p.dir, alive: p.alive,
+        ready: p.alive && p.cd <= 0 && v.energy >= (p.def.energyShot ?? p.def.energyUse * this.dt),
+        cooldown: p.cd > 0 ? r2(p.cd) : 0,
+        mountAngle: r3(wrap(v.th + DIR_ANGLE[p.dir])), angle: r3(wrap(v.th + DIR_ANGLE[p.dir] + p.ang)),
+        arc: p.def.arc, range: p.def.range, minRange: p.def.minRange || 0, projSpeed: p.def.projSpeed || Infinity,
+        dmg: (p.def.dmg ?? p.def.dps) * od,
+      })),
+    };
+  }
+
+  /** Enemy shots a vehicle can sense, nearest first (max 24). */
+  sensedProjectiles(v) {
+    const projectiles = [];
+    for (const p of this.projectiles) {
+      if (p.team === v.team) continue;
+      const d2 = (p.x - v.x) ** 2 + (p.y - v.y) ** 2;
+      if (d2 >= v.sensor * v.sensor) continue;
+      if (p.k === 'lob') projectiles.push({ kind: 'mortar', x: r2(p.x), y: r2(p.y), vx: 0, vy: 0, landsAt: { x: r2(p.tx), y: r2(p.ty) }, landsIn: r2(p.T - p.t), d2 });
+      else projectiles.push({ kind: p.k, x: r2(p.x), y: r2(p.y), vx: r2(p.vx), vy: r2(p.vy), d2 });
+    }
+    projectiles.sort((a, b) => a.d2 - b.d2);
+    projectiles.length = Math.min(projectiles.length, 24);
+    return projectiles;
+  }
+
+  /** Enemy mines a vehicle knows about: within 5 m, or anywhere its team's sensors reach if a teammate carries a radar. */
+  sensedMines(v, radar) {
+    const mines = [];
+    for (const m of this.mines) {
+      if (m.team === v.team) continue;
+      const d = Math.hypot(m.x - v.x, m.y - v.y);
+      if (d < 5 || (radar && this.visibleTo(v.team, { x: m.x, y: m.y, radius: 0, revealT: -1 }))) mines.push({ x: r2(m.x), y: r2(m.y) });
+    }
+    return mines;
+  }
+
+  publicSnapshot(v) {
+    const parts = [];
+    for (const p of v.parts) {
+      if (p.decor) continue;
+      parts.push(Object.freeze({ i: p.i, type: p.type, x: p.x, y: p.y, z: p.z, dir: p.dir, alive: p.alive,
+        hpFrac: r3(p.hp / p.maxHp), wx: r2(p.wx), wy: r2(p.wy) }));
+    }
+    const core = this.snapCore(v);
+    Object.freeze(core.weapons);
+    return Object.freeze({ ...core, parts: Object.freeze(parts) });
+  }
+
+  /**
+   * The observation of every living vehicle (null for the dead), as objects: the shape the
+   * rulebook documents as `state`. Controllers are not handed these — they get the text from
+   * observeWire, which decodes to the same thing — so this is for tests and tools.
+   */
   observeAll() {
     const snaps = this.vehicles.map((v) => this.publicSnapshot(v));
     const items = Object.freeze(this.itemSpawns.filter((s) => s.present).map((s) => Object.freeze({ id: s.id, type: s.type, x: s.x, y: s.y })));
-    const pads = Object.freeze(this.pads.map((p) => Object.freeze({ x: p.x, y: p.y, charge: Math.round(p.charge) })));
+    const pads = Object.freeze(this.pads.map((p) => Object.freeze({ x: p.x, y: p.y, charge: ri(p.charge) })));
     const z = this.zone;
     const zone = Object.freeze({ x: z.x, y: z.y, r: r2(z.r), minR: z.minR, startT: z.start, endT: z.end, shrinking: this.t > z.start && this.t < z.end });
     const out = [];
@@ -1021,54 +1113,124 @@ export class World {
       const mates = this.teams[v.team], foes = this.teams[1 - v.team];
       const enemies = [];
       for (const e of foes) if (e.alive && this.visibleTo(v.team, e)) enemies.push(snaps[e.id]);
-      if (!enemies.length) v.stats.timeNoEnemyVisible += this.dt * this.rules.decisionEvery;
       const radar = mates.some((a) => a.alive && a.seesMines);
-      const projectiles = [];
-      for (const p of this.projectiles) {
-        if (p.team === v.team) continue;
-        const d2 = (p.x - v.x) ** 2 + (p.y - v.y) ** 2;
-        if (d2 >= v.sensor * v.sensor) continue;
-        if (p.k === 'lob') projectiles.push({ kind: 'mortar', x: r2(p.x), y: r2(p.y), vx: 0, vy: 0, landsAt: { x: r2(p.tx), y: r2(p.ty) }, landsIn: r2(p.T - p.t), d2 });
-        else projectiles.push({ kind: p.k, x: r2(p.x), y: r2(p.y), vx: r2(p.vx), vy: r2(p.vy), d2 });
-      }
-      projectiles.sort((a, b) => a.d2 - b.d2);
-      projectiles.length = Math.min(projectiles.length, 24);
-      const mines = [];
-      for (const m of this.mines) {
-        if (m.team === v.team) continue;
-        const d = Math.hypot(m.x - v.x, m.y - v.y);
-        if (d < 5 || (radar && this.visibleTo(v.team, { x: m.x, y: m.y, radius: 0, revealT: -1 }))) mines.push({ x: r2(m.x), y: r2(m.y) });
-      }
       const messages = [];
       for (const a of mates) if (a !== v && a.said !== undefined) messages.push({ from: a.slot, id: a.id, data: a.said });
-      const od = v.overdrive > 0 ? ITEMS.overdrive.mult : 1;
       out.push({
         t: r2(this.t), tick: this.tick, timeLeft: r2(this.rules.duration - this.t), dt: this.dt * this.rules.decisionEvery,
         self: {
           ...snaps[v.id],
-          hp: Math.round(v.hpNow), maxHp: v.hpMax, coreHp: Math.round(v.core.hp), coreMaxHp: v.core.maxHp,
-          energy: r2(v.energy), energyMax: v.energyMax, energyRegen: v.energyRegen,
-          shieldMax: v.shieldMax, overshield: Math.round(v.overshield), sensor: v.sensor,
-          item: v.item ? { type: v.item.type, charges: v.item.charges } : null,
-          effects: { overdrive: v.overdrive > 0 ? r2(v.overdrive) : 0, nitro: v.nitro > 0 ? r2(v.nitro) : 0 },
-          tile: TILE_NAME[tileCodeAt(this.map, v.x, v.y)],
+          ...this.selfExtras(v),
           parts: v.parts.filter((p) => !p.decor).map((p) => ({ i: p.i, type: p.type, x: p.x, y: p.y, z: p.z, dir: p.dir, alive: p.alive,
-            hp: Math.round(p.hp), maxHp: p.maxHp, wx: r2(p.wx), wy: r2(p.wy) })),
-          weapons: v.parts.filter((p) => p.def.weapon && p.def.weapon !== 'melee').map((p) => ({
-            i: p.i, type: p.type, dir: p.dir, alive: p.alive,
-            ready: p.alive && p.cd <= 0 && v.energy >= (p.def.energyShot ?? p.def.energyUse * this.dt),
-            cooldown: p.cd > 0 ? r2(p.cd) : 0,
-            mountAngle: r3(wrap(v.th + DIR_ANGLE[p.dir])), angle: r3(wrap(v.th + DIR_ANGLE[p.dir] + p.ang)),
-            arc: p.def.arc, range: p.def.range, minRange: p.def.minRange || 0, projSpeed: p.def.projSpeed || Infinity,
-            dmg: (p.def.dmg ?? p.def.dps) * od,
-          })),
+            hp: ri(p.hp), maxHp: p.maxHp, wx: r2(p.wx), wy: r2(p.wy) })),
         },
         allies: mates.filter((a) => a !== v).map((a) => snaps[a.id]),
         enemies,
         enemiesAlive: foes.reduce((n, e) => n + (e.alive ? 1 : 0), 0),
         lastSeen: this.lastSeen[v.team].map((l) => ({ ...l })),
-        projectiles, mines, items, pads, zone, messages,
+        projectiles: this.sensedProjectiles(v), mines: this.sensedMines(v, radar), items, pads, zone, messages,
       });
+    }
+    return out;
+  }
+
+  /**
+   * The observation of every living vehicle (null for the dead) in the form that crosses
+   * into a controller's realm (realm.js decodes it back into the `state` object): numbers
+   * in this.wire, plus two short pieces of text.
+   *
+   * `sinks[id]` is the array to write vehicle id's observation into — in a match, the engine's
+   * view of the memory its realm reads (a World keeps arrays of its own when none are given). Returns
+   * { buf, n, messages, layouts } per living vehicle: the observation is buf[0 .. n), laid out as
+   *
+   *   head      t, tick, timeLeft, dt, enemiesAlive, then the counts of allies, enemies,
+   *             last-seen rows, projectiles, mines, items and pads, then the zone (7)
+   *   self      the public block below, then SELF_N more numbers, then 4 per gun
+   *             (ready, cooldown, mountAngle, angle), then 4 per piece (alive, hp, wx, wy)
+   *   vehicles  one public block per ally, then per visible enemy: PUB_N numbers, then 4
+   *             per piece (alive, hpFrac, wx, wy)
+   *   lists     last seen (5 each), projectiles (9), mines (2), items (4), pads (3)
+   *
+   * `messages` is the JSON of what teammates said ('' if nothing). `layouts` is JSON too:
+   * [[id, team, slot, name, [[i, type, x, y, z, dir, maxHp], ...]], ...] — everything
+   * about a vehicle that never changes — for each vehicle this controller is being shown
+   * for the first time ('' if none). A vehicle's public block is computed once and copied
+   * to everyone who can see it; nothing about an enemy out of sight is written at all.
+   *
+   * Call once per decision tick: it also keeps the timeNoEnemyVisible statistic.
+   */
+  observeWire(sinks) {
+    const vs = this.vehicles, nv = vs.length, stepDt = this.dt * this.rules.decisionEvery;
+    sinks ||= (this.wires ||= vs.map(() => new Float64Array(WIRE_CAP)));
+    const P = (this.pubWire ||= new Float64Array(nv * (PUB_N + 4 * 160)));
+    const pubAt = [], pubEnd = [];
+    let k = 0;
+    for (const v of vs) {
+      pubAt.push(k);
+      P[k++] = v.id; P[k++] = v.alive ? 1 : 0; P[k++] = r2(v.x); P[k++] = r2(v.y); P[k++] = r3(v.th);
+      P[k++] = r2(v.vx); P[k++] = r2(v.vy); P[k++] = r2(Math.hypot(v.vx, v.vy)); P[k++] = r3(v.w);
+      P[k++] = r3(Math.max(0, v.hpNow / v.hpMax)); P[k++] = r3(Math.max(0, v.core.hp / v.core.maxHp));
+      P[k++] = v.energyMax ? r3(v.energy / v.energyMax) : 0;
+      P[k++] = ri(v.mass); P[k++] = r2(v.radius); P[k++] = ri(v.shield + v.overshield);
+      P[k++] = v.hovering ? 1 : 0; P[k++] = v.stun > 0 ? r2(v.stun) : 0; P[k++] = v.item ? ITEM_INDEX[v.item.type] : 0;
+      for (const p of v.parts) if (!p.decor) { P[k++] = p.alive ? 1 : 0; P[k++] = r3(p.hp / p.maxHp); P[k++] = r2(p.wx); P[k++] = r2(p.wy); }
+      pubEnd.push(k);
+    }
+    // the same for every member of a team
+    const seen = [0, 1].map((t) => this.teams[1 - t].filter((e) => e.alive && this.visibleTo(t, e)));
+    const radar = [0, 1].map((t) => this.teams[t].some((a) => a.alive && a.seesMines));
+    const foesAlive = [0, 1].map((t) => this.teams[1 - t].reduce((n, e) => n + (e.alive ? 1 : 0), 0));
+    const items = this.itemSpawns.filter((s) => s.present);
+    const z = this.zone, t = r2(this.t), left = r2(this.rules.duration - this.t), zr = r2(z.r), shrinking = this.t > z.start && this.t < z.end ? 1 : 0;
+    const out = [];
+    for (const v of vs) {
+      if (!v.alive) { out.push(null); continue; }
+      const W = sinks[v.id], mates = this.teams[v.team], vis = seen[v.team];
+      if (!vis.length) v.stats.timeNoEnemyVisible += stepDt;
+      const shots = this.sensedProjectiles(v), mines = this.sensedMines(v, radar[v.team]), last = this.lastSeen[v.team];
+      if (mines.length > 64) mines.length = 64;
+      k = 0;
+      W[k++] = t; W[k++] = this.tick; W[k++] = left; W[k++] = stepDt; W[k++] = foesAlive[v.team];
+      W[k++] = mates.length - 1; W[k++] = vis.length; W[k++] = last.length; W[k++] = shots.length; W[k++] = mines.length; W[k++] = items.length; W[k++] = this.pads.length;
+      W[k++] = z.x; W[k++] = z.y; W[k++] = zr; W[k++] = z.minR; W[k++] = z.start; W[k++] = z.end; W[k++] = shrinking;
+      // self
+      for (let j = pubAt[v.id], e = j + PUB_N; j < e; j++) W[k++] = P[j];
+      W[k++] = ri(v.hpNow); W[k++] = v.hpMax; W[k++] = ri(v.core.hp); W[k++] = v.core.maxHp;
+      W[k++] = r2(v.energy); W[k++] = v.energyMax; W[k++] = v.energyRegen;
+      W[k++] = v.shieldMax; W[k++] = ri(v.overshield); W[k++] = v.sensor;
+      W[k++] = v.item ? v.item.charges : 0;
+      W[k++] = v.overdrive > 0 ? r2(v.overdrive) : 0; W[k++] = v.nitro > 0 ? r2(v.nitro) : 0;
+      W[k++] = tileCodeAt(this.map, v.x, v.y); W[k++] = v.overdrive > 0 ? ITEMS.overdrive.mult : 1;
+      for (const p of v.parts) {
+        if (!p.def.weapon || p.def.weapon === 'melee') continue;
+        W[k++] = p.alive && p.cd <= 0 && v.energy >= (p.def.energyShot ?? p.def.energyUse * this.dt) ? 1 : 0;
+        W[k++] = p.cd > 0 ? r2(p.cd) : 0;
+        W[k++] = r3(wrap(v.th + DIR_ANGLE[p.dir])); W[k++] = r3(wrap(v.th + DIR_ANGLE[p.dir] + p.ang));
+      }
+      for (const p of v.parts) if (!p.decor) { W[k++] = p.alive ? 1 : 0; W[k++] = ri(p.hp); W[k++] = r2(p.wx); W[k++] = r2(p.wy); }
+      // everyone else this vehicle can see, and what it has not been told about them yet
+      v.shown ||= new Uint8Array(nv);
+      let layouts = '';
+      const show = (o) => {
+        if (v.shown[o.id]) return;
+        v.shown[o.id] = 1;
+        o.layoutWire ||= JSON.stringify([o.id, o.team, o.slot, o.name, o.parts.filter((p) => !p.decor).map((p) => [p.i, p.type, p.x, p.y, p.z, p.dir, p.maxHp])]);
+        layouts += (layouts ? ',' : '[') + o.layoutWire;
+      };
+      show(v);
+      for (const a of mates) if (a !== v) { show(a); for (let j = pubAt[a.id], e = pubEnd[a.id]; j < e; j++) W[k++] = P[j]; }
+      for (const o of vis) { show(o); for (let j = pubAt[o.id], e = pubEnd[o.id]; j < e; j++) W[k++] = P[j]; }
+      for (const l of last) { W[k++] = l.id; W[k++] = l.x; W[k++] = l.y; W[k++] = l.t; W[k++] = l.alive ? 1 : 0; }
+      for (const p of shots) {
+        W[k++] = PROJ_NAME.indexOf(p.kind); W[k++] = p.x; W[k++] = p.y; W[k++] = p.vx; W[k++] = p.vy; W[k++] = p.d2;
+        if (p.landsAt) { W[k++] = p.landsAt.x; W[k++] = p.landsAt.y; W[k++] = p.landsIn; } else { W[k++] = 0; W[k++] = 0; W[k++] = 0; }
+      }
+      for (const m of mines) { W[k++] = m.x; W[k++] = m.y; }
+      for (const s of items) { W[k++] = s.id; W[k++] = ITEM_INDEX[s.type]; W[k++] = s.x; W[k++] = s.y; }
+      for (const p of this.pads) { W[k++] = p.x; W[k++] = p.y; W[k++] = ri(p.charge); }
+      const messages = [];
+      for (const a of mates) if (a !== v && a.said !== undefined) messages.push({ from: a.slot, id: a.id, data: a.said });
+      out.push({ buf: W, n: k, messages: messages.length ? JSON.stringify(messages) : '', layouts: layouts ? layouts + ']' : '' });
     }
     return out;
   }

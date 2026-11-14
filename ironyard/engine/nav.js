@@ -6,6 +6,7 @@
 // instead of being sent to scrape along the wall.
 import { TILE } from './parts.js';
 import { TILE_CODE, TILE_NAME } from './maps.js';
+import { makeFollower } from './realm.js';
 
 const C = TILE_CODE;
 const STEP = TILE / 2;
@@ -184,49 +185,7 @@ export function makeNav(map) {
     return out;
   }
 
-  /**
-   * Stateful path follower: caches the A* route, re-plans every `replanTicks`
-   * ticks (default 30 = 0.5 s) or when the goal moves, and backs out when the
-   * vehicle is wedged against something.
-   *   const f = api.nav.follower();                       // keep it in your controller's closure
-   *   const wp = f.next(self, goalX, goalY, state.tick);  // -> { x, y, reverse? } waypoint to steer at
-   *   Object.assign(cmd, api.util.driveTo(self, wp));
-   */
-  function follower(defaults = {}) {
-    let route = [], gx = NaN, gy = NaN, nextPlan = -1;
-    let cx = NaN, cy = NaN, ct = -1, lastCall = -99, escape = null, escapeUntil = -1, flip = 1;
-    return {
-      get route() { return route; },
-      reset() { nextPlan = -1; },
-      next(self, x, y, tick, opts) {
-        const o = opts ? { ...defaults, ...opts } : defaults;
-        // stuck detection: called continuously yet barely moved in 1.5 s
-        if (tick - lastCall > 12) { cx = self.x; cy = self.y; ct = tick; }
-        lastCall = tick;
-        if (tick < escapeUntil && escape) return escape;
-        if (tick - ct >= 90) {
-          const far = Math.hypot(x - self.x, y - self.y) > 2.5;
-          if (far && Math.hypot(self.x - cx, self.y - cy) < 0.5) {
-            flip = -flip;
-            const a = self.heading + Math.PI + flip * 0.7;
-            escape = { x: self.x + Math.cos(a) * 4, y: self.y + Math.sin(a) * 4, reverse: true };
-            escapeUntil = tick + 45; nextPlan = -1;
-          }
-          cx = self.x; cy = self.y; ct = tick;
-          if (tick < escapeUntil) return escape;
-        }
-        const moved = Math.hypot(x - gx, y - gy);
-        if (!(tick < nextPlan) || !(moved <= (o.replanDist ?? 3))) {
-          const margin = o.margin ?? Math.max(0.8, Math.min(2.0, (self.radius || 1.5) * 0.8));
-          route = path(self.x, self.y, x, y, { hover: !!self.hovering, ...o, margin });
-          gx = x; gy = y; nextPlan = tick + (o.replanTicks ?? 30);
-        }
-        const reach = o.reach ?? 1.3;
-        while (route.length > 1 && Math.hypot(route[0].x - self.x, route[0].y - self.y) < reach) route.shift();
-        return route[0] || { x, y };
-      },
-    };
-  }
+  const follower = makeFollower(path);
 
   return {
     follower,

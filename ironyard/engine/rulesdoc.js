@@ -92,10 +92,12 @@ function tick(state, api) {           // called at ${R.tickRate / R.decisionEver
 }
 \`\`\`
 
-Rules for the file: plain JavaScript, no \`import\`/\`require\`, no network, no clock (\`Date\`, timers and
-the usual globals are undefined), \`Math.random\` is replaced by a seeded generator. Keep state in
-top-level variables — every vehicle gets its own private copy of your file, so teammates do **not**
-share variables; use \`say\` (section 6) to coordinate.
+Rules for the file: plain JavaScript, one file, and only the language to work with. There is no
+\`require\`, no network, no clock (\`Date\`, timers and the usual globals are undefined), and the word
+\`import\` may not appear anywhere in the file, not even in a comment. \`Math.random\` is replaced by a
+seeded generator. Your code runs when \`init\` and \`tick\` are called and at no other time: a promise
+never resolves, so do not \`await\`. Keep state in top-level variables — every vehicle gets its own
+private copy of your file, so teammates do **not** share variables; use \`say\` (section 6) to coordinate.
 
 ## 2. Building the vehicle
 
@@ -229,6 +231,8 @@ state = {
 \`\`\`
 
 \`weapons[].i\` and \`parts[].i\` are indexes into your blueprint's \`parts\` array. Decor is not listed.
+\`state\` is built fresh for every tick and is yours alone: write on it if you like — nothing you change
+reaches the engine, a teammate or the next tick.
 A mortar shell in \`projectiles\` tells you where and when it lands — drive out of the circle.
 
 ## 5. What \`tick\` returns
@@ -250,9 +254,10 @@ A mortar shell in \`projectiles\` tells you where and when it lands — drive ou
 \`\`\`
 
 The mortar lands its shell on the **point** you aim at, so give it \`{ x, y }\` (a bare angle drops the shell 12 m out).
-Missing or invalid fields count as 0 / off. If \`tick\` throws, the vehicle idles for that step; after
-${R.maxViolations} exceptions the controller is cut off for the rest of the match. A tick should take well under ${R.tickBudgetMs} ms;
-one that never returns forfeits the match.
+Missing or invalid fields count as 0 / off (for a number, \`true\` counts as full). The command is read once,
+when \`tick\` returns. If \`tick\` throws, the vehicle idles for that step and the match report quotes the
+message with the line of your file; after ${R.maxViolations} exceptions the controller is cut off for the rest of
+the match. A tick should take well under ${R.tickBudgetMs} ms; one that never returns forfeits the match.
 
 ### Helpers: \`api\`
 * \`api.util.driveTo(self, point, { reverse, stopDist, speed })\` → \`{ throttle, steer, brake }\` pursuit controller.

@@ -128,14 +128,10 @@ test('controllers that throw are cut off, not fatal', () => {
 
 test('controller source rules', () => {
   assert.throws(() => preprocessBotSource('import fs from "fs";\nfunction tick(){}'), /imports are not allowed/);
+  assert.throws(() => preprocessBotSource('function tick() {\n  return import("node:fs");\n}'), /word "import" cannot appear .*\(line 2\)/);
   assert.match(preprocessBotSource('export const design = {};\nexport function tick() {}'), /^const design/);
   assert.ok(wrapBotSource('function tick(){}').includes('"use strict"'));
-  // sandboxed globals
-  const src = readBotSource('rookie') + '\nconst leak = [typeof process, typeof require, typeof globalThis, typeof Date].join();\nconst meta2 = leak;';
-  assert.doesNotThrow(() => makeBot('probe', src));
-  const probe = makeBot('probe2', 'const design = null; function tick(){ return { say: [typeof process, typeof require, typeof Date].join() }; }');
-  const inst = probe.factory({ Math, console });
-  assert.equal(inst.tick().say, 'undefined,undefined,undefined');
+  assert.throws(() => makeBot('broken', 'const design = {};\nconst x = ;\nfunction tick() {}'), /bot "broken" failed to compile: Unexpected token ';' \(line 2\)/);
 });
 
 test('watchdog kills a controller that never returns', async () => {

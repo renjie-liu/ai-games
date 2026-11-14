@@ -4,84 +4,52 @@ import { validateDesign, parseBlueprint, STOCK_DESIGN } from './design.js';
 import { MAPS, MODES, SPAWN_SLOTS, describeMap } from './maps.js';
 import { makeNav } from './nav.js';
 import { makeRng, hashSeed } from './rng.js';
-import { World, angDiff } from './sim.js';
+import { World, WIRE_CAP } from './sim.js';
+import { controllerRealm, makeUtil, makeFollower } from './realm.js';
+import { WRAP_LINES } from './botwrap.js';
 
-export const ENGINE_VERSION = '0.2.0';
+export const ENGINE_VERSION = '0.4.0';
 
 export class MatchError extends Error {
   constructor(message, detail) { super(message); this.name = 'MatchError'; this.detail = detail; }
 }
 
-const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
-
 function deepFreeze(o) {
   if (o && typeof o === 'object' && !Object.isFrozen(o)) { Object.freeze(o); for (const k of Object.keys(o)) deepFreeze(o[k]); }
   return o;
 }
-const FROZEN_PARTS = deepFreeze(JSON.parse(JSON.stringify(PARTS)));
-const FROZEN_ITEMS = deepFreeze(JSON.parse(JSON.stringify(ITEMS)));
-const FROZEN_TILES = deepFreeze(JSON.parse(JSON.stringify(TILES)));
+// The tables a controller reads as api.parts / api.items / api.tiles, as text: each realm parses its own copy.
+const PARTS_JSON = JSON.stringify(PARTS), ITEMS_JSON = JSON.stringify(ITEMS), TILES_JSON = JSON.stringify(TILES);
 
-/** Helpers every controller receives as `api.util`. Pure functions, no hidden state. */
-export const util = Object.freeze({
-  clamp,
-  blueprint: parseBlueprint,                 // ASCII art -> { name, paint, parts } (see AGENTS.md)
-  angDiff,                                   // signed smallest difference a - b, in (-PI, PI]
-  dist: (a, b) => Math.hypot(a.x - b.x, a.y - b.y),
-  angleTo: (from, to) => Math.atan2(to.y - from.y, to.x - from.x),
-  /**
-   * Intercept solution for a moving target and a projectile of the given speed.
-   * Returns { x, y, angle, t }: pass it straight to `aim` (a point, so all guns converge).
-   */
-  lead(from, target, projSpeed) {
-    const dx = target.x - from.x, dy = target.y - from.y;
-    if (!Number.isFinite(projSpeed) || projSpeed <= 0) return { x: target.x, y: target.y, angle: Math.atan2(dy, dx), t: 0 };
-    const vx = target.vx || 0, vy = target.vy || 0;
-    const a = vx * vx + vy * vy - projSpeed * projSpeed, b = 2 * (dx * vx + dy * vy), c = dx * dx + dy * dy;
-    let t = 0;
-    const disc = b * b - 4 * a * c;
-    if (Math.abs(a) < 1e-6) t = b !== 0 ? -c / b : 0;
-    else if (disc >= 0) { const s = Math.sqrt(disc); const t1 = (-b - s) / (2 * a), t2 = (-b + s) / (2 * a); t = Math.min(t1 > 0 ? t1 : Infinity, t2 > 0 ? t2 : Infinity); }
-    if (!Number.isFinite(t) || t < 0) t = 0;
-    t = Math.min(t, 3);
-    return { x: target.x + vx * t, y: target.y + vy * t, angle: Math.atan2(dy + vy * t, dx + vx * t), t };
-  },
-  /**
-   * Simple pursuit controller: returns { throttle, steer, brake } that drives
-   * `self` toward a point. Call as driveTo(self, x, y, opts) or driveTo(self, {x, y}, opts).
-   * opts: { reverse: allow backing up, stopDist: metres, speed: 0..1 }
-   */
-  driveTo(self, x, y, opts) {
-    if (x && typeof x === 'object') { opts = x.reverse ? { ...(y || {}), reverse: true } : y; y = x.y; x = x.x; }
-    opts = opts || {};
-    const dx = x - self.x, dy = y - self.y, d = Math.hypot(dx, dy);
-    if (d < (opts.stopDist ?? 0.6)) return { throttle: 0, steer: 0, brake: 1 };
-    let err = angDiff(Math.atan2(dy, dx), self.heading), dir = 1;
-    if (opts.reverse && Math.abs(err) > Math.PI * 0.6) { err = angDiff(err + Math.PI, 0); dir = -1; }
-    const steer = clamp(err * 2.2 - (self.angVel || 0) * 0.35, -1, 1) * dir;
-    const align = Math.max(0, Math.cos(err));
-    let throttle = (opts.speed ?? 1) * dir * (Math.abs(err) > 1.2 ? 0.15 : 0.3 + 0.7 * align);
-    return { throttle, steer, brake: 0 };
-  },
-  /** { throttle: 0, steer } that turns the hull toward a world angle. */
-  turnTo(self, angle) {
-    const err = angDiff(angle, self.heading);
-    return { throttle: 0, steer: clamp(err * 2.5 - (self.angVel || 0) * 0.4, -1, 1) };
-  },
-});
+/** The helpers a controller receives as `api.util`, for use outside a match. Pure functions, no hidden state. */
+export const util = Object.freeze({ ...makeUtil(), blueprint: parseBlueprint });
 
-function seededMath(rng) {
-  const m = {};
-  for (const k of Object.getOwnPropertyNames(Math)) m[k] = Math[k];
-  m.random = rng;
-  return Object.freeze(m);
+// What comes back from a realm is text written by a controller: read it as that and nothing more.
+const textOf = (x) => (typeof x === 'string' ? x : '');
+const failed = (s) => s.charCodeAt(0) === 33; // '!' + message
+function readJson(s) { try { return JSON.parse(s); } catch { return undefined; } }
+/** Message of something a realm threw, without trusting the thing. */
+function thrown(e) {
+  try { const m = e && e.message; return typeof m === 'string' ? m.slice(0, 240) : 'error'; } catch { return 'error'; }
+}
+const plain = (o) => (o && typeof o === 'object' && !Array.isArray(o) ? o : {});
+// The clearance fields of a map take a while to build and never change: one per map, kept.
+const NAVS = new WeakMap();
+function navOf(map) { let nav = NAVS.get(map); if (!nav) NAVS.set(map, nav = makeNav(map)); return nav; }
+// A realm's number array belongs to the realm, so the engine never uses it as an object: it takes
+// the memory behind it — with its own built-ins, which run no code of the realm's and refuse
+// anything that is not a real typed array — and looks at that memory through an array of its own.
+const typed = Object.getOwnPropertyDescriptors(Object.getPrototypeOf(Float64Array.prototype));
+function viewOf(buf) {
+  try { return new Float64Array(typed.buffer.get.call(buf), typed.byteOffset.get.call(buf), typed.length.get.call(buf)); } catch { return null; }
 }
 
 /**
  * @param {object} o
  * @param {string|object} o.map     map id or built map
  * @param {string} [o.mode]         '1v1' | '2v2' | '3v3'
- * @param {Array}  o.teams          [[bot, ...], [bot, ...]], bot = { id, name?, factory }
+ * @param {Array}  o.teams          [[bot, ...], [bot, ...]], bot = { id, name?, factory } — or { id, name?, open } for a
+ *                                  bot that brings its own realm (node/loader.js: one sealed vm context per vehicle)
  * @param {number} [o.seed]
  * @param {boolean} [o.swap]        swap spawn sides
  * @param {number} [o.budget]
@@ -106,8 +74,9 @@ export function runMatch(o) {
   const rules = { ...RULES, ...(o.rules || {}) };
   const slots = SPAWN_SLOTS[teamSize];
   const mapInfo = deepFreeze(describeMap(map));
-  const nav = Object.freeze(makeNav(map));
+  const nav = navOf(map);
   const rulesInfo = deepFreeze({ ...rules, stud: CELL, gridHalfX: GRID_HX, gridHalfY: GRID_HY, paints: Object.keys(PAINTS), budget });
+  const tables = `"parts":${PARTS_JSON},"items":${ITEMS_JSON},"tiles":${TILES_JSON},"rules":${JSON.stringify(rulesInfo)},"map":${JSON.stringify(mapInfo)}`;
 
   const ctl = [];     // controller runtime per vehicle
   const entries = [];
@@ -119,30 +88,48 @@ export function runMatch(o) {
       const id = entries.length;
       const rng = makeRng(hashSeed('bot', seed, t, k));
       const logs = [], errors = [];
-      const log = (...args) => {
-        if (logs.length >= 200) return;
-        let s; try { s = args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' '); } catch { s = String(args[0]); }
-        logs.push(`[${world ? world.t.toFixed(2) : 'init'}] ${String(s).slice(0, 300)}`);
+      // The engine side of the fence (see realm.js): every function takes and returns primitives.
+      const host = {
+        rng: () => rng(),
+        log: (line) => { if (logs.length < 200) logs.push(`[${world ? world.t.toFixed(2) : 'init'}] ${String(line).slice(0, 300)}`); },
+        blueprint: (args) => {
+          try { const [name, layers, opts] = JSON.parse(args); return JSON.stringify({ ok: parseBlueprint(name, layers, plain(opts)) }); }
+          catch (e) { return JSON.stringify({ error: String(e && e.message) }); }
+        },
+        tileAt: (x, y) => nav.tileAt(x, y),
+        tileAtCell: (tx, ty) => nav.tileAtCell(tx, ty),
+        isOpen: (x, y, hover) => nav.isOpen(x, y, hover),
+        clearWall: (x, y) => nav.clearance(x, y).wall,
+        clearPit: (x, y) => nav.clearance(x, y).pit,
+        los: (x0, y0, x1, y1) => nav.los(x0, y0, x1, y1),
+        clear: (x0, y0, x1, y1, opts) => nav.clear(x0, y0, x1, y1, plain(opts === undefined ? null : JSON.parse(opts))),
+        path: (x0, y0, x1, y1, opts) => {
+          const flat = [];
+          for (const wp of nav.path(x0, y0, x1, y1, plain(opts === undefined ? null : JSON.parse(opts)))) flat.push(wp.x, wp.y);
+          return JSON.stringify(flat);
+        },
       };
-      const api = Object.freeze({ parts: FROZEN_PARTS, items: FROZEN_ITEMS, tiles: FROZEN_TILES, rules: rulesInfo, map: mapInfo, nav, util, rng, log });
-      const env = { Math: seededMath(rng), console: Object.freeze({ log, warn: log, error: log, info: log, debug: log }) };
-      const c = { id, bot, api, logs, errors, inst: null, cpuTotal: 0, cpuMax: 0, calls: 0, team: t, k };
+      const c = { id, bot, logs, errors, port: null, cpuTotal: 0, cpuMax: 0, calls: 0, team: t, k };
       const fail = (msg, detail) => { throw new MatchError(`bot "${bot.id}" (team ${t}, slot ${k}): ${msg}`, { bot: bot.id, team: t, slot: k, ...detail }); };
-      try { c.inst = bot.factory(env); } catch (e) { fail(`threw while loading: ${e && e.message}`, { phase: 'load' }); }
-      if (!c.inst || typeof c.inst.tick !== 'function') fail('must define a top-level function `tick(state, api)`', { phase: 'load' });
-      const ctx = deepFreeze({ mode, teamSize, team: t, slot: k, budget, map: mapInfo, rules: rulesInfo });
-      let raw = c.inst.design;
-      if (typeof raw === 'function') {
-        try { raw = raw(ctx, api); } catch (e) { fail(`design(ctx, api) threw: ${e && e.message}`, { phase: 'design' }); }
-      }
-      let val = validateDesign(raw, { budget });
+      const boot = `{"ctx":${JSON.stringify({ mode, teamSize, team: t, slot: k, budget })},"file":${JSON.stringify(bot.file || '')},"lineOffset":${WRAP_LINES},${tables}}`;
+      if (trace) trace[0] = id;
+      try { c.port = bot.open ? bot.open(host, boot) : controllerRealm(bot.factory, host, boot, makeUtil, makeFollower); }
+      catch (e) { fail(`threw while loading: ${thrown(e)}`, { phase: 'load' }); }
+      if (typeof c.port.error === 'string') fail(c.port.error, { phase: 'load' });
+      c.buf = viewOf(c.port.buf);
+      if (!c.buf || c.buf.length < WIRE_CAP) fail('its realm has no room for observations', { phase: 'load' });
+      let drawn;
+      try { drawn = textOf(c.port.design()); } catch (e) { drawn = '!design(ctx, api) threw: ' + thrown(e); }
+      if (trace) trace[0] = -1;
+      if (failed(drawn)) fail(drawn.slice(1), { phase: 'design' });
+      let val = validateDesign(readJson(drawn), { budget });
       if (!val.ok) {
         if (strict) fail(`invalid design: ${val.errors.join('; ')}`, { phase: 'design', errors: val.errors });
         errors.push(`invalid design, using stock chassis: ${val.errors.join('; ')}`);
         val = validateDesign(STOCK_DESIGN, { budget: Infinity });
       }
-      c.design = val.design; c.designStats = val.stats; c.ctx = ctx;
-      const meta = c.inst.meta && typeof c.inst.meta === 'object' ? c.inst.meta : {};
+      c.design = val.design; c.designStats = val.stats;
+      const meta = plain(readJson(textOf(c.port.meta)));
       c.name = String(bot.name || meta.name || bot.id).slice(0, 32);
       ctl.push(c);
       entries.push({ team: t, slot: slots[k], design: val.design, name: c.name, botId: bot.id });
@@ -152,30 +139,35 @@ export function runMatch(o) {
   var world = new World({ map, seed, swap: !!o.swap, entries, rules });
 
   for (const c of ctl) {
-    if (!c.inst.init) continue;
     const v = world.vehicles[c.id];
-    try { c.inst.init({ ...c.ctx, id: v.id, design: c.design, stats: c.designStats, x: v.x, y: v.y, heading: v.th }, c.api); }
-    catch (e) { c.errors.push(`init threw: ${e && e.message}`); world.vehicles[c.id].violations++; }
+    if (trace) trace[0] = c.id;
+    let said;
+    try { said = textOf(c.port.init(JSON.stringify({ id: v.id, design: c.design, stats: c.designStats, x: v.x, y: v.y, heading: v.th }))); }
+    catch (e) { said = '!' + thrown(e); }
+    if (failed(said)) { c.errors.push(`init threw: ${said.slice(1)}`); v.violations++; }
   }
+  if (trace) trace[0] = -1;
 
   const frames = [];
   if (record) frames.push(world.frame());
   const maxTime = o.maxTime ?? Infinity;
+  const sinks = ctl.map((c) => c.buf);
   while (!world.finished && world.t < maxTime) {
     if (world.tick % rules.decisionEvery === 0) {
-      const obs = world.observeAll();
+      const obs = world.observeWire(sinks);
       for (const c of ctl) {
         const v = world.vehicles[c.id];
         if (!v.alive) continue;
         if (v.cutOff) { world.setCommand(v, null); continue; }
-        let cmd = null;
+        let said;
         const t0 = now ? now() : 0;
         if (trace) trace[0] = c.id;
-        try { cmd = c.inst.tick(obs[c.id], c.api); }
-        catch (e) {
+        try { said = textOf(c.port.tick(obs[c.id].messages, obs[c.id].layouts)); } catch (e) { said = '!' + thrown(e); }
+        let cmd = null;
+        if (failed(said)) {
           v.violations++;
-          if (c.errors.length < 8) c.errors.push(`tick threw at t=${world.t.toFixed(2)}: ${e && e.message}`);
-        }
+          if (c.errors.length < 8) c.errors.push(`tick threw at t=${world.t.toFixed(2)}: ${said.slice(1)}`);
+        } else cmd = world.readCommand(c.buf, said && said.length <= rules.sayLimit ? readJson(said) : undefined);
         if (now) {
           const el = now() - t0;
           c.cpuTotal += el; c.calls++;

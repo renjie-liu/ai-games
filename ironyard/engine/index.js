@@ -6,4 +6,5 @@ export * from './rng.js';
 export * from './sim.js';
 export * from './match.js';
 export * from './botwrap.js';
+export * from './realm.js';
 export * from './tournament.js';
