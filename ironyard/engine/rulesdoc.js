@@ -11,14 +11,19 @@ const deg = (r) => Math.round((r * 180) / Math.PI);
 function partRow(p) {
   const bits = [];
   if (p.weapon && p.weapon !== 'melee') {
-    if (p.dps) bits.push(`${p.dps} dps beam`);
+    if (p.weapon === 'flame') bits.push(`${p.dps} dps to each piece in a ±${deg(p.cone)}° stream`, `heats them ${p.heat}/s (a piece catches fire at heat 1)`);
+    else if (p.dps) bits.push(`${p.dps} dps beam`);
     else bits.push(`${p.dmg} dmg${p.salvo ? ` x${p.salvo}` : ''} / ${p.cooldown}s (${Math.round((p.dmg * (p.salvo || 1)) / p.cooldown)} dps)`);
     bits.push(p.minRange ? `range ${p.minRange}-${p.range} m` : `range ${p.range} m`, p.arc >= 3 ? 'arc 360°' : `arc ±${deg(p.arc)}°`, `traverse ${p.traverse} rad/s`);
     if (p.projSpeed) bits.push(`shot speed ${p.projSpeed} m/s`); else bits.push('instant hit');
     bits.push(p.energyShot ? `${p.energyShot} energy/shot` : `${p.energyUse} energy/s`);
     if (p.splash) bits.push(p.weapon === 'lob' ? `blast ${p.splash.r} m, up to ${p.splash.max} pieces` : `splash ${p.splash.r} m x${p.splash.f}`);
+    if (p.rope) bits.push(`cable holds ${p.rope.hold} s, reels in ${p.rope.reel} m/s down to ${p.rope.min} m`);
+    if (p.recoil) bits.push(`recoil ${p.recoil} N·s`);
     bits.push(p.dtype);
   }
+  if (p.punch) bits.push(`${p.punch.dmg} dmg and ${p.punch.impulse} N·s per punch`, `reach ${p.punch.reach} m`, `${p.punch.cooldown} s to reset`, `${p.punch.energy} energy/punch`);
+  if (p.blast) bits.push(`blast ${p.blast.dmg} dmg, ${p.blast.r} m, up to ${p.blast.max} pieces per vehicle`, `fuse ${p.blast.fuse} s when dropped`);
   if (p.weapon === 'melee') bits.push(`${p.dps} dps on contact`, `${p.energyUse} energy/s while cutting`);
   if (p.force) bits.push(`${p.force} N drive`, `grip ${p.grip}`);
   if (p.lift) bits.push(`lift ${p.lift} kg`, `${p.energyUse} energy/s`);
@@ -39,6 +44,7 @@ function partRow(p) {
   if (p.low) place.push('low');
   if (p.directional) place.push(p.lane === 'back' ? 'dir, clear exhaust' : p.lane ? 'dir, clear lane' : 'dir');
   if (p.fixedDir) place.push('always lengthwise');
+  if (!p.decor) bits.push(p.burn ? (p.burn >= 1 ? 'burns' : 'burns slowly') : 'fireproof');
   return `| \`${p.id}\` | ${p.glyph} | ${p.size[0]}x${p.size[1]} | ${p.cost} | ${p.mass} | ${p.hp} | ${place.join(', ')} | ${bits.join(', ')} | ${p.desc} |`;
 }
 
@@ -57,7 +63,9 @@ export function rulesMarkdown() {
 
 Ironyard is a deterministic vehicle-combat arena. **You build the car and you write its brain.**
 Before a match you hand in ONE JavaScript file containing a blueprint (which bricks go where, within a
-budget) and a \`tick\` function (what the car does each decision step). Matches then run with no model
+budget) and a \`tick\` function (what the car does each decision step). The kit has wheels, tracks and hover pads,
+guns, flamethrowers, harpoons, piston rams and powder kegs; things burn, blasts throw vehicles about, and some maps
+are built of crates and barrels that do not stay where they are. Matches then run with no model
 in the loop: same files + same seed = same result, every time.
 
 Modes: \`1v1\`, \`2v2\`, \`3v3\`. A team wins by destroying every enemy core. Budget per vehicle:
@@ -121,11 +129,19 @@ The kit works like a box of bricks: a stud grid, two layers that stack, and piec
 What happens under fire:
 
 * Each piece has its own hp. At 0 it breaks off and its function is gone. Anything no longer connected to
-  the core falls off with it. The vehicle dies when the core dies.
+  the core falls off with it. The vehicle dies when the core dies — or ${R.wreckTime} s after it has nothing left that
+  moves it (wheels, tracks, hover pads, thrusters) and nothing left that can hurt (guns, flamers, harpoons, saws,
+  pistons, spikes, plows, kegs): a hull like that is a wreck.
 * **Shots, beams and blasts hit the deck piece of a stud column first**, then the chassis piece under it.
   **Rams, saws and mines hit the chassis piece first.** A shot travelling across the vehicle hits whatever column it enters first.
 * Slopes: a kinetic or explosive hit arriving against the slope's facing (within 60°) only does ${Math.round(PARTS.slope.deflect * 100)}%.
 * Decor is not solid: shots pass through it, and it is shaken off when the piece under it takes ${PARTS.tile.hp} damage.
+* **Fire.** Every piece has heat. Flamethrowers, lava, and the blasts of kegs and barrels raise it; at heat 1 a piece
+  that burns catches fire. It then loses ${R.fireDps} hp/s for ${R.fireTime} s (armor does not help) and heats every piece touching
+  it by ${R.fireSpread}/s, so the fire walks across the vehicle. A piece burns once. The tables say what burns: plates, bricks,
+  wheels and most equipment do; armor, slopes, tracks, spikes, plows, pistons and the core do not, so a row of them is a
+  firebreak. A fire is put out by parking on a repair pad, by a repair kit, by a repair arm (it goes for burning pieces
+  first), or by letting go of the piece (\`jettison\`). A keg that catches fire goes off.
 
 ${partTables}
 
@@ -166,7 +182,12 @@ Tokens: \`.\` empty, \`:\` rest of a multi-stud piece, otherwise the glyph plus 
 * **Energy:** capacity and regen come from core, batteries and reactors. Guns, lasers, saws, thrusters, hover pads,
   shields and repair arms draw from it; whatever cannot be paid for simply does not work that tick. Wheels and tracks are free.
 * **Collisions:** rigid-body impulses, one circle per occupied stud. Damage = collision energy x ${R.ramK} to the two pieces that touch
-  (only above ${R.ramMinSpeed} m/s closing speed, never between teammates), scaled by each piece's ram multipliers. Mass and speed push people around.
+  (only above ${R.ramMinSpeed} m/s closing speed, never between teammates), scaled by each piece's ram multipliers, and ${Math.round(R.ramSpread * 100)}% of it again
+  to every piece touching the one that was hit. Mass and speed push people around.
+* **Everything shoves.** A blast throws each vehicle in it away from its centre with ${R.blastPush} N·s per point of damage (a 46-damage
+  mortar shell: ${Math.round(46 * R.blastPush)} N·s, which is ${(46 * R.blastPush / 250).toFixed(1)} m/s for a 250 kg car — and more for a hover craft). A shell, bullet or
+  slug pushes what it hits with ${R.hitPush} N·s per point. Cannons, railguns, mortars and missile pods kick their own vehicle
+  straight back when they fire (the tables give the recoil). Near a hole, that is how you leave.
 
 ## 3. The arena
 
@@ -186,6 +207,10 @@ Off the edge of the map counts as a pit.
   or for ${R.revealTime}s after it fires a gun. Walls do not block vision. \`state.lastSeen\` remembers where each enemy was.
 * **Friendly fire is off**: shots, blasts and saws pass through teammates. You can still bump into them.
 * **Timeout:** more vehicles alive wins; then more total hull fraction remaining; then more damage dealt; else a draw.
+* **Crates and barrels** are tiles with hit points. A crate is a wall until it is broken; a barrel explodes when it is,
+  a tenth of a second later, so a row of them goes off one after another. Shots, beams, blasts, fire, pistons and
+  collisions (x${R.ramTile}, and more through a spike or plow) all damage them. \`api.nav\` always answers for the map as it is
+  now, and \`state.barrels\` lists the barrels still standing near you.
 
 ### Items
 Pick-ups appear on the map's \`*\` spots at t=${R.itemFirstSpawn}s and again ${R.itemRespawn}s after being taken. Drive over one to take it.
@@ -196,6 +221,7 @@ Mirrored spots always hold the same item type.
 ${Object.entries(ITEMS).map(([id, it]) => `| \`${id}\` | ${it.held ? 'held' : 'instant'} | ${it.desc} |`).join('\n')}
 
 A vehicle holds one item at a time (a new held item replaces the old one). Mines do not trigger on hovering vehicles.
+A repair kit also puts out every fire on the vehicle.
 
 ### Maps
 Each map is point-symmetric. \`A B C\` / \`a b c\` are the three spawn points of team 0 / team 1: 3v3 fills them in
@@ -213,21 +239,24 @@ state = {
     id, team, slot, name, x, y, heading, vx, vy, speed, angVel,
     hp, maxHp, hpFrac, coreHp, coreMaxHp, coreFrac, mass, radius,
     energy, energyMax, energyRegen, energyFrac,
-    shield, shieldMax, overshield, hovering, stunned (seconds left), sensor, tile ('floor' | 'mud' | ...),
+    shield, shieldMax, overshield, hovering, stunned (seconds left), burning (pieces on fire), sensor, tile ('floor' | 'mud' | ...),
     item: null | { type, charges }, effects: { overdrive, nitro } (seconds left),
-    parts:   [{ i, type, x, y, z, dir, alive, hp, maxHp, wx, wy }],     // wx, wy = world position of the piece's centre
+    parts:   [{ i, type, x, y, z, dir, alive, burning, hp, maxHp, wx, wy }],     // wx, wy = world position of the piece's centre
     weapons: [{ i, type, dir, alive, ready, cooldown, angle, mountAngle, arc, range, minRange, projSpeed, dmg }],
   },
-  allies:  [{ id, slot, name, alive, x, y, heading, vx, vy, speed, hpFrac, coreFrac, energyFrac, mass, radius, shield, item, parts, ... }],
+  allies:  [{ id, slot, name, alive, x, y, heading, vx, vy, speed, hpFrac, coreFrac, energyFrac, mass, radius, shield, burning, item, parts, ... }],
   enemies: [ same shape — ONLY enemies your team can currently see; parts[] shows their layout (with z) and damage ],
   enemiesAlive,                      // how many are left, seen or not
   lastSeen: [{ id, x, y, t, alive }],
-  projectiles: [{ kind: 'bullet' | 'shell' | 'missile' | 'mortar', x, y, vx, vy, landsAt?, landsIn? }],  // enemy shots in sensor range, nearest first (max 24)
+  projectiles: [{ kind: 'bullet' | 'shell' | 'missile' | 'mortar' | 'hook', x, y, vx, vy, landsAt?, landsIn? }],  // enemy shots in sensor range, nearest first (max 24)
   mines: [{ x, y }],                 // enemy mines within 5 m (anywhere in sensor range with a radar)
   items: [{ id, type, x, y }],       // every pick-up currently on the map
   pads:  [{ x, y, charge }],
   zone:  { x, y, r, minR, startT, endT, shrinking },
   messages: [{ from: slot, id, data }],   // what teammates passed to \`say\` on their previous tick
+  bombs:   [{ x, y, vx, vy, fuse, r }],   // kegs on the ground in sensor range, anybody's: where, how fast, seconds left, blast radius
+  barrels: [{ x, y }],                    // powder barrels still standing in sensor range, nearest first (max 24)
+  tethers: [{ from, to, length, taut, timeLeft }],   // harpoon cables: \`from\` is the vehicle that fired the hook
 }
 \`\`\`
 
@@ -249,7 +278,11 @@ A mortar shell in \`projectiles\` tells you where and when it lands — drive ou
   boost: 0..1 | { N, E, S, W },               // thrusters, by the direction they push. A number means the forward (N) ones.
   useItem: true,              // use the held item
   target: id,                 // missile lock (enemy id) and/or repair-arm priority (ally id)
-  shield: false, repair: false, melee: false, // switch those systems off to save energy (default on)
+  shield: false, repair: false, melee: false, // switch those systems off to save energy (default on); melee covers saws and pistons
+  detonate: true | [partIndex, ...],          // set off your kegs (all, or those) where they sit
+  jettison: [partIndex, ...],                 // let go of pieces (not the core): a keg rolls on and blows when its fuse is up, anything else is just gone
+  reel:  0..1,                                // wind in your harpoon cable
+  release: true,                              // let go of whatever your harpoon holds
   say: anyJSON,               // ≤ ${R.sayLimit} chars; teammates read it next tick in state.messages
 }
 \`\`\`
@@ -266,6 +299,8 @@ the match. A tick should take well under ${R.tickBudgetMs} ms; one that never re
 * \`api.util.lead(from, target, projectileSpeed)\` → \`{ x, y, angle, t }\` intercept point (pass it as \`aim\`).
   \`target\` only needs \`x, y, vx, vy\`, so you can lead a single piece: \`{ x: part.wx, y: part.wy, vx: foe.vx, vy: foe.vy }\`.
 * \`api.util.angDiff(a, b)\`, \`angleTo(from, to)\`, \`dist(a, b)\`, \`clamp(x, lo, hi)\`, \`blueprint(name, { deck, chassis }, { paint })\`.
+* \`api.util.threat(state, margin = 1.2)\` → \`null\`, or \`{ x, y, r, in, away }\` for the keg or mortar shell whose blast you are in or
+  nearly in: where, how big, in how many seconds, and a point just outside it to drive to (\`driveTo(self, t.away, { reverse: true })\`).
 * \`api.nav.follower()\` → object with \`next(self, goalX, goalY, state.tick)\` returning the next waypoint of an A* route
   (cached, re-planned twice a second, sized to your hull, backs out when wedged). Keep one per controller.
 * \`api.nav.path(x0, y0, x1, y1, { hover, margin, mudCost, iceCost, lavaCost })\` → waypoints.
@@ -298,5 +333,10 @@ Things that decide matches: whether your guns can actually bear (watch \`timeFir
 reaches your core (slopes and armor in front, on the deck), what a ram meets (the chassis), energy balance, not driving
 into pits, and picking the fight your build wins — out-range brawlers, out-turn snipers, shove hover craft, shield
 against missiles and mortars, saw through shields.
+
+And the physical side: what on your vehicle burns and where the firebreaks are (\`validate_design\` reports the share of
+fireproof pieces); where your kegs sit when somebody shoots them; which way a blast or a punch will send you and
+what is behind you when it does; whether you are the heavier end of a cable. A vehicle that has lost its wheels and
+its guns is out, so there are more ways to win than drilling for the core — and more ways to lose.
 `;
 }

@@ -69,6 +69,26 @@ export function makeUtil() {
       const err = angDiff(angle, self.heading);
       return { throttle: 0, steer: clamp(err * 2.5 - (self.angVel || 0) * 0.4, -1, 1) };
     },
+    /**
+     * The blast you most need to get out of: a keg on the ground, or a mortar shell on its way,
+     * whose circle you are in or within `margin` metres of. Returns null if there is none, else
+     * { x, y, r, in, away }: where it goes off, how big, in how many seconds, and a point just
+     * outside it, straight out from its centre through you (pass `away` to driveTo).
+     */
+    threat(state, margin = 1.2) {
+      const s = state.self;
+      let best = null;
+      const look = (x, y, r, t) => {
+        const d = Math.hypot(s.x - x, s.y - y), reach = r + (s.radius || 1) + margin;
+        if (d > reach || (best && best.in <= t)) return;
+        const ux = d > 1e-3 ? (s.x - x) / d : Math.cos(s.heading), uy = d > 1e-3 ? (s.y - y) / d : Math.sin(s.heading);
+        best = { x, y, r, in: t, away: { x: x + ux * (reach + 1), y: y + uy * (reach + 1) } };
+      };
+      const bombs = state.bombs || [], shots = state.projectiles || [];
+      for (let i = 0; i < bombs.length; i++) { const b = bombs[i], t = Math.min(b.fuse, 0.5); look(b.x + b.vx * t, b.y + b.vy * t, b.r, b.fuse); }
+      for (let i = 0; i < shots.length; i++) { const p = shots[i]; if (p.landsAt) look(p.landsAt.x, p.landsAt.y, 2, p.landsIn); }
+      return best;
+    },
   };
 }
 
@@ -266,7 +286,7 @@ export function controllerRealm(factory, host, boot, makeUtil, makeFollower) {
   // layout, the first time this controller was shown that vehicle.
   const buf = new F64(8192);
   const tileNames = keysOf(tiles), itemNames = keysOf(items);
-  const SHOTS = ['bullet', 'shell', 'missile', 'mortar'];
+  const SHOTS = ['bullet', 'shell', 'missile', 'mortar', 'hook'];
   const known = [];           // vehicle id → { team, slot, name, rows, arms, guns }
   let at = 0;                 // read position in buf
 
@@ -284,15 +304,15 @@ export function controllerRealm(factory, host, boot, makeUtil, makeFollower) {
     }
   };
 
-  // The pieces of one vehicle, read at `at`: 4 numbers each, the first says whether the piece is still attached.
+  // The pieces of one vehicle, read at `at`: 4 numbers each, the first says whether the piece is gone (0), attached (1) or attached and on fire (2).
   const pieces = (rows, own) => {
     const b = buf, list = [];
     let j = at;
     for (let k = 0; k < rows.length; k++, j += 4) {
       const r = rows[k];
       list[k] = own
-        ? { i: r[0], type: r[1], x: r[2], y: r[3], z: r[4], dir: r[5], alive: b[j] === 1, hp: b[j + 1], maxHp: r[6], wx: b[j + 2], wy: b[j + 3] }
-        : { i: r[0], type: r[1], x: r[2], y: r[3], z: r[4], dir: r[5], alive: b[j] === 1, hpFrac: b[j + 1], wx: b[j + 2], wy: b[j + 3] };
+        ? { i: r[0], type: r[1], x: r[2], y: r[3], z: r[4], dir: r[5], alive: b[j] >= 1, burning: b[j] === 2, hp: b[j + 1], maxHp: r[6], wx: b[j + 2], wy: b[j + 3] }
+        : { i: r[0], type: r[1], x: r[2], y: r[3], z: r[4], dir: r[5], alive: b[j] >= 1, burning: b[j] === 2, hpFrac: b[j + 1], wx: b[j + 2], wy: b[j + 3] };
     }
     at = j;
     return list;
@@ -304,7 +324,7 @@ export function controllerRealm(factory, host, boot, makeUtil, makeFollower) {
     maxRange = 0;
     for (let a = 0; a < arms.length; a++) {
       const j = arms[a];
-      if (b[at + j * 4] !== 1) continue;
+      if (!(b[at + j * 4] >= 1)) continue;
       const type = rows[j][1], def = parts[type];
       weapons[type] = (weapons[type] || 0) + 1;
       const reach = def.range || def.reach || 0;
@@ -316,26 +336,26 @@ export function controllerRealm(factory, host, boot, makeUtil, makeFollower) {
   // An ally or a visible enemy: one public block at `at`.
   const vehicle = () => {
     const b = buf, k = at, id = b[k], info = known[id];
-    at = k + 18;
+    at = k + 19;
     const weapons = armed(info);
     return {
       id, team: info.team, slot: info.slot, name: info.name, alive: b[k + 1] === 1,
       x: b[k + 2], y: b[k + 3], heading: b[k + 4], vx: b[k + 5], vy: b[k + 6], speed: b[k + 7], angVel: b[k + 8],
       hpFrac: b[k + 9], coreFrac: b[k + 10], energyFrac: b[k + 11],
       mass: b[k + 12], radius: b[k + 13], shield: b[k + 14],
-      hovering: b[k + 15] === 1, stunned: b[k + 16],
-      item: b[k + 17] ? itemNames[b[k + 17] - 1] : null, weapons, maxRange,
+      hovering: b[k + 15] === 1, stunned: b[k + 16], burning: b[k + 17],
+      item: b[k + 18] ? itemNames[b[k + 18] - 1] : null, weapons, maxRange,
       parts: pieces(info.rows, false),
     };
   };
 
   // The vehicle itself: its public block, then what only it knows, its guns, its pieces.
   const own = () => {
-    const b = buf, k = at, id = b[k], info = known[id], rows = info.rows, e = k + 18, od = b[e + 14];
+    const b = buf, k = at, id = b[k], info = known[id], rows = info.rows, e = k + 19, od = b[e + 14];
     const p0 = e + 15 + info.guns.length * 4, guns = [];
     for (let g = 0, w = e + 15; g < info.guns.length; g++, w += 4) {
       const j = info.guns[g], r = rows[j], def = parts[r[1]];
-      guns[g] = { i: r[0], type: r[1], dir: r[5], alive: b[p0 + j * 4] === 1, ready: b[w] === 1, cooldown: b[w + 1], mountAngle: b[w + 2], angle: b[w + 3],
+      guns[g] = { i: r[0], type: r[1], dir: r[5], alive: b[p0 + j * 4] >= 1, ready: b[w] === 1, cooldown: b[w + 1], mountAngle: b[w + 2], angle: b[w + 3],
         arc: def.arc, range: def.range, minRange: def.minRange || 0, projSpeed: def.projSpeed || Infinity, dmg: (def.dmg ?? def.dps) * od };
     }
     at = p0;
@@ -345,8 +365,8 @@ export function controllerRealm(factory, host, boot, makeUtil, makeFollower) {
       x: b[k + 2], y: b[k + 3], heading: b[k + 4], vx: b[k + 5], vy: b[k + 6], speed: b[k + 7], angVel: b[k + 8],
       hpFrac: b[k + 9], coreFrac: b[k + 10], energyFrac: b[k + 11],
       mass: b[k + 12], radius: b[k + 13], shield: b[k + 14],
-      hovering: b[k + 15] === 1, stunned: b[k + 16],
-      item: b[k + 17] ? { type: itemNames[b[k + 17] - 1], charges: b[e + 10] } : null, weapons: guns, maxRange,
+      hovering: b[k + 15] === 1, stunned: b[k + 16], burning: b[k + 17],
+      item: b[k + 18] ? { type: itemNames[b[k + 18] - 1], charges: b[e + 10] } : null, weapons: guns, maxRange,
       parts: pieces(rows, true),
       hp: b[e], maxHp: b[e + 1], coreHp: b[e + 2], coreMaxHp: b[e + 3],
       energy: b[e + 4], energyMax: b[e + 5], energyRegen: b[e + 6],
@@ -360,9 +380,11 @@ export function controllerRealm(factory, host, boot, makeUtil, makeFollower) {
     if (layouts) learn(layouts);
     const b = buf;
     const nAllies = b[5], nEnemies = b[6], nLast = b[7], nShots = b[8], nMines = b[9], nItems = b[10], nPads = b[11];
-    const zone = { x: b[12], y: b[13], r: b[14], minR: b[15], startT: b[16], endT: b[17], shrinking: b[18] === 1 };
-    at = 19;
+    const nBombs = b[12], nBarrels = b[13], nCables = b[14];
+    const zone = { x: b[15], y: b[16], r: b[17], minR: b[18], startT: b[19], endT: b[20], shrinking: b[21] === 1 };
+    at = 22;
     const self = own(), allies = [], enemies = [], lastSeen = [], projectiles = [], mines = [], here = [], pads = [];
+    const bombs = [], barrels = [], tethers = [];
     for (let i = 0; i < nAllies; i++) allies[i] = vehicle();
     for (let i = 0; i < nEnemies; i++) enemies[i] = vehicle();
     let k = at;
@@ -375,10 +397,14 @@ export function controllerRealm(factory, host, boot, makeUtil, makeFollower) {
     for (let i = 0; i < nMines; i++, k += 2) mines[i] = { x: b[k], y: b[k + 1] };
     for (let i = 0; i < nItems; i++, k += 4) here[i] = { id: b[k], type: itemNames[b[k + 1] - 1], x: b[k + 2], y: b[k + 3] };
     for (let i = 0; i < nPads; i++, k += 3) pads[i] = { x: b[k], y: b[k + 1], charge: b[k + 2] };
+    for (let i = 0; i < nBombs; i++, k += 6) bombs[i] = { x: b[k], y: b[k + 1], vx: b[k + 2], vy: b[k + 3], fuse: b[k + 4], r: b[k + 5] };
+    for (let i = 0; i < nBarrels; i++, k += 2) barrels[i] = { x: b[k], y: b[k + 1] };
+    for (let i = 0; i < nCables; i++, k += 5) tethers[i] = { from: b[k], to: b[k + 1], length: b[k + 2], taut: b[k + 3] === 1, timeLeft: b[k + 4] };
     return {
       t: b[0], tick: b[1], timeLeft: b[2], dt: b[3],
       self, allies, enemies, enemiesAlive: b[4],
       lastSeen, projectiles, mines, items: here, pads, zone, messages: messages ? parse(messages) : [],
+      bombs, barrels, tethers,
     };
   };
 
@@ -401,7 +427,7 @@ export function controllerRealm(factory, host, boot, makeUtil, makeFollower) {
     b[1] = num(cmd.throttle); b[2] = num(cmd.steer); b[3] = num(cmd.brake);
     aimAt(cmd.aim, 4);
     const fire = cmd.fire, boost = cmd.boost;
-    let k = 20, nFire = 0, nAims = 0;
+    let k = 25, nFire = 0, nAims = 0;
     if (fire === true) b[7] = 1;
     else if (isArray(fire)) {
       b[7] = 2;
@@ -425,6 +451,16 @@ export function controllerRealm(factory, host, boot, makeUtil, makeFollower) {
       }
     }
     b[18] = nFire; b[19] = nAims;
+    b[20] = num(cmd.reel); b[21] = cmd.release ? 1 : 0;
+    const det = cmd.detonate, jet = cmd.jettison;
+    let nDet = 0, nJet = 0;
+    if (det === true) b[22] = 1;
+    else if (isArray(det)) {
+      b[22] = 2;
+      for (let i = 0; i < det.length && i < 64 && nDet < 8; i++) { const x = det[i]; if (typeof x === 'number' && floor(x) === x && x - x === 0) { b[k++] = x; nDet++; } }
+    } else b[22] = 0;
+    if (isArray(jet)) for (let i = 0; i < jet.length && i < 64 && nJet < 16; i++) { const x = jet[i]; if (typeof x === 'number' && floor(x) === x && x - x === 0) { b[k++] = x; nJet++; } }
+    b[23] = nDet; b[24] = nJet;
     let say = '';
     const said = cmd.say;
     if (said !== undefined && said !== null) {

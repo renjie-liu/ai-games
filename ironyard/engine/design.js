@@ -196,7 +196,7 @@ export function validateDesign(input, opts = {}) {
   // warnings — legal but probably not what you want
   if (stats.groundMovers + stats.hoverMovers === 0 && stats.thrusters === 0) warnings.push('no wheels, tracks, hover pads or thrusters: this vehicle cannot move');
   if (stats.hoverMovers > 0 && !stats.hovers && stats.groundMovers === 0) warnings.push(`hover lift ${stats.lift} kg < mass ${stats.mass} kg: it will not float and hover pads alone barely push it`);
-  if (stats.dps === 0 && stats.ramParts === 0) warnings.push('no weapons, saws or spikes: this vehicle can only win by pushing or by timeout');
+  if (stats.dps === 0 && stats.ramParts === 0 && stats.kegs === 0) warnings.push('no weapons, saws, spikes, pistons or kegs: this vehicle can only win by pushing or by timeout');
   if (stats.energyDrain > stats.energyRegen * 3 && stats.energyDrain > 0) warnings.push(`peak energy drain ${stats.energyDrain.toFixed(1)}/s is far above regen ${stats.energyRegen}/s; sustained fire will stall`);
   if (stats.groundMovers > 0 && Math.abs(stats.wheelBias) > 0.25) warnings.push('drive force is lopsided left/right: the vehicle will pull to one side');
   if (stats.turnRate < 0.8 && stats.groundMovers + stats.hoverMovers > 0) warnings.push(`slow turn rate (~${stats.turnRate.toFixed(2)} rad/s): widen the wheelbase or add a gyro`);
@@ -209,7 +209,7 @@ export function validateDesign(input, opts = {}) {
 
 export function computeStats(parts) {
   const a = aggregate(parts);
-  let dps = 0, maxRange = 0, energyDrain = 0, thrusters = 0, ramParts = 0, thrust = 0, studs = [0, 0], decor = 0;
+  let dps = 0, maxRange = 0, energyDrain = 0, thrusters = 0, ramParts = 0, thrust = 0, studs = [0, 0], decor = 0, kegs = 0, fireproof = 0, solidN = 0;
   let leftF = 0, rightF = 0, steerTorque = 0, x0 = 9, x1 = -9, y0 = 9, y1 = -9;
   const weapons = {};
   const hovers = a.lift >= a.mass && a.hoverMovers > 0;
@@ -226,7 +226,9 @@ export function computeStats(parts) {
       energyDrain += d.energyUse ?? (d.energyShot / d.cooldown);
       weapons[p.type] = (weapons[p.type] || 0) + 1;
     }
-    if (d.ramOut > 1) ramParts++;
+    if (d.ramOut > 1 || d.punch) ramParts++;
+    if (d.blast) kegs++;
+    solidN++; if (!d.burn) fireproof++;
     if (d.thrust) { thrusters++; thrust += d.thrust; energyDrain += d.energyUse; }
     if (d.mover === 'hover') energyDrain += d.energyUse;
     if (d.shield) energyDrain += d.energyUse;
@@ -261,6 +263,8 @@ export function computeStats(parts) {
     hoverMovers: a.hoverMovers,
     thrusters,
     ramParts,
+    kegs,
+    fireproof: solidN ? Math.round((fireproof / solidN) * 100) / 100 : 0,   // share of pieces that cannot burn
     driveForce: Math.round(force),
     accel: r2(force / a.mass),
     topSpeed: r2(topSpeed(force, a.mass, lin)),

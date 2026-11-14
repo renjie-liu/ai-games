@@ -5,7 +5,7 @@
 // clearance field, so a 3.5 m wide tank is routed down the middle of a 4 m gap
 // instead of being sent to scrape along the wall.
 import { TILE } from './parts.js';
-import { TILE_CODE, TILE_NAME } from './maps.js';
+import { TILE_CODE, TILE_NAME, TILE_SOLID, TILE_SHOTS } from './maps.js';
 import { makeFollower } from './realm.js';
 
 const C = TILE_CODE;
@@ -16,7 +16,7 @@ export function makeNav(map) {
   const { w, h, tiles } = map;
   const code = (tx, ty) => (tx < 0 || ty < 0 || tx >= w || ty >= h ? C.pit : tiles[ty * w + tx]);
   const codeAt = (x, y) => code(Math.floor(x / TILE), Math.floor(y / TILE));
-  const solid = (c) => c === C.wall || c === C.barrier;
+  const solid = (c) => TILE_SOLID[c];
 
   // ── lattice + clearance fields ──
   const gw = w * 2 + 1, gh = h * 2 + 1, N = gw * gh;
@@ -24,11 +24,11 @@ export function makeNav(map) {
   const pitDist = new Float32Array(N).fill(FAR);
   const terrain = new Uint8Array(N); // worst tile touching the node: 0 floor, mud, ice, lava
   const RANK = { [C.lava]: 3, [C.mud]: 2, [C.ice]: 1 };
-  for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
+  const R = Math.ceil(FAR / TILE);
+  const survey = (i, j) => {
     const x = i * STEP, y = j * STEP, n = j * gw + i;
     const tx0 = Math.floor(x / TILE), ty0 = Math.floor(y / TILE);
     let wd = FAR, pd = FAR, worst = 0;
-    const R = Math.ceil(FAR / TILE);
     for (let ty = ty0 - R; ty <= ty0 + R; ty++) for (let tx = tx0 - R; tx <= tx0 + R; tx++) {
       const c = code(tx, ty);
       const isS = solid(c), isP = c === C.pit;
@@ -40,7 +40,15 @@ export function makeNav(map) {
       if (d < 1e-6 && RANK[c] > worst) worst = RANK[c];
     }
     wallDist[n] = wd; pitDist[n] = pd; terrain[n] = worst;
-  }
+  };
+  for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) survey(i, j);
+  /** A tile changed (a crate or barrel went): redo the clearance of every lattice node it could have mattered to. */
+  const refresh = (tx, ty) => {
+    const reach = Math.ceil(FAR / STEP) + 2;
+    const i0 = Math.max(0, tx * 2 - reach), i1 = Math.min(gw - 1, tx * 2 + 2 + reach);
+    const j0 = Math.max(0, ty * 2 - reach), j1 = Math.min(gh - 1, ty * 2 + 2 + reach);
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) survey(i, j);
+  };
   const nodeOf = (x, y) => {
     const i = Math.max(0, Math.min(gw - 1, Math.round(x / STEP))), j = Math.max(0, Math.min(gh - 1, Math.round(y / STEP)));
     return j * gw + i;
@@ -67,13 +75,13 @@ export function makeNav(map) {
     return -1;
   }
 
-  /** Is the straight segment free of walls (for shooting)? Barriers do not block shots. */
+  /** Is the straight segment free of walls, crates and barrels (for shooting)? Barriers do not block shots. */
   function los(x0, y0, x1, y1) {
     const d = Math.hypot(x1 - x0, y1 - y0);
     const n = Math.max(1, Math.ceil(d / (TILE * 0.25)));
     for (let i = 1; i < n; i++) {
       const t = i / n;
-      if (codeAt(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t) === C.wall) return false;
+      if (TILE_SHOTS[codeAt(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)]) return false;
     }
     return true;
   }
@@ -194,6 +202,6 @@ export function makeNav(map) {
     isOpen: (x, y, hover = false) => { const c = codeAt(x, y); return !solid(c) && (hover || c !== C.pit); },
     /** metres from (x, y) to the nearest wall/barrier and the nearest pit (capped at 6) */
     clearance: (x, y) => { const n = nodeOf(x, y); return { wall: wallDist[n], pit: pitDist[n] }; },
-    los, clear, path,
+    los, clear, path, refresh,
   };
 }

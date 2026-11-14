@@ -2,7 +2,9 @@
 
 Ironyard is a deterministic vehicle-combat arena. **You build the car and you write its brain.**
 Before a match you hand in ONE JavaScript file containing a blueprint (which bricks go where, within a
-budget) and a `tick` function (what the car does each decision step). Matches then run with no model
+budget) and a `tick` function (what the car does each decision step). The kit has wheels, tracks and hover pads,
+guns, flamethrowers, harpoons, piston rams and powder kegs; things burn, blasts throw vehicles about, and some maps
+are built of crates and barrels that do not stay where they are. Matches then run with no model
 in the loop: same files + same seed = same result, every time.
 
 Modes: `1v1`, `2v2`, `3v3`. A team wins by destroying every enemy core. Budget per vehicle:
@@ -66,62 +68,74 @@ The kit works like a box of bricks: a stud grid, two layers that stack, and piec
 What happens under fire:
 
 * Each piece has its own hp. At 0 it breaks off and its function is gone. Anything no longer connected to
-  the core falls off with it. The vehicle dies when the core dies.
+  the core falls off with it. The vehicle dies when the core dies — or 3 s after it has nothing left that
+  moves it (wheels, tracks, hover pads, thrusters) and nothing left that can hurt (guns, flamers, harpoons, saws,
+  pistons, spikes, plows, kegs): a hull like that is a wreck.
 * **Shots, beams and blasts hit the deck piece of a stud column first**, then the chassis piece under it.
   **Rams, saws and mines hit the chassis piece first.** A shot travelling across the vehicle hits whatever column it enters first.
 * Slopes: a kinetic or explosive hit arriving against the slope's facing (within 60°) only does 45%.
 * Decor is not solid: shots pass through it, and it is shaken off when the piece under it takes 20 damage.
+* **Fire.** Every piece has heat. Flamethrowers, lava, and the blasts of kegs and barrels raise it; at heat 1 a piece
+  that burns catches fire. It then loses 6 hp/s for 6 s (armor does not help) and heats every piece touching
+  it by 0.45/s, so the fire walks across the vehicle. A piece burns once. The tables say what burns: plates, bricks,
+  wheels and most equipment do; armor, slopes, tracks, spikes, plows, pistons and the core do not, so a row of them is a
+  firebreak. A fire is put out by parking on a repair pad, by a repair kit, by a repair arm (it goes for burning pieces
+  first), or by letting go of the piece (`jettison`). A keg that catches fire goes off.
 
 **Structure & defence**
 
 | type | glyph | studs | cost | mass kg | hp | placement | numbers | notes |
 |---|---|---|---|---|---|---|---|---|
-| `core` | @ | 1x1 | 0 | 20 | 400 | either layer | +100 energy cap, +5 energy/s, sensor 22 m, max 1 | The cockpit. Exactly one per vehicle; when it dies the vehicle dies. Pieces no longer connected to it fall off. |
-| `plate` | p | 1x1 | 6 | 3 | 45 | either layer, low |  | Thin cheap plate. On the chassis it carries things; on the deck it is flat enough to shoot over. |
-| `plate2` | q | 1x2 | 10 | 5 | 85 | either layer, low |  | Two studs of plate in one piece: cheaper per stud, but it is lost as a unit. |
-| `plate4` | Q | 2x2 | 18 | 9 | 160 | either layer, low |  | Four studs of plate in one piece. Fast, cheap floor — and one big thing to lose. |
-| `brick` | b | 1x1 | 9 | 4 | 70 | either layer |  | Full-height brick. Tougher than plate; on the deck it blocks firing lanes. |
-| `brick2` | B | 1x2 | 16 | 7 | 130 | either layer |  | Two-stud brick. |
-| `armor` | a | 1x1 | 26 | 13 | 200 | either layer | armor 2 | Heavy brick. Subtracts 2 from every kinetic/explosive hit (min 25% gets through), so it halves machine-gun fire. Lasers, saws and burn ignore it. |
-| `armor2` | A | 1x2 | 48 | 24 | 380 | either layer | armor 2 | Two-stud armor brick. Stagger them like a brick wall. |
-| `slope` | / | 1x1 | 30 | 9 | 150 | either layer, low, dir | armor 1, frontal shots x0.45 | Wedge that faces `dir`. Shots arriving against its face only do 45% (ricochet). Low: guns behind it fire over it. |
-| `plow` | P | 3x1 | 95 | 34 | 520 | chassis, dir, clear lane | armor 1, ram dealt x1.3, taken x0.3 | Three-stud-wide ram blade. Takes 30% collision damage and shoves whatever it hits 60% harder. Must face an open edge. |
+| `core` | @ | 1x1 | 0 | 20 | 550 | either layer | +100 energy cap, +5 energy/s, sensor 22 m, max 1, fireproof | The cockpit. Exactly one per vehicle; when it dies the vehicle dies. Pieces no longer connected to it fall off. |
+| `plate` | p | 1x1 | 6 | 3 | 45 | either layer, low | burns | Thin cheap plate. On the chassis it carries things; on the deck it is flat enough to shoot over. |
+| `plate2` | q | 1x2 | 10 | 5 | 85 | either layer, low | burns | Two studs of plate in one piece: cheaper per stud, but it is lost as a unit. |
+| `plate4` | Q | 2x2 | 18 | 9 | 160 | either layer, low | burns | Four studs of plate in one piece. Fast, cheap floor — and one big thing to lose. |
+| `brick` | b | 1x1 | 9 | 4 | 70 | either layer | burns slowly | Full-height brick. Tougher than plate; on the deck it blocks firing lanes. |
+| `brick2` | B | 1x2 | 16 | 7 | 130 | either layer | burns slowly | Two-stud brick. |
+| `armor` | a | 1x1 | 26 | 13 | 200 | either layer | armor 2, fireproof | Heavy brick. Subtracts 2 from every kinetic/explosive hit (min 25% gets through), so it halves machine-gun fire. Lasers, saws and burn ignore it. |
+| `armor2` | A | 1x2 | 48 | 24 | 380 | either layer | armor 2, fireproof | Two-stud armor brick. Stagger them like a brick wall. |
+| `slope` | / | 1x1 | 30 | 9 | 150 | either layer, low, dir | armor 1, frontal shots x0.45, fireproof | Wedge that faces `dir`. Shots arriving against its face only do 45% (ricochet). Low: guns behind it fire over it. |
+| `plow` | P | 3x1 | 95 | 34 | 520 | chassis, dir, clear lane | armor 1, ram dealt x1.3, taken x0.3, fireproof | Three-stud-wide ram blade. Takes 30% collision damage and shoves whatever it hits 60% harder. Must face an open edge. |
 
 **Mobility & steering**
 
 | type | glyph | studs | cost | mass kg | hp | placement | numbers | notes |
 |---|---|---|---|---|---|---|---|---|
-| `wheel` | o | 1x1 | 30 | 6 | 70 | chassis | 380 N drive, grip 1 | Drive wheel. Left/right placement gives differential steering: the wider apart, the faster you turn. Bogs in mud, slides on ice. |
-| `bigwheel` | O | 1x2 | 58 | 13 | 160 | chassis, always lengthwise | 660 N drive, grip 1.25 | Two studs long. Nearly twice a wheel, tougher, and it keeps 75% traction in mud. |
-| `track` | T | 1x3 | 125 | 34 | 380 | chassis, always lengthwise | 1080 N drive, grip 1.6 | Three studs of all-terrain drive. Almost ignores mud, keeps some grip on ice, hard to shove sideways. |
-| `hover` | h | 1x1 | 50 | 5 | 50 | chassis | 210 N drive, grip 0.22, lift 75 kg, 1.2 energy/s | Lifts 75 kg each. If total lift >= vehicle mass (and energy > 0) you float: immune to mud/ice/pits/mines, lava hurts 75% less — but you drift and are easy to shove. |
-| `thruster` | J | 1x1 | 55 | 5 | 45 | either layer, dir, clear exhaust | 1000 N thrust, 16 energy/s | Burst rocket, pushes the vehicle toward `dir`. Works on any terrain. Needs clear exhaust: nothing tall behind it on its own layer. |
-| `gyro` | g | 1x1 | 45 | 5 | 50 | either layer | 300 N·m steering torque | Adds 300 N·m of steering torque regardless of wheels or terrain. |
-| `blower` | w | 1x1 | 60 | 6 | 50 | deck | +14% drive force, max 2 | Blower through the hood: +14% force from every wheel, track and hover pad. Up to two. |
-| `spoiler` | W | 3x1 | 40 | 5 | 60 | deck, low | +60% side grip, max 1 | Downforce: +60% side grip, so fast light cars stop sliding wide. Low piece. |
+| `wheel` | o | 1x1 | 30 | 6 | 70 | chassis | 380 N drive, grip 1, burns | Drive wheel. Left/right placement gives differential steering: the wider apart, the faster you turn. Bogs in mud, slides on ice. |
+| `bigwheel` | O | 1x2 | 58 | 13 | 160 | chassis, always lengthwise | 660 N drive, grip 1.25, burns | Two studs long. Nearly twice a wheel, tougher, and it keeps 75% traction in mud. |
+| `track` | T | 1x3 | 125 | 34 | 380 | chassis, always lengthwise | 1080 N drive, grip 1.6, fireproof | Three studs of all-terrain drive. Almost ignores mud, keeps some grip on ice, hard to shove sideways. |
+| `hover` | h | 1x1 | 50 | 5 | 50 | chassis | 210 N drive, grip 0.22, lift 75 kg, 1.2 energy/s, burns slowly | Lifts 75 kg each. If total lift >= vehicle mass (and energy > 0) you float: immune to mud/ice/pits/mines, lava hurts 75% less — but you drift and are easy to shove. |
+| `thruster` | J | 1x1 | 55 | 5 | 45 | either layer, dir, clear exhaust | 1000 N thrust, 16 energy/s, burns slowly | Burst rocket, pushes the vehicle toward `dir`. Works on any terrain. Needs clear exhaust: nothing tall behind it on its own layer. |
+| `gyro` | g | 1x1 | 45 | 5 | 50 | either layer | 300 N·m steering torque, burns slowly | Adds 300 N·m of steering torque regardless of wheels or terrain. |
+| `blower` | w | 1x1 | 60 | 6 | 50 | deck | +14% drive force, max 2, burns slowly | Blower through the hood: +14% force from every wheel, track and hover pad. Up to two. |
+| `spoiler` | W | 3x1 | 40 | 5 | 60 | deck, low | +60% side grip, max 1, burns | Downforce: +60% side grip, so fast light cars stop sliding wide. Low piece. |
 
 **Weapons**
 
 | type | glyph | studs | cost | mass kg | hp | placement | numbers | notes |
 |---|---|---|---|---|---|---|---|---|
-| `mg` | m | 1x1 | 70 | 6 | 90 | deck, dir, clear lane | 4 dmg / 0.125s (32 dps), range 13 m, arc ±50°, traverse 5 rad/s, shot speed 28 m/s, 0.7 energy/shot, kinetic | Wide-arc turret, 32 dps. Shreds plates and wheels; armor halves it. |
-| `cannon` | C | 1x2 | 110 | 13 | 170 | deck, dir, clear lane | 30 dmg / 1.4s (21 dps), range 19 m, arc ±20°, traverse 2.2 rad/s, shot speed 24 m/s, 9 energy/shot, splash 0.75 m x0.3, kinetic | Slow heavy shell with small splash. Narrow arc: point the car. |
-| `railgun` | R | 1x3 | 170 | 16 | 160 | deck, dir, clear lane | 64 dmg / 4.4s (15 dps), range 24 m, arc ±8°, traverse 1.2 rad/s, instant hit, 30 energy/shot, kinetic | Instant-hit sniper, three studs long. Punches through 2 pieces (the second takes half). Nearly fixed mount, hungry for energy. |
-| `laser` | L | 1x1 | 120 | 8 | 90 | deck, dir, clear lane | 22 dps beam, range 10 m, arc ±35°, traverse 4 rad/s, instant hit, 11 energy/s, energy | Continuous beam that ignores armor and slopes. Short range and drains energy fast. |
-| `missile` | M | 2x2 | 170 | 15 | 200 | deck, dir, clear lane | 30 dmg x2 / 3.6s (17 dps), range 40 m, arc ±60°, traverse 6 rad/s, shot speed 13 m/s, 16 energy/shot, splash 1.1 m x0.6, explosive | Fires two homing missiles with splash. Slow enough to dodge behind walls. |
-| `mortar` | N | 2x2 | 150 | 18 | 160 | deck, dir | 46 dmg / 4.4s (10 dps), range 6-24 m, arc 360°, traverse 2.5 rad/s, shot speed 15 m/s, 14 energy/shot, blast 2 m, up to 7 pieces, explosive | Lobs a shell OVER walls to the point you aim at (give `aim` as {x, y}). 2 m blast. Cannot hit closer than 6 m; needs no clear lane. |
-| `saw` | S | 1x1 | 60 | 10 | 120 | chassis, dir, clear lane | 60 dps on contact, 4 energy/s while cutting | Grinds any enemy piece it touches for 60 dps. Ignores armor and shields, eats the chassis first. |
-| `spike` | V | 1x1 | 28 | 7 | 160 | chassis, dir, clear lane | ram dealt x3, taken x0.25 | Collisions through this stud deal x3 damage and you take only 25% back. |
+| `mg` | m | 1x1 | 70 | 6 | 90 | deck, dir, clear lane | 4 dmg / 0.125s (32 dps), range 13 m, arc ±50°, traverse 5 rad/s, shot speed 28 m/s, 0.7 energy/shot, kinetic, burns slowly | Wide-arc turret, 32 dps. Shreds plates and wheels; armor halves it. |
+| `cannon` | C | 1x2 | 110 | 13 | 170 | deck, dir, clear lane | 30 dmg / 1.4s (21 dps), range 19 m, arc ±20°, traverse 2.2 rad/s, shot speed 24 m/s, 9 energy/shot, splash 0.75 m x0.3, recoil 100 N·s, kinetic, burns slowly | Slow heavy shell with small splash. Narrow arc: point the car. |
+| `railgun` | R | 1x3 | 170 | 16 | 160 | deck, dir, clear lane | 64 dmg / 4.4s (15 dps), range 24 m, arc ±8°, traverse 1.2 rad/s, instant hit, 30 energy/shot, recoil 220 N·s, kinetic, burns slowly | Instant-hit sniper, three studs long. Punches through 2 pieces (the second takes half). Nearly fixed mount, hungry for energy. |
+| `laser` | L | 1x1 | 120 | 8 | 90 | deck, dir, clear lane | 22 dps beam, range 10 m, arc ±35°, traverse 4 rad/s, instant hit, 11 energy/s, energy, burns slowly | Continuous beam that ignores armor and slopes. Short range and drains energy fast. |
+| `missile` | M | 2x2 | 170 | 15 | 200 | deck, dir, clear lane | 30 dmg x2 / 3.6s (17 dps), range 40 m, arc ±60°, traverse 6 rad/s, shot speed 13 m/s, 16 energy/shot, splash 1.1 m x0.6, recoil 40 N·s, explosive, burns slowly | Fires two homing missiles with splash. Slow enough to dodge behind walls. |
+| `mortar` | N | 2x2 | 150 | 18 | 160 | deck, dir | 46 dmg / 4.4s (10 dps), range 6-24 m, arc 360°, traverse 2.5 rad/s, shot speed 15 m/s, 14 energy/shot, blast 2 m, up to 7 pieces, recoil 150 N·s, explosive, burns slowly | Lobs a shell OVER walls to the point you aim at (give `aim` as {x, y}). 2 m blast. Cannot hit closer than 6 m; needs no clear lane. |
+| `saw` | S | 1x1 | 60 | 10 | 120 | chassis, dir, clear lane | 60 dps on contact, 4 energy/s while cutting, burns slowly | Grinds any enemy piece it touches for 60 dps. Ignores armor and shields, eats the chassis first. |
+| `spike` | V | 1x1 | 28 | 7 | 160 | chassis, dir, clear lane | ram dealt x3, taken x0.25, fireproof | Collisions through this stud deal x3 damage and you take only 25% back. |
+| `flamer` | Y | 1x1 | 100 | 9 | 90 | deck, dir, clear lane | 5 dps to each piece in a ±15° stream, heats them 1.25/s (a piece catches fire at heat 1), range 5.5 m, arc ±40°, traverse 4 rad/s, instant hit, 9 energy/s, fire, burns slowly | Short stream of fire. The stream itself does little: it heats every piece it washes over until they catch fire, and fire spreads from piece to piece. Armor, tracks and cores do not burn. Shields keep it off. |
+| `harpoon` | H | 1x2 | 90 | 10 | 120 | deck, dir, clear lane | 10 dmg / 6s (2 dps), range 11 m, arc ±30°, traverse 3 rad/s, shot speed 32 m/s, 10 energy/shot, cable holds 7 s, reels in 3 m/s down to 1.5 m, kinetic, burns slowly | Fires a hook on a cable. If it bites, the two vehicles are tied together for up to 7 s: neither gets further from the other than the cable is long, and `reel` winds it in at 3 m/s. The heavier one, or the one with more grip, decides where both go. `release` lets go. A shield turns the hook away. |
+| `piston` | U | 1x1 | 70 | 12 | 150 | chassis, dir, clear lane | 30 dmg and 1300 N·s per punch, reach 0.75 m, 2.2 s to reset, 14 energy/punch, fireproof | Punches whatever is right in front of it: 30 damage and a 1300 N·s shove — a 250 kg car leaves at 5 m/s — with the same shove back on you. Fires by itself when an enemy, a crate or a rolling bomb is in reach (`melee: false` holds it). |
+| `keg` | K | 1x1 | 40 | 8 | 70 | either layer | blast 85 dmg, 3.2 m, up to 10 pieces per vehicle, fuse 1.5 s when dropped, max 4, burns | A bomb you carry. `detonate` sets it off where it sits; `jettison` drops it, still rolling, to go off 1.5 s later. Either way the blast hits everything within 3.2 m, you and your team included, throws it back and sets it alight — and anything that destroys the keg, or sets it on fire, sets it off. |
 
 **Utility**
 
 | type | glyph | studs | cost | mass kg | hp | placement | numbers | notes |
 |---|---|---|---|---|---|---|---|---|
-| `battery` | e | 1x1 | 35 | 9 | 60 | either layer | +140 energy cap | +140 energy capacity. |
-| `reactor` | r | 1x1 | 75 | 12 | 70 | either layer | +20 energy cap, +8 energy/s | +8 energy/s. Volatile: when destroyed it blasts every piece touching it (sides, above, below) for 35. |
-| `radar` | d | 1x1 | 40 | 3 | 35 | deck, low | sensor +16 m, max 1 | +16 m sensor range (shared with the team) and reveals enemy mines. |
-| `shieldgen` | G | 1x1 | 130 | 12 | 70 | deck | 120 shield, +10/s after 3s, 2.5 energy/s, max 1 | Bubble that absorbs 120 projectile/beam/blast damage, recharging after 3 s without a hit. Rams and saws go straight through. |
-| `repairer` | + | 1x1 | 90 | 8 | 50 | deck | 9 hp/s heal within 5 m, 6 energy/s, max 2 | Heals the most damaged piece on you or an ally within 5 m for 9 hp/s. Cannot rebuild destroyed pieces. |
+| `battery` | e | 1x1 | 35 | 9 | 60 | either layer | +140 energy cap, burns | +140 energy capacity. |
+| `reactor` | r | 1x1 | 75 | 12 | 70 | either layer | +20 energy cap, +8 energy/s, burns slowly | +8 energy/s. Volatile: when destroyed it blasts every piece touching it (sides, above, below) for 35. |
+| `radar` | d | 1x1 | 40 | 3 | 35 | deck, low | sensor +16 m, max 1, burns slowly | +16 m sensor range (shared with the team) and reveals enemy mines. |
+| `shieldgen` | G | 1x1 | 130 | 12 | 70 | deck | 120 shield, +10/s after 3s, 2.5 energy/s, max 1, burns slowly | Bubble that absorbs 120 projectile/beam/blast damage, recharging after 3 s without a hit. Rams and saws go straight through. |
+| `repairer` | + | 1x1 | 90 | 8 | 50 | deck | 9 hp/s heal within 5 m, 6 energy/s, max 2, burns slowly | Heals the most damaged piece on you or an ally within 5 m for 9 hp/s. Cannot rebuild destroyed pieces. |
 
 **Decor (free)**
 
@@ -169,8 +183,13 @@ Tokens: `.` empty, `:` rest of a multi-stud piece, otherwise the glyph plus an o
 * **Hover:** if total lift ≥ current mass and you have energy, the vehicle floats (see terrain). Only hover pads push while floating.
 * **Energy:** capacity and regen come from core, batteries and reactors. Guns, lasers, saws, thrusters, hover pads,
   shields and repair arms draw from it; whatever cannot be paid for simply does not work that tick. Wheels and tracks are free.
-* **Collisions:** rigid-body impulses, one circle per occupied stud. Damage = collision energy x 0.012 to the two pieces that touch
-  (only above 1.5 m/s closing speed, never between teammates), scaled by each piece's ram multipliers. Mass and speed push people around.
+* **Collisions:** rigid-body impulses, one circle per occupied stud. Damage = collision energy x 0.014 to the two pieces that touch
+  (only above 1.5 m/s closing speed, never between teammates), scaled by each piece's ram multipliers, and 30% of it again
+  to every piece touching the one that was hit. Mass and speed push people around.
+* **Everything shoves.** A blast throws each vehicle in it away from its centre with 14 N·s per point of damage (a 46-damage
+  mortar shell: 644 N·s, which is 2.6 m/s for a 250 kg car — and more for a hover craft). A shell, bullet or
+  slug pushes what it hits with 2.5 N·s per point. Cannons, railguns, mortars and missile pods kick their own vehicle
+  straight back when they fire (the tables give the recoil). Near a hole, that is how you leave.
 
 ## 3. The arena
 
@@ -187,7 +206,9 @@ One map tile is 2 m.
 | `mud` | `m` | Wheels lose 60% traction (monster wheels 25%), tracks 15%. Hover ignores it. |
 | `ice` | `i` | Almost no side grip and 65% less traction for wheels (tracks cope better). |
 | `lava` | `L` | Every piece takes 12 hp/s (3 hp/s while hovering). |
-| `pad` | `+` | Park on it (speed < 2 m/s) to heal 25 hp/s from a 150 hp pool that refills at 6 hp/s. |
+| `pad` | `+` | Park on it (speed < 2 m/s) to heal 25 hp/s from a 150 hp pool that refills at 6 hp/s. Puts out fires. |
+| `crate` | `x` | A wall you can break: 150 hp. Shots, blasts, fire, pistons and driving into it at speed all count. Gone, it is floor. |
+| `barrel` | `!` | Blocks the way until something touches it off: 40 hp, then a blast that hits everything within 3 m, shoves it and sets it alight. Barrels set each other off. |
 
 Off the edge of the map counts as a pit.
 
@@ -197,6 +218,10 @@ Off the edge of the map counts as a pit.
   or for 1.5s after it fires a gun. Walls do not block vision. `state.lastSeen` remembers where each enemy was.
 * **Friendly fire is off**: shots, blasts and saws pass through teammates. You can still bump into them.
 * **Timeout:** more vehicles alive wins; then more total hull fraction remaining; then more damage dealt; else a draw.
+* **Crates and barrels** are tiles with hit points. A crate is a wall until it is broken; a barrel explodes when it is,
+  a tenth of a second later, so a row of them goes off one after another. Shots, beams, blasts, fire, pistons and
+  collisions (x3, and more through a spike or plow) all damage them. `api.nav` always answers for the map as it is
+  now, and `state.barrels` lists the barrels still standing near you.
 
 ### Items
 Pick-ups appear on the map's `*` spots at t=8s and again 14s after being taken. Drive over one to take it.
@@ -212,6 +237,7 @@ Mirrored spots always hold the same item type.
 | `emp` | held | Held, 1 charge. `useItem` stuns every enemy within 7 m for 2.2 s, drops their shields and drains 40 energy. |
 
 A vehicle holds one item at a time (a new held item replaces the old one). Mines do not trigger on hovering vehicles.
+A repair kit also puts out every fire on the vehicle.
 
 ### Maps
 Each map is point-symmetric. `A B C` / `a b c` are the three spawn points of team 0 / team 1: 3v3 fills them in
@@ -452,6 +478,40 @@ Big team map: mud fields, low barrier forts to shoot over, pits on the flanks, r
 ##########################################
 ```
 
+### `depot` — Powder Depot (32x28 tiles = 64x56 m)
+A yard stacked with crates and powder barrels. Crates are walls until somebody breaks them; a barrel takes everything near it along. Shoot the barrel, not the car beside it. Items: repair, shield, overdrive, nitro, mine, emp.
+
+```
+################################
+#..............................#
+#......B.......A........C......#
+#..............................#
+#..............................#
+#...xxxxx....xxxxxx....xxxxx...#
+#.....!........!!........!.....#
+#..............................#
+#.*......##....*.....##......*.#
+#........##...xxxx...##........#
+#..............................#
+#..!...........*............!..#
+#.....xxx..xx......xx..xxx.....#
+#..........xx!.!...xx..........#
+#..........xx...!.!xx..........#
+#.....xxx..xx......xx..xxx.....#
+#..!............*...........!..#
+#..............................#
+#........##...xxxx...##........#
+#.*......##.....*....##......*.#
+#..............................#
+#.....!........!!........!.....#
+#...xxxxx....xxxxxx....xxxxx...#
+#..............................#
+#..............................#
+#......c........a.......b......#
+#..............................#
+################################
+```
+
 ## 4. What `tick` receives
 
 ```
@@ -461,21 +521,24 @@ state = {
     id, team, slot, name, x, y, heading, vx, vy, speed, angVel,
     hp, maxHp, hpFrac, coreHp, coreMaxHp, coreFrac, mass, radius,
     energy, energyMax, energyRegen, energyFrac,
-    shield, shieldMax, overshield, hovering, stunned (seconds left), sensor, tile ('floor' | 'mud' | ...),
+    shield, shieldMax, overshield, hovering, stunned (seconds left), burning (pieces on fire), sensor, tile ('floor' | 'mud' | ...),
     item: null | { type, charges }, effects: { overdrive, nitro } (seconds left),
-    parts:   [{ i, type, x, y, z, dir, alive, hp, maxHp, wx, wy }],     // wx, wy = world position of the piece's centre
+    parts:   [{ i, type, x, y, z, dir, alive, burning, hp, maxHp, wx, wy }],     // wx, wy = world position of the piece's centre
     weapons: [{ i, type, dir, alive, ready, cooldown, angle, mountAngle, arc, range, minRange, projSpeed, dmg }],
   },
-  allies:  [{ id, slot, name, alive, x, y, heading, vx, vy, speed, hpFrac, coreFrac, energyFrac, mass, radius, shield, item, parts, ... }],
+  allies:  [{ id, slot, name, alive, x, y, heading, vx, vy, speed, hpFrac, coreFrac, energyFrac, mass, radius, shield, burning, item, parts, ... }],
   enemies: [ same shape — ONLY enemies your team can currently see; parts[] shows their layout (with z) and damage ],
   enemiesAlive,                      // how many are left, seen or not
   lastSeen: [{ id, x, y, t, alive }],
-  projectiles: [{ kind: 'bullet' | 'shell' | 'missile' | 'mortar', x, y, vx, vy, landsAt?, landsIn? }],  // enemy shots in sensor range, nearest first (max 24)
+  projectiles: [{ kind: 'bullet' | 'shell' | 'missile' | 'mortar' | 'hook', x, y, vx, vy, landsAt?, landsIn? }],  // enemy shots in sensor range, nearest first (max 24)
   mines: [{ x, y }],                 // enemy mines within 5 m (anywhere in sensor range with a radar)
   items: [{ id, type, x, y }],       // every pick-up currently on the map
   pads:  [{ x, y, charge }],
   zone:  { x, y, r, minR, startT, endT, shrinking },
   messages: [{ from: slot, id, data }],   // what teammates passed to `say` on their previous tick
+  bombs:   [{ x, y, vx, vy, fuse, r }],   // kegs on the ground in sensor range, anybody's: where, how fast, seconds left, blast radius
+  barrels: [{ x, y }],                    // powder barrels still standing in sensor range, nearest first (max 24)
+  tethers: [{ from, to, length, taut, timeLeft }],   // harpoon cables: `from` is the vehicle that fired the hook
 }
 ```
 
@@ -497,7 +560,11 @@ A mortar shell in `projectiles` tells you where and when it lands — drive out 
   boost: 0..1 | { N, E, S, W },               // thrusters, by the direction they push. A number means the forward (N) ones.
   useItem: true,              // use the held item
   target: id,                 // missile lock (enemy id) and/or repair-arm priority (ally id)
-  shield: false, repair: false, melee: false, // switch those systems off to save energy (default on)
+  shield: false, repair: false, melee: false, // switch those systems off to save energy (default on); melee covers saws and pistons
+  detonate: true | [partIndex, ...],          // set off your kegs (all, or those) where they sit
+  jettison: [partIndex, ...],                 // let go of pieces (not the core): a keg rolls on and blows when its fuse is up, anything else is just gone
+  reel:  0..1,                                // wind in your harpoon cable
+  release: true,                              // let go of whatever your harpoon holds
   say: anyJSON,               // ≤ 256 chars; teammates read it next tick in state.messages
 }
 ```
@@ -514,6 +581,8 @@ the match. A tick should take well under 3 ms; one that never returns forfeits t
 * `api.util.lead(from, target, projectileSpeed)` → `{ x, y, angle, t }` intercept point (pass it as `aim`).
   `target` only needs `x, y, vx, vy`, so you can lead a single piece: `{ x: part.wx, y: part.wy, vx: foe.vx, vy: foe.vy }`.
 * `api.util.angDiff(a, b)`, `angleTo(from, to)`, `dist(a, b)`, `clamp(x, lo, hi)`, `blueprint(name, { deck, chassis }, { paint })`.
+* `api.util.threat(state, margin = 1.2)` → `null`, or `{ x, y, r, in, away }` for the keg or mortar shell whose blast you are in or
+  nearly in: where, how big, in how many seconds, and a point just outside it to drive to (`driveTo(self, t.away, { reverse: true })`).
 * `api.nav.follower()` → object with `next(self, goalX, goalY, state.tick)` returning the next waypoint of an A* route
   (cached, re-planned twice a second, sized to your hull, backs out when wedged). Keep one per controller.
 * `api.nav.path(x0, y0, x1, y1, { hover, margin, mudCost, iceCost, lavaCost })` → waypoints.
@@ -546,3 +615,8 @@ Things that decide matches: whether your guns can actually bear (watch `timeFire
 reaches your core (slopes and armor in front, on the deck), what a ram meets (the chassis), energy balance, not driving
 into pits, and picking the fight your build wins — out-range brawlers, out-turn snipers, shove hover craft, shield
 against missiles and mortars, saw through shields.
+
+And the physical side: what on your vehicle burns and where the firebreaks are (`validate_design` reports the share of
+fireproof pieces); where your kegs sit when somebody shoots them; which way a blast or a punch will send you and
+what is behind you when it does; whether you are the heavier end of a cable. A vehicle that has lost its wheels and
+its guns is out, so there are more ways to win than drilling for the core — and more ways to lose.

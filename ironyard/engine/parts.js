@@ -29,33 +29,33 @@ export const PARTS = {
   // ── structure / defence ────────────────────────────────────────────────
   core: {
     name: 'Core', zh: '核心', cat: 'structure', glyph: '@', layer: 'any',
-    cost: 0, mass: 20, hp: 400, max: 1, min: 1,
+    cost: 0, mass: 20, hp: 550, max: 1, min: 1,
     energyCap: 100, energyRegen: 5, sensor: 22, gyro: 60,
     desc: 'The cockpit. Exactly one per vehicle; when it dies the vehicle dies. Pieces no longer connected to it fall off.',
   },
   plate: {
     name: 'Plate 1x1', zh: '底板 1×1', cat: 'structure', glyph: 'p', layer: 'any', low: true,
-    cost: 6, mass: 3, hp: 45,
+    cost: 6, mass: 3, hp: 45, burn: 1,
     desc: 'Thin cheap plate. On the chassis it carries things; on the deck it is flat enough to shoot over.',
   },
   plate2: {
     name: 'Plate 1x2', zh: '底板 1×2', cat: 'structure', glyph: 'q', layer: 'any', low: true, size: [1, 2],
-    cost: 10, mass: 5, hp: 85,
+    cost: 10, mass: 5, hp: 85, burn: 1,
     desc: 'Two studs of plate in one piece: cheaper per stud, but it is lost as a unit.',
   },
   plate4: {
     name: 'Plate 2x2', zh: '底板 2×2', cat: 'structure', glyph: 'Q', layer: 'any', low: true, size: [2, 2],
-    cost: 18, mass: 9, hp: 160,
+    cost: 18, mass: 9, hp: 160, burn: 1,
     desc: 'Four studs of plate in one piece. Fast, cheap floor — and one big thing to lose.',
   },
   brick: {
     name: 'Brick 1x1', zh: '砖 1×1', cat: 'structure', glyph: 'b', layer: 'any',
-    cost: 9, mass: 4, hp: 70,
+    cost: 9, mass: 4, hp: 70, burn: 0.8,
     desc: 'Full-height brick. Tougher than plate; on the deck it blocks firing lanes.',
   },
   brick2: {
     name: 'Brick 1x2', zh: '砖 1×2', cat: 'structure', glyph: 'B', layer: 'any', size: [1, 2],
-    cost: 16, mass: 7, hp: 130,
+    cost: 16, mass: 7, hp: 130, burn: 0.8,
     desc: 'Two-stud brick.',
   },
   armor: {
@@ -82,12 +82,12 @@ export const PARTS = {
   // ── mobility ───────────────────────────────────────────────────────────
   wheel: {
     name: 'Wheel', zh: '轮子', cat: 'mobility', glyph: 'o', layer: 'chassis', mover: 'wheel',
-    cost: 30, mass: 6, hp: 70, force: 380, grip: 1.0,
+    cost: 30, mass: 6, hp: 70, burn: 1, force: 380, grip: 1.0,
     desc: 'Drive wheel. Left/right placement gives differential steering: the wider apart, the faster you turn. Bogs in mud, slides on ice.',
   },
   bigwheel: {
     name: 'Monster wheel 1x2', zh: '大脚轮 1×2', cat: 'mobility', glyph: 'O', layer: 'chassis', mover: 'wheel', size: [1, 2], fixedDir: true,
-    cost: 58, mass: 13, hp: 160, force: 660, grip: 1.25, mudTraction: 0.75,
+    cost: 58, mass: 13, hp: 160, burn: 1, force: 660, grip: 1.25, mudTraction: 0.75,
     desc: 'Two studs long. Nearly twice a wheel, tougher, and it keeps 75% traction in mud.',
   },
   track: {
@@ -97,75 +97,75 @@ export const PARTS = {
   },
   hover: {
     name: 'Hover pad', zh: '悬浮垫', cat: 'mobility', glyph: 'h', layer: 'chassis', mover: 'hover',
-    cost: 50, mass: 5, hp: 50, force: 210, grip: 0.22, lift: 75, energyUse: 1.2,
+    cost: 50, mass: 5, hp: 50, burn: 0.7, force: 210, grip: 0.22, lift: 75, energyUse: 1.2,
     desc: 'Lifts 75 kg each. If total lift >= vehicle mass (and energy > 0) you float: immune to mud/ice/pits/mines, lava hurts 75% less — but you drift and are easy to shove.',
   },
   thruster: {
     name: 'Thruster', zh: '推进器', cat: 'mobility', glyph: 'J', layer: 'any', directional: true, lane: 'back',
-    cost: 55, mass: 5, hp: 45, thrust: 1000, energyUse: 16,
+    cost: 55, mass: 5, hp: 45, burn: 0.6, thrust: 1000, energyUse: 16,
     desc: 'Burst rocket, pushes the vehicle toward `dir`. Works on any terrain. Needs clear exhaust: nothing tall behind it on its own layer.',
   },
   gyro: {
     name: 'Steering gyro', zh: '转向陀螺', cat: 'mobility', glyph: 'g', layer: 'any',
-    cost: 45, mass: 5, hp: 50, gyro: 300,
+    cost: 45, mass: 5, hp: 50, burn: 0.5, gyro: 300,
     desc: 'Adds 300 N·m of steering torque regardless of wheels or terrain.',
   },
   blower: {
     name: 'Supercharger', zh: '增压器', cat: 'mobility', glyph: 'w', layer: 'deck', max: 2,
-    cost: 60, mass: 6, hp: 50, driveBoost: 0.14,
+    cost: 60, mass: 6, hp: 50, burn: 0.7, driveBoost: 0.14,
     desc: 'Blower through the hood: +14% force from every wheel, track and hover pad. Up to two.',
   },
   spoiler: {
     name: 'Spoiler 3x1', zh: '尾翼 3×1', cat: 'mobility', glyph: 'W', layer: 'deck', low: true, size: [3, 1], max: 1,
-    cost: 40, mass: 5, hp: 60, gripBoost: 0.6,
+    cost: 40, mass: 5, hp: 60, burn: 1, gripBoost: 0.6,
     desc: 'Downforce: +60% side grip, so fast light cars stop sliding wide. Low piece.',
   },
 
   // ── weapons ────────────────────────────────────────────────────────────
   mg: {
     name: 'Machine-gun turret', zh: '机枪塔', cat: 'weapon', glyph: 'm', layer: 'deck', directional: true, lane: 'front', weapon: 'bullet',
-    cost: 70, mass: 6, hp: 90,
-    dmg: 4, cooldown: 0.125, projSpeed: 28, range: 13, spread: 0.035,
+    cost: 70, mass: 6, hp: 90, burn: 0.5,
+    dmg: 4, cooldown: 0.125, projSpeed: 28, range: 13, spread: 0.07,
     arc: deg(50), traverse: 5, energyShot: 0.7, dtype: 'kinetic',
     desc: 'Wide-arc turret, 32 dps. Shreds plates and wheels; armor halves it.',
   },
   cannon: {
     name: 'Cannon 1x2', zh: '加农炮 1×2', cat: 'weapon', glyph: 'C', layer: 'deck', size: [1, 2], directional: true, lane: 'front', weapon: 'shell',
-    cost: 110, mass: 13, hp: 170,
-    dmg: 30, cooldown: 1.4, projSpeed: 24, range: 19, splash: { r: 0.75, f: 0.3, max: 4 },
+    cost: 110, mass: 13, hp: 170, burn: 0.4,
+    dmg: 30, cooldown: 1.4, projSpeed: 24, range: 19, spread: 0.02, recoil: 100, splash: { r: 0.75, f: 0.3, max: 4 },
     arc: deg(20), traverse: 2.2, energyShot: 9, dtype: 'kinetic',
     desc: 'Slow heavy shell with small splash. Narrow arc: point the car.',
   },
   railgun: {
     name: 'Railgun 1x3', zh: '磁轨炮 1×3', cat: 'weapon', glyph: 'R', layer: 'deck', size: [1, 3], directional: true, lane: 'front', weapon: 'rail',
-    cost: 170, mass: 16, hp: 160,
-    dmg: 64, cooldown: 4.4, range: 24, pierce: 2, pierceFalloff: 0.5,
+    cost: 170, mass: 16, hp: 160, burn: 0.4,
+    dmg: 64, cooldown: 4.4, range: 24, pierce: 2, pierceFalloff: 0.5, recoil: 220,
     arc: deg(8), traverse: 1.2, energyShot: 30, dtype: 'kinetic',
     desc: 'Instant-hit sniper, three studs long. Punches through 2 pieces (the second takes half). Nearly fixed mount, hungry for energy.',
   },
   laser: {
     name: 'Laser', zh: '激光', cat: 'weapon', glyph: 'L', layer: 'deck', directional: true, lane: 'front', weapon: 'beam',
-    cost: 120, mass: 8, hp: 90,
+    cost: 120, mass: 8, hp: 90, burn: 0.5,
     dps: 22, range: 10, arc: deg(35), traverse: 4, energyUse: 11, dtype: 'energy',
     desc: 'Continuous beam that ignores armor and slopes. Short range and drains energy fast.',
   },
   missile: {
     name: 'Missile pod 2x2', zh: '导弹巢 2×2', cat: 'weapon', glyph: 'M', layer: 'deck', size: [2, 2], directional: true, lane: 'front', weapon: 'missile',
-    cost: 170, mass: 15, hp: 200,
-    dmg: 30, salvo: 2, cooldown: 3.6, projSpeed: 13, turn: 2.6, ttl: 4.5, range: 40, splash: { r: 1.1, f: 0.6, max: 5 },
+    cost: 170, mass: 15, hp: 200, burn: 0.8,
+    dmg: 30, salvo: 2, cooldown: 3.6, projSpeed: 13, turn: 2.6, ttl: 4.5, range: 40, recoil: 40, splash: { r: 1.1, f: 0.6, max: 5 },
     arc: deg(60), traverse: 6, energyShot: 16, dtype: 'explosive',
     desc: 'Fires two homing missiles with splash. Slow enough to dodge behind walls.',
   },
   mortar: {
     name: 'Mortar 2x2', zh: '迫击炮 2×2', cat: 'weapon', glyph: 'N', layer: 'deck', size: [2, 2], directional: true, weapon: 'lob',
-    cost: 150, mass: 18, hp: 160,
-    dmg: 46, cooldown: 4.4, projSpeed: 15, range: 24, minRange: 6, splash: { r: 2.0, f: 1, max: 7 },
+    cost: 150, mass: 18, hp: 160, burn: 0.6,
+    dmg: 46, cooldown: 4.4, projSpeed: 15, range: 24, minRange: 6, recoil: 150, splash: { r: 2.0, f: 1, max: 7 },
     arc: Math.PI, traverse: 2.5, energyShot: 14, dtype: 'explosive',
     desc: 'Lobs a shell OVER walls to the point you aim at (give `aim` as {x, y}). 2 m blast. Cannot hit closer than 6 m; needs no clear lane.',
   },
   saw: {
     name: 'Buzz saw', zh: '圆锯', cat: 'weapon', glyph: 'S', layer: 'chassis', directional: true, lane: 'front', weapon: 'melee',
-    cost: 60, mass: 10, hp: 120,
+    cost: 60, mass: 10, hp: 120, burn: 0.3,
     dps: 60, reach: 0.62, energyUse: 4, dtype: 'melee',
     desc: 'Grinds any enemy piece it touches for 60 dps. Ignores armor and shields, eats the chassis first.',
   },
@@ -174,54 +174,79 @@ export const PARTS = {
     cost: 28, mass: 7, hp: 160, ramIn: 0.25, ramOut: 3,
     desc: 'Collisions through this stud deal x3 damage and you take only 25% back.',
   },
+  flamer: {
+    name: 'Flamethrower', zh: '喷火器', cat: 'weapon', glyph: 'Y', layer: 'deck', directional: true, lane: 'front', weapon: 'flame',
+    cost: 100, mass: 9, hp: 90, burn: 0.3,
+    dps: 5, heat: 1.25, range: 5.5, cone: deg(15), arc: deg(40), traverse: 4, energyUse: 9, dtype: 'fire',
+    desc: 'Short stream of fire. The stream itself does little: it heats every piece it washes over until they catch fire, and fire spreads from piece to piece. Armor, tracks and cores do not burn. Shields keep it off.',
+  },
+  harpoon: {
+    name: 'Harpoon 1x2', zh: '鱼叉 1×2', cat: 'weapon', glyph: 'H', layer: 'deck', size: [1, 2], directional: true, lane: 'front', weapon: 'hook',
+    cost: 90, mass: 10, hp: 120, burn: 0.4,
+    dmg: 10, cooldown: 6, projSpeed: 32, range: 11, arc: deg(30), traverse: 3, energyShot: 10, dtype: 'kinetic',
+    rope: { min: 1.5, reel: 3, hold: 7, reelEnergy: 6 },
+    desc: 'Fires a hook on a cable. If it bites, the two vehicles are tied together for up to 7 s: neither gets further from the other than the cable is long, and `reel` winds it in at 3 m/s. The heavier one, or the one with more grip, decides where both go. `release` lets go. A shield turns the hook away.',
+  },
+  piston: {
+    name: 'Piston ram', zh: '活塞锤', cat: 'weapon', glyph: 'U', layer: 'chassis', directional: true, lane: 'front',
+    cost: 70, mass: 12, hp: 150,
+    punch: { impulse: 1300, dmg: 30, reach: 0.75, cooldown: 2.2, energy: 14 },
+    desc: 'Punches whatever is right in front of it: 30 damage and a 1300 N·s shove — a 250 kg car leaves at 5 m/s — with the same shove back on you. Fires by itself when an enemy, a crate or a rolling bomb is in reach (`melee: false` holds it).',
+  },
+  keg: {
+    name: 'Powder keg', zh: '火药桶', cat: 'weapon', glyph: 'K', layer: 'any', max: 4,
+    cost: 40, mass: 8, hp: 70, burn: 2,
+    blast: { dmg: 85, r: 3.2, max: 10, fuse: 1.5 },
+    desc: 'A bomb you carry. `detonate` sets it off where it sits; `jettison` drops it, still rolling, to go off 1.5 s later. Either way the blast hits everything within 3.2 m, you and your team included, throws it back and sets it alight — and anything that destroys the keg, or sets it on fire, sets it off.',
+  },
 
   // ── utility ────────────────────────────────────────────────────────────
   battery: {
     name: 'Battery', zh: '电池', cat: 'utility', glyph: 'e', layer: 'any',
-    cost: 35, mass: 9, hp: 60, energyCap: 140,
+    cost: 35, mass: 9, hp: 60, burn: 1, energyCap: 140,
     desc: '+140 energy capacity.',
   },
   reactor: {
     name: 'Reactor', zh: '反应堆', cat: 'utility', glyph: 'r', layer: 'any',
-    cost: 75, mass: 12, hp: 70, energyRegen: 8, energyCap: 20, volatile: 35,
+    cost: 75, mass: 12, hp: 70, burn: 0.6, energyRegen: 8, energyCap: 20, volatile: 35,
     desc: '+8 energy/s. Volatile: when destroyed it blasts every piece touching it (sides, above, below) for 35.',
   },
   radar: {
     name: 'Radar', zh: '雷达', cat: 'utility', glyph: 'd', layer: 'deck', max: 1, low: true,
-    cost: 40, mass: 3, hp: 35, sensor: 16, seesMines: true,
+    cost: 40, mass: 3, hp: 35, burn: 0.8, sensor: 16, seesMines: true,
     desc: '+16 m sensor range (shared with the team) and reveals enemy mines.',
   },
   shieldgen: {
     name: 'Shield generator', zh: '护盾发生器', cat: 'utility', glyph: 'G', layer: 'deck', max: 1,
-    cost: 130, mass: 12, hp: 70, shield: 120, shieldRegen: 10, shieldDelay: 3, energyUse: 2.5,
+    cost: 130, mass: 12, hp: 70, burn: 0.6, shield: 120, shieldRegen: 10, shieldDelay: 3, energyUse: 2.5,
     desc: 'Bubble that absorbs 120 projectile/beam/blast damage, recharging after 3 s without a hit. Rams and saws go straight through.',
   },
   repairer: {
     name: 'Repair arm', zh: '维修臂', cat: 'utility', glyph: '+', layer: 'deck', max: 2,
-    cost: 90, mass: 8, hp: 50, heal: 9, healRange: 5, energyUse: 6,
+    cost: 90, mass: 8, hp: 50, burn: 0.6, heal: 9, healRange: 5, energyUse: 6,
     desc: 'Heals the most damaged piece on you or an ally within 5 m for 9 hp/s. Cannot rebuild destroyed pieces.',
   },
 
   // ── decor: free, weightless, purely for looks ──────────────────────────
   tile: {
     name: 'Livery tile', zh: '涂装光面砖', cat: 'decor', glyph: 't', layer: 'deck', decor: true, low: true,
-    cost: 0, mass: 0, hp: 20, desc: 'Smooth tile in your accent colour.',
+    cost: 0, mass: 0, hp: 20, burn: 1.5, desc: 'Smooth tile in your accent colour.',
   },
   fin: {
     name: 'Tail fin', zh: '尾鳍', cat: 'decor', glyph: 'f', layer: 'deck', decor: true, low: true, directional: true,
-    cost: 0, mass: 0, hp: 20, desc: 'A fin. It does nothing and looks fast.',
+    cost: 0, mass: 0, hp: 20, burn: 1.5, desc: 'A fin. It does nothing and looks fast.',
   },
   pipe: {
     name: 'Exhaust stacks', zh: '排气管', cat: 'decor', glyph: 'i', layer: 'deck', decor: true, low: true,
-    cost: 0, mass: 0, hp: 20, desc: 'Twin chrome stacks.',
+    cost: 0, mass: 0, hp: 20, burn: 1.5, desc: 'Twin chrome stacks.',
   },
   lamp: {
     name: 'Light bar', zh: '车灯', cat: 'decor', glyph: 'l', layer: 'deck', decor: true, low: true, directional: true,
-    cost: 0, mass: 0, hp: 20, desc: 'Glowing lamps facing `dir`.',
+    cost: 0, mass: 0, hp: 20, burn: 1.5, desc: 'Glowing lamps facing `dir`.',
   },
   flag: {
     name: 'Flag', zh: '旗杆', cat: 'decor', glyph: 'F', layer: 'deck', decor: true, low: true,
-    cost: 0, mass: 0, hp: 20, desc: 'Antenna with a pennant in your accent colour.',
+    cost: 0, mass: 0, hp: 20, burn: 1.5, desc: 'Antenna with a pennant in your accent colour.',
   },
 };
 
@@ -286,7 +311,11 @@ export const TILES = {
   lava:    { ch: 'L', name: 'Lava', zh: '熔岩',
     desc: 'Every piece takes 12 hp/s (3 hp/s while hovering).' },
   pad:     { ch: '+', name: 'Repair pad', zh: '维修台',
-    desc: 'Park on it (speed < 2 m/s) to heal 25 hp/s from a 150 hp pool that refills at 6 hp/s.' },
+    desc: 'Park on it (speed < 2 m/s) to heal 25 hp/s from a 150 hp pool that refills at 6 hp/s. Puts out fires.' },
+  crate:   { ch: 'x', name: 'Crate', zh: '木箱', solid: true, blocksShots: true, hp: 150,
+    desc: 'A wall you can break: 150 hp. Shots, blasts, fire, pistons and driving into it at speed all count. Gone, it is floor.' },
+  barrel:  { ch: '!', name: 'Powder barrel', zh: '火药桶堆', solid: true, blocksShots: true, hp: 40, blast: { dmg: 70, r: 3, max: 8 },
+    desc: 'Blocks the way until something touches it off: 40 hp, then a blast that hits everything within 3 m, shoves it and sets it alight. Barrels set each other off.' },
 };
 export const TILE_IDS = Object.keys(TILES);
 
@@ -302,8 +331,21 @@ export const RULES = {
   lavaDps: 12,
   itemFirstSpawn: 8,
   itemRespawn: 14,
-  ramK: 0.012,             // collision energy -> damage
+  ramK: 0.014,             // collision energy -> damage
   ramMinSpeed: 1.5,
+  ramSpread: 0.3,          // share of a collision's damage that also lands on each piece touching the one hit
+  ramTile: 3,              // a crate or barrel takes this many times the damage a piece would
+  blastPush: 14,           // N·s of shove per point of blast damage
+  hitPush: 2.5,            // N·s of shove per point of damage from a shell, bullet, missile or rail slug
+  recoil: 1,               // multiplier on each gun's own recoil (N·s)
+  fireDps: 6,              // a burning piece loses this much hp per second
+  fireTime: 6,             // ...for this long; a piece burns once
+  fireSpread: 0.45,        // heat per second a burning piece gives each piece touching it (x that piece's `burn`)
+  heatDecay: 0.1,          // heat a piece loses per second; it ignites at heat 1
+  lavaHeat: 1.2,           // heat per second lava gives the chassis pieces of a vehicle standing in it
+  blastHeat: 0.35,         // heat an ordinary blast gives each piece it damages (kegs and barrels ignite outright)
+  bombDrag: 5,             // m/s² a dropped keg loses while it rolls
+  wreckTime: 3,            // seconds a vehicle may go on with nothing that moves it and nothing that can hurt, before it counts as destroyed
   tickBudgetMs: 3,         // advisory per-decision CPU budget
   maxViolations: 40,       // exceptions / gross overruns before the controller is cut off
   sayLimit: 256,           // max JSON chars for team messages

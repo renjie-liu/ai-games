@@ -1,7 +1,7 @@
 // Runs one full match: wires controllers to the World, records frames + events.
 import { PARTS, ITEMS, TILES, RULES, CELL, GRID_HX, GRID_HY, PAINTS, DEFAULT_BUDGET } from './parts.js';
 import { validateDesign, parseBlueprint, STOCK_DESIGN } from './design.js';
-import { MAPS, MODES, SPAWN_SLOTS, describeMap } from './maps.js';
+import { MAPS, MODES, SPAWN_SLOTS, describeMap, liveMap } from './maps.js';
 import { makeNav } from './nav.js';
 import { makeRng, hashSeed } from './rng.js';
 import { World, WIRE_CAP } from './sim.js';
@@ -59,8 +59,9 @@ function viewOf(buf) {
  * @param {number} [o.maxTime]      stop early (seconds) — used for smoke tests
  */
 export function runMatch(o) {
-  const map = typeof o.map === 'string' ? MAPS[o.map] : o.map;
-  if (!map) throw new MatchError(`unknown map "${o.map}". Valid: ${Object.keys(MAPS).join(', ')}`);
+  const base = typeof o.map === 'string' ? MAPS[o.map] : o.map;
+  if (!base) throw new MatchError(`unknown map "${o.map}". Valid: ${Object.keys(MAPS).join(', ')}`);
+  const map = liveMap(base);   // this match's own copy when the map has crates or barrels to lose
   const mode = o.mode || '1v1';
   const teamSize = MODES[mode];
   if (!teamSize) throw new MatchError(`unknown mode "${mode}". Valid: ${Object.keys(MODES).join(', ')}`);
@@ -74,7 +75,7 @@ export function runMatch(o) {
   const rules = { ...RULES, ...(o.rules || {}) };
   const slots = SPAWN_SLOTS[teamSize];
   const mapInfo = deepFreeze(describeMap(map));
-  const nav = navOf(map);
+  const nav = map === base ? navOf(base) : makeNav(map);   // a map that changes needs a pathfinder that follows it
   const rulesInfo = deepFreeze({ ...rules, stud: CELL, gridHalfX: GRID_HX, gridHalfY: GRID_HY, paints: Object.keys(PAINTS), budget });
   const tables = `"parts":${PARTS_JSON},"items":${ITEMS_JSON},"tiles":${TILES_JSON},"rules":${JSON.stringify(rulesInfo)},"map":${JSON.stringify(mapInfo)}`;
 
@@ -137,6 +138,7 @@ export function runMatch(o) {
   });
 
   var world = new World({ map, seed, swap: !!o.swap, entries, rules });
+  if (map !== base) world.onTile = (tx, ty) => nav.refresh(tx, ty);
 
   for (const c of ctl) {
     const v = world.vehicles[c.id];

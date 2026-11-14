@@ -3,6 +3,7 @@
 // teams always get a mirrored battlefield.
 //
 // Legend:  . floor   # wall   - barrier   _ pit   m mud   i ice   L lava   + repair pad
+//          x crate (breakable wall)   ! powder barrel
 //          A B C  team-0 spawns (slot 0/1/2)      * item spawn
 import { TILE, TILES, ITEM_IDS } from './parts.js';
 
@@ -10,6 +11,10 @@ const CH2TILE = {};
 for (const [id, t] of Object.entries(TILES)) CH2TILE[t.ch] = id;
 export const TILE_CODE = Object.fromEntries(Object.keys(TILES).map((id, i) => [id, i]));
 export const TILE_NAME = Object.keys(TILES);
+// by tile code: stops vehicles / stops shots and beams / hit points of a tile that can be broken (0 = cannot)
+export const TILE_SOLID = TILE_NAME.map((id) => !!TILES[id].solid);
+export const TILE_SHOTS = TILE_NAME.map((id) => !!TILES[id].blocksShots);
+export const TILE_HP = TILE_NAME.map((id) => TILES[id].hp || 0);
 
 // ops: [char, col, row, width, height] in tiles; row 0 is the north edge. Later ops paint over earlier ones.
 const RAW = {
@@ -70,6 +75,15 @@ const RAW = {
       ['#', 18, 9, 2, 2], ['#', 22, 9, 2, 2], ['#', 3, 12, 3, 1], ['#', 36, 12, 3, 1], ['_', 1, 13, 2, 3], ['_', 39, 13, 2, 3], ['+', 20, 15, 2, 1]],
     spawns: [[20, 2], [9, 2], [31, 2]], itemSpots: [[2, 9], [39, 9], [20, 7], [10, 14]],
   },
+  depot: {
+    name: 'Powder Depot', zh: '火药库', w: 32, h: 28, border: '#',
+    desc: 'A yard stacked with crates and powder barrels. Crates are walls until somebody breaks them; a barrel takes everything near it along. Shoot the barrel, not the car beside it.',
+    items: ['repair', 'shield', 'overdrive', 'nitro', 'mine', 'emp'],
+    ops: [['x', 4, 5, 5, 1], ['x', 13, 5, 6, 1], ['x', 23, 5, 5, 1], ['!', 6, 6, 1, 1], ['!', 25, 6, 1, 1], ['!', 15, 6, 2, 1],
+      ['#', 9, 8, 2, 2], ['#', 21, 8, 2, 2], ['x', 14, 9, 4, 1], ['!', 3, 11, 1, 1], ['!', 28, 11, 1, 1],
+      ['x', 6, 12, 3, 1], ['x', 23, 12, 3, 1], ['x', 11, 12, 2, 2], ['x', 19, 12, 2, 2], ['!', 13, 13, 1, 1], ['!', 15, 13, 1, 1]],
+    spawns: [[15, 2], [7, 2], [24, 2]], itemSpots: [[2, 8], [29, 8], [15, 8], [15, 11]],
+  },
 };
 
 function build(id, raw) {
@@ -123,7 +137,19 @@ function build(id, raw) {
   return {
     id, name: raw.name, zh: raw.zh, desc: raw.desc, w, h, tile: TILE, width, height, center,
     rows, tiles, spawns, itemSpawns, pads, items: raw.items || ITEM_IDS, zone,
+    breakable: tiles.some((c) => TILE_HP[c] > 0),
   };
+}
+
+/**
+ * The copy of a map one match plays on. A map with crates or barrels changes as they go, so
+ * each match gets its own tiles and their hit points; any other map is used as it is.
+ */
+export function liveMap(map) {
+  if (!map.breakable || map.live) return map;
+  const tileHp = new Float32Array(map.tiles.length);
+  for (let i = 0; i < tileHp.length; i++) tileHp[i] = TILE_HP[map.tiles[i]];
+  return { ...map, tiles: map.tiles.slice(), tileHp, live: true };
 }
 
 export const MAPS = Object.fromEntries(Object.entries(RAW).map(([id, raw]) => [id, build(id, raw)]));
