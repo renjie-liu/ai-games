@@ -1,6 +1,5 @@
 node_modules/
 replays/
 user_bots/*.js
-# the repo root ignores dist/; the single-file page is shipped, the CDN variant is not
-!dist/
+# the build also writes a CDN variant of the page; only the single-file one is kept
 dist/artifact.html
