@@ -163,6 +163,8 @@ test('powder keg: goes off where it sits or where it was dropped, spares nobody,
   roll.run(0.7);
   assert.equal(roll.w.bombs.length, 0, 'the other car does, well inside the fuse');
   assert.ok(roll.q.stats.damageTaken > 150 && roll.p.stats.byType.explosive > 150, `on contact (${roll.q.stats.damageTaken.toFixed(0)})`);
+  assert.equal(roll.p.stats.kegsThrown, 1);
+  assert.equal(roll.p.stats.itemsUsed, 0, 'a keg is not a held item');
 
   const pit = duel(bomber, car(), { gap: 30, map: MAPS.sumo, at: { x: 14, y: 19 } });
   pit.p.vx = 9;
@@ -179,6 +181,18 @@ test('powder keg: goes off where it sits or where it was dropped, spares nobody,
   lit.w.warm(lit.p, piece(lit.p, 'keg'), 1, lit.q.id);
   lit.w.settle();
   assert.ok(count(lit.w, 'boom') >= 1);
+
+  // a teammate in the way is not spared — and what the keg does to it is not to the thrower's credit
+  const w2 = new World({ map: MAPS.proving, seed: 1, entries: [{ team: 0, slot: 0, design: bomber }, { team: 0, slot: 1, design: car() }, { team: 1, slot: 0, design: car() }, { team: 1, slot: 1, design: car() }] });
+  const [thrower, mate, f1, f2] = w2.vehicles;
+  thrower.x = 20; thrower.y = 9; thrower.th = 0; mate.x = 26; mate.y = 9; mate.th = Math.PI; f1.x = 44; f1.y = 30; f2.x = 50; f2.y = 30;
+  for (const v of w2.vehicles) w2.updateCells(v);
+  w2.setCommand(thrower, { jettison: [piece(thrower, 'keg').i] });
+  for (let i = 0; i < 90; i++) w2.step();
+  assert.ok(mate.stats.damageTaken > 150, `the teammate took ${mate.stats.damageTaken.toFixed(0)}`);
+  assert.equal(thrower.stats.damageDealt, 0);
+  assert.equal(thrower.stats.partsDestroyed, 0);
+  assert.equal(w2.teamScore(0).dmg, 0, 'so it cannot win a timeout on damage');
 });
 
 test('harpoon: ties two vehicles together; the cable only pulls, winds in, lets go, and the heavier end wins', () => {
@@ -290,6 +304,7 @@ test('piston: punches what is in front of it, takes the same shove back, breaks 
   bat.w.bombs.push({ id: 99, x: bat.p.x + 2.3, y: bat.p.y, vx: 0, vy: 0, fuse: 1.5, blast: PARTS.keg.blast, owner: 1, team: 1 });
   bat.run(0.05);
   assert.ok(bat.w.bombs[0].vx > 8, 'batted away');
+  assert.equal(bat.w.bombs[0].owner, bat.p.id, 'and it is the batter’s keg now: it will go off on the car it came from');
 });
 
 test('crates and barrels: a map that comes apart, and a pathfinder that notices', () => {

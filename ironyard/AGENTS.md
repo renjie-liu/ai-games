@@ -216,7 +216,9 @@ Off the edge of the map counts as a pit.
   Outside it every piece takes 10 hp/s.
 * **Vision:** you see an enemy if it is within the sensor range of any living teammate (core 22 m, radar +16 m),
   or for 1.5s after it fires a gun. Walls do not block vision. `state.lastSeen` remembers where each enemy was.
-* **Friendly fire is off**: shots, blasts and saws pass through teammates. You can still bump into them.
+* **Friendly fire is off** for guns, flamethrowers, saws, pistons and hooks: shots and their splash pass through
+  teammates. You can still bump into them. **Powder kegs and barrels are the exception**: their blasts hit everyone in
+  reach, a teammate sets off a rolling keg by touching it, and nothing done to your own side counts as damage dealt.
 * **Timeout:** more vehicles alive wins; then more total hull fraction remaining; then more damage dealt; else a draw.
 * **Crates and barrels** are tiles with hit points. A crate is a wall until it is broken; a barrel explodes when it is,
   a tenth of a second later, so a row of them goes off one after another. Shots, beams, blasts, fire, pistons and

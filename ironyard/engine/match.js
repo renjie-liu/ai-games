@@ -210,7 +210,7 @@ export function runMatch(o) {
         timeOutsideZone: rnd(s.timeOutsideZone), timeNoEnemyVisible: rnd(s.timeNoEnemyVisible),
         timeOn: { mud: rnd(s.timeOn.mud), ice: rnd(s.timeOn.ice), lava: rnd(s.timeOn.lava) },
         timeBurning: rnd(s.timeBurning), piecesBurnt: s.piecesBurnt, tilesBroken: s.tilesBroken,
-        punches: s.punches, hooks: s.hooks, timeTethered: rnd(s.timeTethered), piecesTorn: s.piecesTorn,
+        punches: s.punches, hooks: s.hooks, timeTethered: rnd(s.timeTethered), piecesTorn: s.piecesTorn, kegsThrown: s.kegsThrown,
       },
       cpu: now && c.calls ? { avgMs: Math.round((c.cpuTotal / c.calls) * 1000) / 1000, maxMs: Math.round(c.cpuMax * 100) / 100 } : null,
       violations: v.violations, cutOff: v.cutOff, errors: c.errors, logs: c.logs,

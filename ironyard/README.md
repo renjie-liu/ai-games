@@ -107,4 +107,4 @@ node tests/maps.mjs      # 给每张地图截远景和近景（需要 Chrome）�
 - 浏览器里引擎和控制器在同一个 Web Worker 里，走的是同一套协议，但没有隔离：那里跑的是你自己贴进去的代码。
 - CPU 预算目前只统计并上报（`cpu.avgMs`），没有做成确定性的指令计数。
 - 三角函数用的是宿主 JS 引擎的实现：同一台机器上完全可复现；不同引擎（V8 / JavaScriptCore）之间理论上可能有末位浮点差异，回放文件本身不受影响。
-- 平衡性只用内置 13 个 bot 的循环赛粗调过（1v1 八张图，1248 场：bastion 66%、pyro 65%、sapper 62%、wolfpack 61%、angler 59%、bulldozer 58%、longshot 51%、boxer 50%、medic 44%、wasp 43%、thumper 40%、hornet 31%，rookie 20% 是故意留的低预算靶子）。这些都是靶子，不是天花板：v0.5 的调研和前后对比见 [docs/DESIGN.md](docs/DESIGN.md)。
+- 平衡性只用内置 13 个 bot 的循环赛粗调过（1v1 八张图，1248 场：bastion 67%、pyro 66%、wolfpack 62%、sapper 60%、angler 59%、bulldozer 58%、longshot 51%、boxer 51%、medic 44%、wasp 43%、thumper 40%、hornet 31%，rookie 20% 是故意留的低预算靶子）。这些都是靶子，不是天花板：v0.5 的调研和前后对比见 [docs/DESIGN.md](docs/DESIGN.md)。

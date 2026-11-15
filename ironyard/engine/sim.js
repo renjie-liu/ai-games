@@ -47,7 +47,7 @@ function newStats() {
     itemsPicked: 0, itemsUsed: 0, distance: 0, rams: 0,
     timeStunned: 0, timeEnergyStarved: 0, timeFireOutOfArc: 0, timeOutsideZone: 0,
     timeOn: { mud: 0, ice: 0, lava: 0 }, timeStill: 0, timeNoEnemyVisible: 0,
-    timeBurning: 0, piecesBurnt: 0, tilesBroken: 0, punches: 0, hooks: 0, timeTethered: 0, piecesTorn: 0,
+    timeBurning: 0, piecesBurnt: 0, tilesBroken: 0, punches: 0, hooks: 0, timeTethered: 0, piecesTorn: 0, kegsThrown: 0,
   };
 }
 
@@ -231,8 +231,10 @@ export class World {
       v.hpNow -= dealt;
       v.stats.damageTaken += dealt;
       if (src && src !== v) {
-        src.stats.damageDealt += dealt;
-        if (src.stats.byType[dtype] !== undefined) src.stats.byType[dtype] += dealt;
+        if (src.team !== v.team) {   // what a keg or a barrel does to your own side is not to your credit
+          src.stats.damageDealt += dealt;
+          if (src.stats.byType[dtype] !== undefined) src.stats.byType[dtype] += dealt;
+        }
         v.lastHitBy = src.id; v.lastHitT = this.t;
       }
       // decor riding on this piece gets shaken off
@@ -251,7 +253,7 @@ export class World {
     p.hp = 0;
     for (const [cx, cy] of p.cells) v.grid[p.z][cellIndex(cx, cy)] = -1;
     v.stats.partsLost++;
-    if (src && src !== v) src.stats.partsDestroyed++;
+    if (src && src.team !== v.team) src.stats.partsDestroyed++;
     if (p.fire > 0) { p.fire = 0; v.burning--; }
     if (p === v.core) { this.kill(v, src, cause); return; }
     if (cause !== 'jettisoned') {
@@ -265,7 +267,7 @@ export class World {
     if (!v.alive) return;
     v.alive = false; v.deathT = this.t; v.deathCause = cause;
     v.killedBy = src && src !== v ? src.id : -1;
-    if (src && src !== v) src.stats.kills++;
+    if (src && src.team !== v.team) src.stats.kills++;
     v.vx = v.vy = v.w = 0; v.shield = 0; v.overshield = 0;
     v.said = undefined; // the dead say nothing: their last message is not repeated to the team every tick
     this.event({ k: 'death', v: v.id, by: v.killedBy, c: cause, x: r2(v.x), y: r2(v.y) });
@@ -487,7 +489,7 @@ export class World {
       this.bombs.push({ id: this.nextId++, x: p.wx, y: p.wy, vx: v.vx - v.w * (p.wy - v.y) + cx, vy: v.vy + v.w * (p.wx - v.x) + cy,
         fuse: p.def.blast.fuse, blast: p.def.blast, owner: v.id, team: v.team });
       if (f) this.push(v, p.wx, p.wy, -cx * p.def.mass, -cy * p.def.mass);
-      v.stats.itemsUsed++;
+      v.stats.kegsThrown++;
     }
     this.destroy(v, p, null, 'jettisoned');
   }
@@ -512,7 +514,7 @@ export class World {
         const reach = this.rules.bombTouch * this.rules.bombTouch;
         touch: for (const v of this.vehicles) {
           if (!v.alive || v.id === b.owner || (v.x - b.x) ** 2 + (v.y - b.y) ** 2 > (v.radius + 1) * (v.radius + 1)) continue;
-          for (const p of v.parts) if (p.alive && !p.decor && (p.wx - b.x) ** 2 + (p.wy - b.y) ** 2 < reach) { b.fuse = 0; b.touched = v.id; break touch; }
+          for (const p of v.parts) if (p.alive && !p.decor && (p.wx - b.x) ** 2 + (p.wy - b.y) ** 2 < reach) { b.fuse = 0; break touch; }
         }
       }
       if (b.fuse <= 0) this.pendingBlasts.push({ x: b.x, y: b.y, blast: b.blast, src: b.owner >= 0 ? this.vehicles[b.owner] : null });
@@ -1152,7 +1154,7 @@ export class World {
         this.push(v, s.wx, s.wy, -ca * j, -sa * j);   // and the same back
         tv.lastHitBy = v.id; tv.lastHitT = this.t;
         this.crumple(tv, tv.parts[tc.bot >= 0 ? tc.bot : tc.top], P.dmg * od, v);
-      } else if (bomb) { bomb.vx = v.vx + ca * 11; bomb.vy = v.vy + sa * 11; }
+      } else if (bomb) { bomb.vx = v.vx + ca * 11; bomb.vy = v.vy + sa * 11; bomb.owner = v.id; bomb.team = v.team; }   // it is the batter's keg now: it will go off on the car it came from
       else this.damageTile(ftx, fty, P.dmg * 4 * od, v);
     }
   }
@@ -1167,16 +1169,12 @@ export class World {
     let reached = false;
     for (const e of this.teams[1 - v.team]) {
       if (!e.alive || Math.hypot(e.x - mx, e.y - my) > d.range + e.radius) continue;
-      let shielded = false, checked = false, open = false;
       for (const c of e.cols) {
         const dx = c.wx - mx, dy = c.wy - my, dist = Math.hypot(dx, dy);
         if (dist > d.range || (dist > 0.3 && (dx * ca + dy * sa) / dist < cosCone)) continue;
-        if (!checked) {   // once per vehicle: is there a wall in the way, is a shield up
-          checked = true;
-          open = !this.blocked(mx, my, c.wx, c.wy);
-          if (open && e.shield + e.overshield > 0) { this.drainShield(e, d.dps * 3 * dt * od); shielded = true; reached = true; }
-        }
-        if (!open || shielded) break;
+        if (this.blocked(mx, my, c.wx, c.wy)) continue;   // this column is behind a wall; the next may not be
+        // a shield that is up takes the whole stream, once, however many columns it would have reached
+        if (e.shield + e.overshield > 0) { this.drainShield(e, d.dps * 3 * dt * od); reached = true; break; }
         const p = e.parts[c.top >= 0 ? c.top : c.bot];
         if (!p.alive) continue;
         reached = true;

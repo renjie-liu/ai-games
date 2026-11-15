@@ -22,6 +22,9 @@ import { MatchPool, withSources } from './runner.js';
 const SERVER = { name: 'ironyard', title: 'Ironyard Arena', version: ENGINE_VERSION };
 const PROTOCOLS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 const REPLAY_DIR = process.env.IRONYARD_REPLAY_DIR ? path.resolve(process.env.IRONYARD_REPLAY_DIR) : path.join(ROOT, 'replays');
+// One request may carry several calls, and every call can queue matches: a batch is kept small.
+const MAX_BATCH = 16, BATCH_MSG = `a batch may carry at most ${MAX_BATCH} calls`;
+const overfull = (msg) => Array.isArray(msg) && msg.length > MAX_BATCH;
 const pool = new MatchPool({ timeoutMs: Number(process.env.IRONYARD_MATCH_TIMEOUT_MS || 30_000) });
 const log = (...a) => process.stderr.write(`[ironyard-mcp] ${a.join(' ')}\n`);
 
@@ -204,7 +207,10 @@ const TOOLS = [
       let replay;
       if (a.save_replay) {
         fs.mkdirSync(REPLAY_DIR, { recursive: true });
-        replay = path.join(REPLAY_DIR, `${spec.mode}-${spec.map}-${a.team_a.join('+')}-vs-${a.team_b.join('+')}-s${spec.seed}${spec.swap ? '-swap' : ''}.json`);
+        // six 40-letter names do not fit in a file name: past 120 characters the line-up is cut and told apart by a hash
+        let who = `${a.team_a.join('+')}-vs-${a.team_b.join('+')}`;
+        if (who.length > 120) who = `${who.slice(0, 100)}-${crypto.createHash('sha256').update(who).digest('hex').slice(0, 12)}`;
+        replay = path.join(REPLAY_DIR, `${spec.mode}-${spec.map}-${who}-s${spec.seed}${spec.swap ? '-swap' : ''}.json`);
         fs.writeFileSync(replay, JSON.stringify(res));
         const { summarize } = await import('../engine/index.js');
         res = summarize(res);
@@ -458,6 +464,7 @@ function serveStdio() {
     if (!line.trim()) return;
     let msg;
     try { msg = JSON.parse(line); } catch { process.stdout.write(JSON.stringify(rpcError(null, -32700, 'Parse error')) + '\n'); return; }
+    if (overfull(msg)) { process.stdout.write(JSON.stringify(rpcError(null, -32600, BATCH_MSG)) + '\n'); return; }
     pending++;
     try {
       const out = Array.isArray(msg) ? (await Promise.all(msg.map(handle))).filter(Boolean) : await handle(msg);
@@ -494,6 +501,7 @@ function serveHttp(port, host) {
       try { msg = JSON.parse(body); } catch {
         res.writeHead(400, { 'content-type': 'application/json', ...cors }).end(JSON.stringify(rpcError(null, -32700, 'Parse error'))); return;
       }
+      if (overfull(msg)) { res.writeHead(400, { 'content-type': 'application/json', ...cors }).end(JSON.stringify(rpcError(null, -32600, BATCH_MSG))); return; }
       const out = Array.isArray(msg) ? (await Promise.all(msg.map(handle))).filter(Boolean) : await handle(msg);
       if (!out || (Array.isArray(out) && !out.length)) { res.writeHead(202, cors).end(); return; }
       res.writeHead(200, { 'content-type': 'application/json', ...cors }).end(JSON.stringify(out));
