@@ -19,14 +19,14 @@ export const TILE_HP = TILE_NAME.map((id) => TILES[id].hp || 0);
 // ops: [char, col, row, width, height] in tiles; row 0 is the north edge. Later ops paint over earlier ones.
 const RAW = {
   proving: {
-    name: 'Proving Ground', zh: '试炼场', w: 28, h: 28, border: '#',
+    name: 'Proving Ground', w: 28, h: 28, border: '#',
     desc: 'Walled open arena with pillars, two low barriers and a mud patch in the middle. The fair default.',
     items: ['repair', 'overdrive', 'shield', 'nitro', 'mine', 'emp'],
     ops: [['#', 7, 7, 2, 2], ['#', 19, 7, 2, 2], ['#', 13, 10, 2, 1], ['-', 3, 11, 3, 1], ['-', 22, 11, 3, 1], ['m', 12, 12, 4, 2]],
     spawns: [[13, 2], [6, 3], [21, 3]], itemSpots: [[2, 9], [25, 9], [13, 6]],
   },
   sumo: {
-    name: 'Sumo Deck', zh: '相扑台', w: 20, h: 20, border: '_',
+    name: 'Sumo Deck', w: 20, h: 20, border: '_',
     desc: 'Floating platform, no walls. An ice ring and a hole in the centre. Push them off — or hover.',
     items: ['nitro', 'shield', 'emp', 'repair'],
     zone: { start: 60, end: 125, minRadius: 6 },
@@ -35,7 +35,7 @@ const RAW = {
     spawns: [[9, 2], [5, 3], [14, 3]], itemSpots: [[2, 8], [17, 8], [9, 7]],
   },
   canyon: {
-    name: 'Canyon', zh: '峡谷', w: 36, h: 28, border: '#',
+    name: 'Canyon', w: 36, h: 28, border: '#',
     desc: 'Three lanes split by rock walls. Long sightlines down the middle, mud in the centre choke, pillars to hide behind.',
     items: ['repair', 'overdrive', 'shield', 'mine', 'emp', 'nitro'],
     ops: [['#', 3, 5, 8, 1], ['#', 14, 5, 8, 1], ['#', 25, 5, 8, 1], ['#', 11, 6, 1, 5], ['#', 24, 6, 1, 5],
@@ -43,7 +43,7 @@ const RAW = {
     spawns: [[17, 2], [8, 2], [27, 2]], itemSpots: [[2, 8], [33, 8], [17, 7], [17, 12]],
   },
   frostbite: {
-    name: 'Frostbite', zh: '冰湖', w: 30, h: 30, border: '#',
+    name: 'Frostbite', w: 30, h: 30, border: '#',
     desc: 'A frozen lake fills the middle with a dry island at its heart; holes in the corners. Wheels slide, tracks and hover shine.',
     items: ['nitro', 'repair', 'overdrive', 'shield', 'emp', 'mine'],
     ops: [['_', 1, 1, 3, 1], ['_', 1, 2, 1, 2], ['_', 26, 1, 3, 1], ['_', 28, 2, 1, 2],
@@ -51,7 +51,7 @@ const RAW = {
     spawns: [[14, 2], [7, 3], [22, 3]], itemSpots: [[2, 10], [27, 10], [14, 9], [10, 14]],
   },
   foundry: {
-    name: 'Foundry', zh: '熔炉', w: 34, h: 30, border: '#',
+    name: 'Foundry', w: 34, h: 30, border: '#',
     desc: 'Lava pools with crossings between them and repair pads in the back corners.',
     items: ['repair', 'shield', 'overdrive', 'mine', 'emp', 'nitro'],
     ops: [['+', 1, 1, 1, 1], ['+', 32, 1, 1, 1], ['L', 4, 6, 4, 3], ['L', 26, 6, 4, 3], ['L', 12, 9, 3, 3], ['L', 19, 9, 3, 3],
@@ -59,7 +59,7 @@ const RAW = {
     spawns: [[16, 2], [8, 2], [25, 2]], itemSpots: [[1, 10], [32, 10], [16, 8], [6, 13]],
   },
   skybridge: {
-    name: 'Skybridge', zh: '天桥', w: 32, h: 24, border: '_', fill: '_',
+    name: 'Skybridge', w: 32, h: 24, border: '_', fill: '_',
     desc: 'Islands over the void joined by bridges. One slip and you are gone; hover craft take the shortcut.',
     items: ['nitro', 'shield', 'emp', 'repair', 'overdrive'],
     zone: { start: 75, end: 135, minRadius: 7 },
@@ -68,7 +68,7 @@ const RAW = {
     spawns: [[15, 2], [10, 2], [21, 2]], itemSpots: [[3, 9], [28, 9], [15, 10]],
   },
   bog: {
-    name: 'Bog Fort', zh: '沼泽堡垒', w: 42, h: 32, border: '#',
+    name: 'Bog Fort', w: 42, h: 32, border: '#',
     desc: 'Big team map: mud fields, low barrier forts to shoot over, pits on the flanks, repair pads in the centre.',
     items: ['repair', 'shield', 'overdrive', 'nitro', 'mine', 'emp'],
     ops: [['-', 6, 6, 4, 1], ['-', 6, 7, 1, 2], ['-', 32, 6, 4, 1], ['-', 35, 7, 1, 2], ['m', 12, 6, 6, 4], ['m', 24, 6, 6, 4], ['m', 14, 13, 14, 3],
@@ -76,7 +76,7 @@ const RAW = {
     spawns: [[20, 2], [9, 2], [31, 2]], itemSpots: [[2, 9], [39, 9], [20, 7], [10, 14]],
   },
   depot: {
-    name: 'Powder Depot', zh: '火药库', w: 32, h: 28, border: '#',
+    name: 'Powder Depot', w: 32, h: 28, border: '#',
     desc: 'A yard stacked with crates and powder barrels. Crates are walls until somebody breaks them; a barrel takes everything near it along. Shoot the barrel, not the car beside it.',
     items: ['repair', 'shield', 'overdrive', 'nitro', 'mine', 'emp'],
     ops: [['x', 4, 5, 5, 1], ['x', 13, 5, 6, 1], ['x', 23, 5, 5, 1], ['!', 6, 6, 1, 1], ['!', 25, 6, 1, 1], ['!', 15, 6, 2, 1],
@@ -135,7 +135,7 @@ function build(id, raw) {
   for (const t of [0, 1]) for (const s of spawns[t]) s.heading = Math.atan2(center.y - s.y, 0); // face the enemy side
   const zone = Object.assign({ radius0: Math.hypot(width, height) / 2 + 2 }, raw.zone || {});
   return {
-    id, name: raw.name, zh: raw.zh, desc: raw.desc, w, h, tile: TILE, width, height, center,
+    id, name: raw.name, desc: raw.desc, w, h, tile: TILE, width, height, center,
     rows, tiles, spawns, itemSpawns, pads, items: raw.items || ITEM_IDS, zone,
     breakable: tiles.some((c) => TILE_HP[c] > 0),
   };
@@ -168,7 +168,7 @@ export function tileCodeAt(map, x, y) {
 /** Plain-data description of a map that is safe to hand to controllers / JSON. */
 export function describeMap(map) {
   return {
-    id: map.id, name: map.name, zh: map.zh, desc: map.desc,
+    id: map.id, name: map.name, desc: map.desc,
     w: map.w, h: map.h, tile: map.tile, width: map.width, height: map.height,
     center: { ...map.center },
     rows: map.rows.map((r) => r.replace(/[A-Ca-c*]/g, '.')), // row 0 = north edge

@@ -38,7 +38,9 @@ export function prepReplay(res, IY) {
   const feed = [];    // {t, text, team}
   const openItem = {}, openMine = {};
   const name = (id) => (id >= 0 && vehicles[id] ? vehicles[id].name : null);
-  const CAUSE = { fell: '坠落', burn: '烧毁', ram: '撞毁', melee: '锯毁', kinetic: '击毁', explosive: '炸毁', energy: '熔毁', fire: '烧毁', wrecked: '打成废铁', torn: '扯碎' };
+  // per cause of death: [what the killer did to the victim, what happened to a victim nobody killed]
+  const CAUSE = { fell: ['dropped', 'fell'], burn: ['burned', 'burned up'], ram: ['smashed', 'crashed'], melee: ['shredded', 'was shredded'], kinetic: ['gunned down', 'was gunned down'],
+    explosive: ['blew up', 'blew up'], energy: ['melted', 'melted'], fire: ['burned', 'burned up'], wrecked: ['wrecked', 'was wrecked'], torn: ['tore apart', 'was torn apart'] };
   for (const e of res.events) {
     if (e.k === 'part') {
       const v = vehicles[e.v], p = v.parts[e.i], d = IY.PARTS[p.type];
@@ -49,7 +51,7 @@ export function prepReplay(res, IY) {
       const cs = Math.cos(f[2]), sn = Math.sin(f[2]);
       v.deathT[e.i] = e.t; v.alive[e.i] = false;
       if (v.fireT1[e.i] > e.t) v.fireT1[e.i] = e.t;
-      if (e.c === 'torn') feed.push({ t: e.t, team: 1 - v.team, kind: 'item', text: `${v.name} 的${d.zh.replace(/\s.*$/, '')}被缆绳扯了下来` });
+      if (e.c === 'torn') feed.push({ t: e.t, team: 1 - v.team, kind: 'item', text: `${v.name}'s ${d.name.replace(/ \dx\d$/, '').toLowerCase()} was torn off by the cable` });
       if (!d.decor) {
         const left = v.parts.filter((q, i) => v.alive[i] && solid(q));
         if (left.length) { const a = IY.aggregate(left); v.com.push({ t: e.t, u: a.comU, v: a.comV, r: a.radius }); }
@@ -61,7 +63,8 @@ export function prepReplay(res, IY) {
       const v = vehicles[e.v];
       v.diedAt = e.t;
       fx.push({ k: 'death', t: e.t, x: e.x, y: e.y, team: v.team });
-      feed.push({ t: e.t, team: v.team, kind: 'death', text: name(e.by) ? `${name(e.by)} ${CAUSE[e.c] || e.c} ${v.name}` : `${v.name} ${CAUSE[e.c] || e.c}` });
+      const how = CAUSE[e.c] || [e.c, e.c];
+      feed.push({ t: e.t, team: v.team, kind: 'death', text: name(e.by) ? `${name(e.by)} ${how[0]} ${v.name}` : `${v.name} ${how[1]}` });
     } else if (e.k === 'boom') fx.push({ k: 'boom', t: e.t, x: e.x, y: e.y, r: e.r });
     else if (e.k === 'rail') fx.push({ k: 'rail', t: e.t, x1: e.x1, y1: e.y1, x2: e.x2, y2: e.y2, team: e.team });
     else if (e.k === 'spark') fx.push({ k: 'spark', t: e.t, x: e.x, y: e.y });
@@ -70,12 +73,12 @@ export function prepReplay(res, IY) {
     else if (e.k === 'item') { const it = { s: e.s, type: e.type, x: e.x, y: e.y, t0: e.t, t1: Infinity }; items.push(it); openItem[e.s] = it; }
     else if (e.k === 'pickup') {
       if (openItem[e.s]) { openItem[e.s].t1 = e.t; fx.push({ k: 'pickup', t: e.t, x: openItem[e.s].x, y: openItem[e.s].y, type: e.type }); }
-      feed.push({ t: e.t, team: vehicles[e.v].team, kind: 'item', text: `${vehicles[e.v].name} 拾取 ${IY.ITEMS[e.type].icon}${IY.ITEMS[e.type].zh}` });
-    } else if (e.k === 'use') feed.push({ t: e.t, team: vehicles[e.v].team, kind: 'item', text: `${vehicles[e.v].name} 使用 ${IY.ITEMS[e.type].icon}${IY.ITEMS[e.type].zh}` });
+      feed.push({ t: e.t, team: vehicles[e.v].team, kind: 'item', text: `${vehicles[e.v].name} picked up ${IY.ITEMS[e.type].icon} ${IY.ITEMS[e.type].name}` });
+    } else if (e.k === 'use') feed.push({ t: e.t, team: vehicles[e.v].team, kind: 'item', text: `${vehicles[e.v].name} used ${IY.ITEMS[e.type].icon} ${IY.ITEMS[e.type].name}` });
     else if (e.k === 'mine') { const m = { id: e.id, x: e.x, y: e.y, team: e.team, t0: e.t, t1: Infinity }; mines.push(m); openMine[e.id] = m; }
     else if (e.k === 'mineboom') { if (openMine[e.id]) openMine[e.id].t1 = e.t; }
-    else if (e.k === 'cutoff') feed.push({ t: e.t, team: vehicles[e.v].team, kind: 'death', text: `${vehicles[e.v].name} 控制器出错被切断` });
-    else if (e.k === 'fire') { const v = vehicles[e.v]; v.fireT0[e.i] = e.t; if (!v.lit) { v.lit = true; feed.push({ t: e.t, team: v.team, kind: 'item', text: `${v.name} 着火了` }); } }
+    else if (e.k === 'cutoff') feed.push({ t: e.t, team: vehicles[e.v].team, kind: 'death', text: `${vehicles[e.v].name} was cut off after a controller error` });
+    else if (e.k === 'fire') { const v = vehicles[e.v]; v.fireT0[e.i] = e.t; if (!v.lit) { v.lit = true; feed.push({ t: e.t, team: v.team, kind: 'item', text: `${v.name} is on fire` }); } }
     else if (e.k === 'out') { const v = vehicles[e.v]; if (v.fireT1[e.i] > e.t) v.fireT1[e.i] = e.t; }
     else if (e.k === 'tile') {
       const tl = tiles.find((x) => x.tx === e.tx && x.ty === e.ty && x.t === Infinity);
@@ -84,7 +87,7 @@ export function prepReplay(res, IY) {
       fx.push({ k: 'debris', t: e.t, x: (e.tx + 0.5) * T, y: (e.ty + 0.5) * T, h: 0.9, color: wood ? [0x9a6a3a, 0x6b4a2a, 0xd9b27a] : [0xb3261e, 0x2a2d31, 0xf5cd2f], n: 5, seed: e.tx * 91 + e.ty * 17 });
       fx.push({ k: 'debris', t: e.t, x: (e.tx + 0.5) * T + 0.5, y: (e.ty + 0.5) * T - 0.4, h: 0.5, color: wood ? [0x9a6a3a, 0xd9b27a] : [0xb3261e, 0x2a2d31], n: 5, seed: e.tx * 37 + e.ty * 53 });
     } else if (e.k === 'punch') fx.push({ k: 'punch', t: e.t, x: e.x, y: e.y, a: e.a });
-    else if (e.k === 'hook') feed.push({ t: e.t, team: vehicles[e.a].team, kind: 'item', text: `${vehicles[e.a].name} 钩住了 ${vehicles[e.b].name}` });
+    else if (e.k === 'hook') feed.push({ t: e.t, team: vehicles[e.a].team, kind: 'item', text: `${vehicles[e.a].name} hooked ${vehicles[e.b].name}` });
   }
   const duration = frames[frames.length - 1].t;
   return { res, map, frames, fdt, duration, vehicles, fx, items, mines, tiles, feed, zone: map.zone };

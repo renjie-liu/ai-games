@@ -34,7 +34,7 @@ export class SimHost {
     };
     this.worker.onerror = (ev) => {
       ev.preventDefault && ev.preventDefault();
-      this.failAll(new Error('模拟线程出错：' + (ev.message || '未知错误')));
+      this.failAll(new Error('The simulation worker failed: ' + (ev.message || 'unknown error')));
       this.dispose();
     };
   }
@@ -57,7 +57,7 @@ export class SimHost {
         job.timer = setTimeout(() => {
           this.jobs.delete(id);
           this.dispose(); // kills the runaway controller along with the worker
-          reject(new Error(`模拟超时（${timeout / 1000}s 没有响应）：很可能某个控制器的 tick() 进入了死循环`));
+          reject(new Error(`The simulation timed out (no answer for ${timeout / 1000}s): most likely a controller's tick() is stuck in an infinite loop`));
         }, timeout);
       };
       job.touch();
@@ -78,12 +78,12 @@ export class SimHost {
       const url = URL.createObjectURL(new Blob([`self.__b = ${wrapped};\nself.postMessage('ok');`], { type: 'text/javascript' }));
       const w = new Worker(url);
       const done = (r) => { clearTimeout(timer); w.terminate(); URL.revokeObjectURL(url); resolve(r); };
-      const timer = setTimeout(() => done({ ok: false, error: '语法检查超时' }), 4000);
+      const timer = setTimeout(() => done({ ok: false, error: 'The syntax check timed out' }), 4000);
       w.onmessage = () => done({ ok: true });
       w.onerror = (ev) => {
         ev.preventDefault && ev.preventDefault();
         const line = ev.lineno ? Math.max(1, ev.lineno - 5) : null;
-        done({ ok: false, error: (ev.message || '语法错误').replace(/^Uncaught /, '') + (line ? `（第 ${line} 行附近）` : '') });
+        done({ ok: false, error: (ev.message || 'Syntax error').replace(/^Uncaught /, '') + (line ? ` (near line ${line})` : '') });
       };
     });
   }

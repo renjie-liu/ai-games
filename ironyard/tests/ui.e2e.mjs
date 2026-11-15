@@ -36,32 +36,32 @@ const tap = async (tool, cells, dir) => {
   for (const [x, y] of cells) await page.evaluate((i) => document.querySelectorAll('#bp .cell')[i].click(), (5 - y) * 9 + (x + 4));
 };
 const cellAt = (x, y) => page.evaluate((i) => { const c = document.querySelectorAll('#bp .cell')[i]; return { type: c.dataset.type || null, cont: c.classList.contains('cont') }; }, (5 - y) * 9 + (x + 4));
-await layer('底盘');
-await tap('底板 2×2', [[-1, -1]]);                       // covers x -1..0, y -1..0 and replaces the starter plate
+await layer('CHASSIS');
+await tap('Plate 2x2', [[-1, -1]]);                      // covers x -1..0, y -1..0 and replaces the starter plate
 assert.deepEqual(await cellAt(0, 0), { type: 'plate4', cont: true });
-await tap('底板 1×1', [[-1, 1], [0, 1]]);
-await tap('轮子', [[-2, -1], [-2, 1]]);
-await tap('反应堆', [[0, -2]]);
-await tap('机枪塔', [[-1, 1]], '↑');                     // deck-only piece: the editor switches layer by itself
-assert.equal(await page.evaluate(() => document.querySelector('#layer-seg button[aria-pressed="true"]').textContent.includes('上层')), true);
-await tap('加农炮 1×2', [[0, 1]], '↑');                  // two studs long: (0,1) and (0,2)
+await tap('Plate 1x1', [[-1, 1], [0, 1]]);
+await tap('Wheel', [[-2, -1], [-2, 1]]);
+await tap('Reactor', [[0, -2]]);
+await tap('Machine-gun turret', [[-1, 1]], '↑');         // deck-only piece: the editor switches layer by itself
+assert.equal(await page.evaluate(() => document.querySelector('#layer-seg button[aria-pressed="true"]').textContent.includes('DECK')), true);
+await tap('Cannon 1x2', [[0, 1]], '↑');                  // two studs long: (0,1) and (0,2)
 assert.deepEqual(await cellAt(0, 2), { type: 'cannon', cont: true });
 await page.click('#g-mirror');                           // wheels, the left plate and the gun get a twin on the right
 assert.equal((await cellAt(1, 1)).type, 'mg');
-await layer('底盘');
+await layer('CHASSIS');
 assert.equal((await cellAt(2, -1)).type, 'wheel'); assert.equal((await cellAt(2, 1)).type, 'wheel'); assert.equal((await cellAt(1, 1)).type, 'plate');
 assert.match(await text('#g-msgs'), /wheel at \(2, -1\) on chassis is not connected/); // the 2x2 plate straddles the centre line, so it has no twin
-await tap('底板 1×1', [[1, -1], [1, 0]]);
-assert.match(await text('#g-msgs'), /蓝图合法|slow turn|lopsided|energy/);
+await tap('Plate 1x1', [[1, -1], [1, 0]]);
+assert.match(await text('#g-msgs'), /Blueprint is valid|slow turn|lopsided|energy/);
 assert.equal(await text('#g-cost'), String(18 + 5 * 6 + 4 * 30 + 75 + 110 + 2 * 70));
-assert.equal(await text('#g-class'), '超轻');
+assert.equal(await text('#g-class'), 'Featherweight');
 // an illegal move is explained: a tall brick in front of the left gun (with a plate under it so support is not the issue)
-await tap('底板 1×1', [[-1, 2]]);
-await layer('上层');
-await tap('砖 1×1', [[-1, 2]]);
+await tap('Plate 1x1', [[-1, 2]]);
+await layer('DECK');
+await tap('Brick 1x1', [[-1, 2]]);
 assert.match(await text('#g-msgs'), /mg at \(-1, 1\) on deck facing N is blocked by brick/);
 // a slope in the same spot is low, so the gun fires over it
-await tap('斜面装甲', [[-1, 2]], '↑');
+await tap('Slope armor', [[-1, 2]], '↑');
 assert.doesNotMatch(await text('#g-msgs'), /blocked/);
 await page.click('#erase'); await page.evaluate((i) => document.querySelectorAll('#bp .cell')[i].click(), (5 - 2) * 9 + 3); await page.click('#erase');
 assert.equal((await cellAt(-1, 2)).type, null);
@@ -80,10 +80,10 @@ assert.equal(await page.evaluate(() => window.__ironyard.replay.vehicles[0].desi
 await tab('lab');
 await page.select('#lab-bot', 'my-test-car');
 const src = await page.$eval('#lab-src', (n) => n.value);
-assert.match(src, /车库生成/); assert.match(src, /"type": "cannon", "x": 0, "y": 1, "z": 1/); assert.match(src, /"accent": "lime"/);
+assert.match(src, /Made in the garage/); assert.match(src, /"type": "cannon", "x": 0, "y": 1, "z": 1/); assert.match(src, /"accent": "lime"/);
 await page.$eval('#lab-src', (n) => { n.value = 'const design = {parts: []};\nfunction tick( {'; });
 await page.click('#lab-check'); await sleep(800);
-assert.match(await text('#lab-msg'), /第 \d+ 行附近|Unexpected|SyntaxError/);
+assert.match(await text('#lab-msg'), /near line \d+|Unexpected|SyntaxError/);
 await page.$eval('#lab-src', (n) => { n.value = 'const design = {parts: [{type:"wheel",x:0,y:0}]};\nfunction tick() { return {}; }'; });
 await page.click('#lab-check'); await sleep(1200);
 assert.match(await text('#lab-msg'), /at least 1 core/);
@@ -93,7 +93,7 @@ await page.$eval('#lab-src', (n, s) => { n.value = s.replace('function tick(stat
 await page.$eval('#lab-name', (n) => { n.value = 'hang'; });
 const t0 = Date.now();
 await page.click('#lab-save');
-await page.waitForFunction(() => /死循环/.test(document.getElementById('lab-msg').textContent), { timeout: 40000 });
+await page.waitForFunction(() => /infinite loop/.test(document.getElementById('lab-msg').textContent), { timeout: 40000 });
 console.log(`watchdog fired after ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 assert.equal(await page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('ironyard.v2')).custom).includes('hang')), false);
 
@@ -102,20 +102,20 @@ await tab('arena');
 await page.click('#reseed'); await ready();
 const up = await page.$('#replay-file');
 await up.uploadFile(replayFile);
-await page.waitForFunction(() => /已载入回放/.test(document.getElementById('setup-msg').textContent), { timeout: 10000 });
+await page.waitForFunction(() => /Replay loaded/.test(document.getElementById('setup-msg').textContent), { timeout: 10000 });
 assert.match(await text('#roster'), /Hornet/); assert.match(await text('#roster'), /Wasp/);
 
 // 5. playback controls: jump to the end -> banner + report
 await page.evaluate(() => { const s = document.getElementById('scrub'); s.value = s.max; s.dispatchEvent(new Event('input')); });
 await page.waitForFunction(() => !document.getElementById('banner').hidden, { timeout: 5000 });
-assert.match(await text('#banner'), /胜|平局/);
-assert.match(await text('#report'), /命中/);
+assert.match(await text('#banner'), /wins|Draw/);
+assert.match(await text('#report'), /Accuracy/);
 
 // 6. league with the custom bot, then jump from the head-to-head grid into a match
 await tab('league');
 await page.evaluate(() => { for (const b of document.querySelectorAll('#lg-bots .chip')) if (!/Rookie|Test Car|Hornet/.test(b.textContent) && b.getAttribute('aria-pressed') === 'true') b.click(); });
 await page.evaluate(() => { for (const b of document.querySelectorAll('#lg-bots .chip')) if (/Test Car/.test(b.textContent) && b.getAttribute('aria-pressed') !== 'true') b.click(); });
-assert.match(await text('#lg-count'), /^18 场/);
+assert.match(await text('#lg-count'), /^18 matches/);
 await page.click('#lg-run');
 await page.waitForFunction(() => !document.getElementById('lg-result').hidden, { timeout: 60000 });
 assert.equal(await page.$$eval('#lg-table tbody tr', (r) => r.length), 3);
@@ -127,7 +127,7 @@ assert.equal(await page.evaluate(() => location.hash), '#arena');
 await page.goto('file://' + path.join(root, 'dist/index.html') + '#rules');
 await sleep(1500);
 assert.equal(await page.evaluate(() => document.getElementById('tab-rules').hidden), false);
-assert.match(await text('#rules'), /零件表/);
+assert.match(await text('#rules'), /Parts list/);
 assert.ok(await page.evaluate(() => 'my-test-car' in JSON.parse(localStorage.getItem('ironyard.v2')).custom));
 const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 assert.ok(overflow <= 1, 'no sideways page scroll on a phone (' + overflow + 'px)');

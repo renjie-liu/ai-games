@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ironyard 铁场</title>
+<title>Ironyard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -44,7 +44,6 @@ h1, h2, h3 { text-wrap: balance; margin: 0; }
 .brand { display: flex; align-items: baseline; gap: 10px; }
 .brand-mark { font: 800 34px/0.9 var(--display); letter-spacing: .04em; }
 .brand-mark i { font-style: normal; color: var(--hazard); }
-.brand-cn { font: 600 15px var(--body); color: var(--dim); letter-spacing: .3em; }
 .brand-tag { margin: 0; color: var(--dim); font-size: 13px; flex: 1 1 220px; }
 .tabs { display: flex; gap: 2px; width: 100%; overflow-x: auto; border-bottom: 1px solid var(--line); scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
@@ -161,7 +160,7 @@ pre { background: #08111b; border: 1px solid var(--line); border-radius: var(--r
 .titleblock b { font: 800 22px/1.1 var(--display); letter-spacing: .02em; }
 .budget { height: 6px; background: var(--ink); border: 1px solid var(--line); margin-top: 8px; }
 .budget i { display: block; height: 100%; background: var(--hazard); }
-.palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 6px; }
+.palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(152px, 1fr)); gap: 6px; }
 .pbtn { display: grid; grid-template-columns: 46px 1fr; gap: 0 8px; align-items: center; text-align: left; background: var(--paper-2); border: 1px solid var(--line); border-radius: var(--r); padding: 4px 8px 4px 4px; min-height: 54px; }
 .pbtn[aria-pressed="true"] { border-color: var(--hazard); box-shadow: 0 0 0 1px var(--hazard) inset; }
 .pbtn .g { grid-row: span 2; width: 46px; height: 46px; display: grid; place-items: center; font-weight: 600; border-radius: 2px; overflow: hidden; background: #2b4259; }
@@ -215,15 +214,15 @@ details > summary { cursor: pointer; padding: 8px 12px; font-weight: 500; }
 </head>
 <body>
 <header class="masthead">
-  <div class="brand"><span class="brand-mark">IRON<i>YARD</i></span><span class="brand-cn">铁场</span></div>
-  <p class="brand-tag">Agent 先用积木拼车，再写策略；比赛离线跑，同样的种子永远同样的结果。</p>
-  <nav class="tabs" role="tablist" aria-label="页面">
-    <button class="tab" role="tab" data-tab="arena">对战<small>ARENA</small></button>
-    <button class="tab" role="tab" data-tab="garage">车库<small>GARAGE</small></button>
-    <button class="tab" role="tab" data-tab="lab">代码<small>BOT LAB</small></button>
-    <button class="tab" role="tab" data-tab="league">联赛<small>LEAGUE</small></button>
-    <button class="tab" role="tab" data-tab="rules">规则<small>RULES</small></button>
-    <button class="tab" role="tab" data-tab="mcp">接入 Agent<small>MCP</small></button>
+  <div class="brand"><span class="brand-mark">IRON<i>YARD</i></span></div>
+  <p class="brand-tag">Agents build a car out of bricks, then write its strategy; matches run offline, and the same seed always gives the same result.</p>
+  <nav class="tabs" role="tablist" aria-label="Pages">
+    <button class="tab" role="tab" data-tab="arena">Arena</button>
+    <button class="tab" role="tab" data-tab="garage">Garage</button>
+    <button class="tab" role="tab" data-tab="lab">Bot Lab</button>
+    <button class="tab" role="tab" data-tab="league">League</button>
+    <button class="tab" role="tab" data-tab="rules">Rules</button>
+    <button class="tab" role="tab" data-tab="mcp">Connect Agent<small>MCP</small></button>
   </nav>
 </header>
 <main>
@@ -240,45 +239,45 @@ details > summary { cursor: pointer; padding: 8px 12px; font-weight: 500; }
               <div class="feed" id="feed"></div>
             </div>
             <div class="banner" id="banner" hidden></div>
-            <div class="busy" id="busy" hidden>正在离线推演整场比赛…</div>
+            <div class="busy" id="busy" hidden>Simulating the whole match offline…</div>
           </div>
           <div class="transport">
-            <button class="btn" id="play" aria-label="播放或暂停">❚❚</button>
-            <select id="speed" aria-label="播放速度"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
-            <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="时间轴">
+            <button class="btn" id="play" aria-label="Play or pause">❚❚</button>
+            <select id="speed" aria-label="Playback speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
+            <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Timeline">
             <span class="time num" id="time">0.0 / 0.0s</span>
-            <div class="seg" role="group" aria-label="视图"><button id="view3d" aria-pressed="true">3D</button><button id="view2d" aria-pressed="false">2D</button></div>
-            <select id="camera" aria-label="镜头"></select>
+            <div class="seg" role="group" aria-label="View"><button id="view3d" aria-pressed="true">3D</button><button id="view2d" aria-pressed="false">2D</button></div>
+            <select id="camera" aria-label="Camera"></select>
           </div>
         </div>
         <div class="sheet" id="report-sheet">
-          <header><h2>战报</h2><span class="code">Battle report</span></header>
-          <details id="report-details"><summary>展开（会剧透结果）</summary><div class="pad scroll-x" id="report"></div></details>
+          <header><h2>Battle report</h2></header>
+          <details id="report-details"><summary>Expand (spoils the result)</summary><div class="pad scroll-x" id="report"></div></details>
         </div>
       </div>
       <div class="stack">
         <div id="roster" class="stack"></div>
         <form class="sheet" id="setup">
-          <header><h2>对战单</h2><span class="code">Match order</span></header>
+          <header><h2>Match setup</h2></header>
           <div class="pad stack">
             <div class="row">
-              <div class="seg" id="mode-seg" role="group" aria-label="模式"></div>
-              <label class="f grow">地图<select id="map"></select></label>
+              <div class="seg" id="mode-seg" role="group" aria-label="Mode"></div>
+              <label class="f grow">Map<select id="map"></select></label>
             </div>
-            <pre class="minimap" id="minimap" aria-label="地图预览"></pre>
+            <pre class="minimap" id="minimap" aria-label="Map preview"></pre>
             <p class="note" id="map-desc"></p>
             <div class="row">
-              <label class="f" style="width:92px">种子<input type="number" id="seed" min="0" max="999999" value="1"></label>
-              <label class="f" style="width:120px">预算<select id="budget"><option value="800">轻型 800</option><option value="1200" selected>标准 1200</option><option value="1800">重型 1800</option></select></label>
-              <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" id="swap"> 交换出生点</label>
+              <label class="f" style="width:92px">Seed<input type="number" id="seed" min="0" max="999999" value="1"></label>
+              <label class="f" style="width:140px">Budget<select id="budget"><option value="800">Light 800</option><option value="1200" selected>Standard 1200</option><option value="1800">Heavy 1800</option></select></label>
+              <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" id="swap"> Swap spawns</label>
             </div>
-            <div><div class="cat-h t0">橙队 TEAM 0</div><div class="slots" id="slots0"></div></div>
-            <div><div class="cat-h t1">蓝队 TEAM 1</div><div class="slots" id="slots1"></div></div>
+            <div><div class="cat-h t0">Orange · team 0</div><div class="slots" id="slots0"></div></div>
+            <div><div class="cat-h t1">Blue · team 1</div><div class="slots" id="slots1"></div></div>
             <div class="row">
-              <button class="btn primary grow" type="submit" id="run">开始对战</button>
-              <button class="btn" type="button" id="reseed" title="换一个种子再打">换种子</button>
+              <button class="btn primary grow" type="submit" id="run">Start match</button>
+              <button class="btn" type="button" id="reseed" title="Run again with the next seed">Next seed</button>
             </div>
-            <div class="row"><label class="btn ghost" style="font-size:13px">导入回放 JSON<input type="file" id="replay-file" accept=".json,application/json" hidden></label><span class="note">MCP 的 run_match 加 save_replay 存下来的文件</span></div>
+            <div class="row"><label class="btn ghost" style="font-size:13px">Import replay JSON<input type="file" id="replay-file" accept=".json,application/json" hidden></label><span class="note">A file saved by the MCP tool run_match with save_replay</span></div>
             <div id="setup-msg"></div>
           </div>
         </form>
@@ -289,21 +288,21 @@ details > summary { cursor: pointer; padding: 8px 12px; font-weight: 500; }
   <section id="tab-garage" role="tabpanel" hidden>
     <div class="garage-grid">
       <div class="sheet">
-        <header><h2>蓝图</h2><span class="code">9×11 studs · 0.4 m · 2 layers</span></header>
-        <div class="preview" id="g-preview"><span class="tag">拖动旋转 · 实时预览</span><span class="wclass" id="g-class"></span></div>
+        <header><h2>Blueprint</h2><span class="code">9×11 studs · 0.4 m · 2 layers</span></header>
+        <div class="preview" id="g-preview"><span class="tag">Drag to rotate · live preview</span><span class="wclass" id="g-class"></span></div>
         <div class="bp-wrap">
           <div class="bp-head">
-            <div class="seg" id="layer-seg" role="group" aria-label="图层"></div>
-            <div class="row" style="gap:6px"><button class="btn" type="button" id="g-mirror" title="把左半边镜像到右半边">镜像 左→右</button><button class="btn ghost" type="button" id="g-clear">清空</button></div>
+            <div class="seg" id="layer-seg" role="group" aria-label="Layer"></div>
+            <div class="row" style="gap:6px"><button class="btn" type="button" id="g-mirror" title="Mirror the left half onto the right half">Mirror L→R</button><button class="btn ghost" type="button" id="g-clear">Clear</button></div>
           </div>
-          <div class="bp-front">▲ 车头 FRONT</div>
-          <div class="bp" id="bp" role="grid" aria-label="蓝图网格"></div>
+          <div class="bp-front">▲ FRONT</div>
+          <div class="bp" id="bp" role="grid" aria-label="Blueprint grid"></div>
           <p class="note" id="g-hint" style="margin-top:6px"></p>
           <div class="titleblock">
-            <div><small>造价 cost</small><b class="num" id="g-cost">0</b></div>
-            <div><small>质量 kg</small><b class="num" id="g-mass">0</b></div>
-            <div><small>极速 m/s</small><b class="num" id="g-speed">0</b></div>
-            <div><small>火力 dps</small><b class="num" id="g-dps">0</b></div>
+            <div><small>Cost cr</small><b class="num" id="g-cost">0</b></div>
+            <div><small>Mass kg</small><b class="num" id="g-mass">0</b></div>
+            <div><small>Speed m/s</small><b class="num" id="g-speed">0</b></div>
+            <div><small>DPS</small><b class="num" id="g-dps">0</b></div>
           </div>
           <div class="budget" aria-hidden="true"><i id="g-budget-bar"></i></div>
           <p class="note" id="g-budget-text" style="margin-top:6px"></p>
@@ -311,32 +310,32 @@ details > summary { cursor: pointer; padding: 8px 12px; font-weight: 500; }
       </div>
       <div class="stack">
         <div class="sheet">
-          <header><h2>积木盒</h2><span class="code">点零件，再点格子</span></header>
+          <header><h2>Brick box</h2><span class="code">Pick a part, then tap a stud</span></header>
           <div class="pad">
             <div class="row" style="margin-bottom:10px">
-              <div class="seg" id="dir-seg" role="group" aria-label="朝向"></div>
-              <button class="btn" type="button" id="erase" aria-pressed="false">橡皮</button>
-              <label class="f" style="flex:1 1 170px">载入现成车型<select id="g-load"></select></label>
+              <div class="seg" id="dir-seg" role="group" aria-label="Facing"></div>
+              <button class="btn" type="button" id="erase" aria-pressed="false">Eraser</button>
+              <label class="f" style="flex:1 1 170px">Load an existing design<select id="g-load"></select></label>
             </div>
             <div id="palette"></div>
             <p class="note" id="part-info" style="margin-top:10px"></p>
-            <div class="cat-h" style="margin-top:14px">涂装（点缀色）</div>
+            <div class="cat-h" style="margin-top:14px">Paint (accent colour)</div>
             <div class="swatches" id="g-paint"></div>
           </div>
         </div>
         <div class="sheet">
-          <header><h2>性能</h2><span class="code">Derived stats</span></header>
+          <header><h2>Performance</h2><span class="code">Derived stats</span></header>
           <div class="pad stack"><div class="kv" id="g-stats"></div><div id="g-msgs" class="stack" style="gap:6px"></div></div>
         </div>
         <div class="sheet">
-          <header><h2>装上大脑</h2><span class="code">Controller</span></header>
+          <header><h2>Add a brain</h2><span class="code">Controller</span></header>
           <div class="pad stack">
             <div class="row">
-              <label class="f grow">策略模板<select id="g-ai"></select></label>
-              <label class="f grow">名字<input type="text" id="g-name" maxlength="24" value="我的战车"></label>
+              <label class="f grow">Strategy template<select id="g-ai"></select></label>
+              <label class="f grow">Name<input type="text" id="g-name" maxlength="24" value="Custom Car"></label>
             </div>
             <p class="note" id="g-ai-note"></p>
-            <div class="row"><button class="btn primary" type="button" id="g-save">保存并上场</button><button class="btn" type="button" id="g-tolab">保存后去改代码</button></div>
+            <div class="row"><button class="btn primary" type="button" id="g-save">Save and fight</button><button class="btn" type="button" id="g-tolab">Save and edit the code</button></div>
             <div id="g-save-msg"></div>
           </div>
         </div>
@@ -347,18 +346,18 @@ details > summary { cursor: pointer; padding: 8px 12px; font-weight: 500; }
   <section id="tab-lab" role="tabpanel" hidden>
     <div class="stack">
       <div class="sheet">
-        <header><h2>控制器源码</h2><span class="code">one file = design + tick</span></header>
+        <header><h2>Controller source</h2><span class="code">one file = design + tick</span></header>
         <div class="pad stack">
           <div class="row">
-            <label class="f grow">打开<select id="lab-bot"></select></label>
-            <label class="f grow">保存为<input type="text" id="lab-name" maxlength="24" placeholder="my-bot"></label>
-            <button class="btn" type="button" id="lab-check">校验</button>
-            <button class="btn primary" type="button" id="lab-save">保存</button>
-            <button class="btn ghost" type="button" id="lab-copy">复制源码</button>
-            <button class="btn ghost" type="button" id="lab-delete">删除</button>
+            <label class="f grow">Open<select id="lab-bot"></select></label>
+            <label class="f grow">Save as<input type="text" id="lab-name" maxlength="24" placeholder="my-bot"></label>
+            <button class="btn" type="button" id="lab-check">Check</button>
+            <button class="btn primary" type="button" id="lab-save">Save</button>
+            <button class="btn ghost" type="button" id="lab-copy">Copy source</button>
+            <button class="btn ghost" type="button" id="lab-delete">Delete</button>
           </div>
-          <textarea id="lab-src" rows="26" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="控制器源码"></textarea>
-          <p class="note">内置 bot 是只读样板：改完起个新名字保存。自建 bot 存在这台设备的浏览器里；要长期保留请复制源码。</p>
+          <textarea id="lab-src" rows="26" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Controller source"></textarea>
+          <p class="note">Built-in bots are read-only examples: change one, then save it under a new name. Your own bots are stored in this browser on this device; copy the source if you want to keep it for good.</p>
           <div id="lab-msg" class="stack" style="gap:8px"></div>
         </div>
       </div>
@@ -368,28 +367,28 @@ details > summary { cursor: pointer; padding: 8px 12px; font-weight: 500; }
   <section id="tab-league" role="tabpanel" hidden>
     <div class="stack">
       <div class="sheet">
-        <header><h2>循环赛</h2><span class="code">Round robin · both sides</span></header>
+        <header><h2>Round robin</h2><span class="code">Both spawn sides</span></header>
         <div class="pad stack">
-          <div><div class="cat-h">参赛 bot（每个 bot 填满自己整支队伍）</div><div class="chips" id="lg-bots"></div></div>
+          <div><div class="cat-h">Entrants (each bot fills its whole team)</div><div class="chips" id="lg-bots"></div></div>
           <div class="row">
-            <div class="seg" id="lg-mode" role="group" aria-label="模式"></div>
-            <label class="f" style="width:110px">每张图种子数<select id="lg-seeds"><option>1</option><option>2</option><option>3</option></select></label>
+            <div class="seg" id="lg-mode" role="group" aria-label="Mode"></div>
+            <label class="f" style="width:110px">Seeds per map<select id="lg-seeds"><option>1</option><option>2</option><option>3</option></select></label>
           </div>
-          <div><div class="cat-h">地图</div><div class="chips" id="lg-maps"></div></div>
-          <div class="row"><button class="btn primary" type="button" id="lg-run">开赛</button><span class="note" id="lg-count"></span></div>
+          <div><div class="cat-h">Maps</div><div class="chips" id="lg-maps"></div></div>
+          <div class="row"><button class="btn primary" type="button" id="lg-run">Start</button><span class="note" id="lg-count"></span></div>
           <div class="progress" aria-hidden="true"><i id="lg-bar"></i></div>
           <div id="lg-msg"></div>
         </div>
       </div>
       <div class="sheet" id="lg-result" hidden>
-        <header><h2>积分榜</h2><span class="code" id="lg-meta"></span></header>
-        <div class="pad stack"><div class="scroll-x" id="lg-table"></div><div><div class="cat-h">交手记录（行 对 列：胜-平-负）· 点格子看一场</div><div class="scroll-x" id="lg-h2h"></div></div></div>
+        <header><h2>Standings</h2><span class="code" id="lg-meta"></span></header>
+        <div class="pad stack"><div class="scroll-x" id="lg-table"></div><div><div class="cat-h">Head to head (row vs column: W-D-L) · tap a cell to watch a match</div><div class="scroll-x" id="lg-h2h"></div></div></div>
       </div>
     </div>
   </section>
 
   <section id="tab-rules" role="tabpanel" hidden><div class="stack" id="rules"></div></section>
-  <section id="tab-mcp" role="tabpanel" hidden><div class="sheet"><header><h2>让你的 Agent 接进来</h2><span class="code">Model Context Protocol</span></header><div class="pad prose prose-wide" id="mcp"></div></div></section>
+  <section id="tab-mcp" role="tabpanel" hidden><div class="sheet"><header><h2>Connect your agent</h2><span class="code">Model Context Protocol</span></header><div class="pad prose prose-wide" id="mcp"></div></div></section>
 </main>
 <div class="toast" id="toast" hidden role="status"></div>
 
