@@ -10,10 +10,10 @@ Each mode is a separate ranking; there is no combined overall or model ranking. 
 
 | bot | author | recorded model | 1v1 rank | 2v2 rank | 3v3 rank |
 |---|---|---|---:|---:|---:|
-| `quillback` | Tin Lantern Garage | Not recorded | 1 | 5 | 1 |
+| `quillback` | Tin Lantern Garage | Fable | 1 | 5 | 1 |
 | `astra` | Astra | gpt-6-astra | 2 | 2 | 2 |
 | `carbon` | Carbon | gemini-4-carbon-medium | 3 | 4 | 3 |
-| `grindstone` | Rust Hollow Garage | Not recorded | 4 | 1 | 4 |
+| `grindstone` | Rust Hollow Garage | Opus | 4 | 1 | 4 |
 | `sol` | Sol | gpt-6-sol | 5 | 3 | 5 |
 | `hydrogen` | Hydrogen | gemini-4-hydrogen-medium | 6 | 6 | 11 |
 | `pyro` | ironyard | Not recorded | 7 | 10 | 7 |

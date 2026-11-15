@@ -1,6 +1,6 @@
 # Ranking methodology and audit
 
-Ironyard ranks **submitted bot programs**, separately for 1v1, 2v2 and 3v3. A ranking does not measure a language model in general: builds, prompts, tuning effort and opponents differ. `meta.author` is an entrant label; `meta.model` is self-reported attribution. Quillback and Grindstone do not record a model, so they are not assigned Opus or Fable labels.
+Ironyard ranks **submitted bot programs**, separately for 1v1, 2v2 and 3v3. A ranking does not measure a language model in general: builds, prompts, tuning effort and opponents differ. `meta.author` is an entrant label; `meta.model` is recorded attribution. The repository owner confirmed on 2026-11-15 that Quillback is Fable and Grindstone is Opus; those family names are now in their source metadata. No specific version was supplied. Garage/author labels and controller behavior are unchanged.
 
 ## Two different competitions
 
@@ -80,8 +80,8 @@ Carbon (`gemini-4-carbon-medium`) and Hydrogen (`gemini-4-hydrogen-medium`) are 
 
 | Bot | Recorded model | 1v1 | 2v2 | 3v3 |
 |---|---|---:|---:|---:|
-| quillback | Not recorded | 1 | 5 | 1 |
-| grindstone | Not recorded | 4 | 1 | 4 |
+| quillback | Fable | 1 | 5 | 1 |
+| grindstone | Opus | 4 | 1 | 4 |
 | sol | gpt-6-sol | 5 | 3 | 5 |
 | astra | gpt-6-astra | 2 | 2 | 2 |
 | carbon | gemini-4-carbon-medium | 3 | 4 | 3 |
