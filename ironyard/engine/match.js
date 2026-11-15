@@ -7,6 +7,8 @@ import { makeRng, hashSeed } from './rng.js';
 import { World, WIRE_CAP } from './sim.js';
 import { controllerRealm, makeUtil, makeFollower } from './realm.js';
 import { WRAP_LINES } from './botwrap.js';
+import { compactTelemetry } from './telemetry.js';
+import { insightsFor } from './insights.js';
 
 export const ENGINE_VERSION = '0.5.0';
 
@@ -213,6 +215,7 @@ export function runMatch(o) {
         timeBurning: rnd(s.timeBurning), piecesBurnt: s.piecesBurnt, tilesBroken: s.tilesBroken,
         punches: s.punches, hooks: s.hooks, timeTethered: rnd(s.timeTethered), piecesTorn: s.piecesTorn, kegsThrown: s.kegsThrown,
       },
+      telemetry: world.telemetry(v),   // raw numbers; summarize() gives the rounded form (telemetry.js, compactTelemetry)
       cpu: now && c.calls ? { avgMs: Math.round((c.cpuTotal / c.calls) * 1000) / 1000, maxMs: Math.round(c.cpuMax * 100) / 100 } : null,
       violations: v.violations, cutOff: v.cutOff, errors: c.errors, logs: c.logs,
     };
@@ -237,8 +240,12 @@ export function runMatch(o) {
   };
 }
 
-/** Compact, agent-readable report of a match result (no frames). */
-export function summarize(res, { events = 40 } = {}) {
+/**
+ * Compact, agent-readable report of a match result (no frames). Each vehicle carries its
+ * telemetry in the rounded form and up to six `insights`: the findings an agent should act on
+ * first. `brief` leaves out the design, the timeline and the list of pieces lost.
+ */
+export function summarize(res, { events = 40, brief = false } = {}) {
   const who = (id) => (id >= 0 && res.vehicles[id] ? `${res.vehicles[id].name}#${id}` : 'environment');
   const lines = [];
   const interesting = res.events.filter((e) => ['death', 'pickup', 'use', 'cutoff', 'end'].includes(e.k));
@@ -263,8 +270,10 @@ export function summarize(res, { events = 40 } = {}) {
       id: v.id, team: v.team, slot: v.slot, name: v.name, bot: v.bot, author: v.author,
       alive: v.alive, death: v.alive ? null : { t: v.deathT, cause: v.deathCause, by: who(v.killedBy) },
       hullLeft: v.hpFrac, coreLeft: v.coreFrac,
-      design: { cost: v.designStats.cost, mass: v.designStats.mass, weightClass: v.designStats.weightClass, topSpeed: v.designStats.topSpeed, turnRate: v.designStats.turnRate, dps: v.designStats.dps, weapons: v.designStats.weapons },
+      design: brief ? undefined : { cost: v.designStats.cost, mass: v.designStats.mass, weightClass: v.designStats.weightClass, topSpeed: v.designStats.topSpeed, turnRate: v.designStats.turnRate, dps: v.designStats.dps, weapons: v.designStats.weapons },
+      insights: insightsFor(res, v.id),
       stats: v.stats,
+      telemetry: compactTelemetry(v.telemetry, { brief }),
       firstPartsLost: (partLoss[v.id] || []).slice(0, 8).map((p) => `${p.t}s ${p.type} (${p.cause})`),
       cpu: v.cpu, violations: v.violations, errors: v.errors, logs: v.logs.slice(0, 30),
     })),

@@ -8,6 +8,8 @@ import { PARTS, CELL, GRID_HX, GRID_HY, GRID_W, GRID_L, DIR_ANGLE, ITEMS, RULES,
 import { aggregate, PHYS, cellIndex, centerOf } from './design.js';
 import { TILE_CODE, TILE_NAME, TILE_SOLID, TILE_SHOTS, TILE_HP, tileCodeAt, liveMap } from './maps.js';
 import { makeRng, hashSeed } from './rng.js';
+// telemetry watches and counts; nothing it keeps (v.tel, a weapon piece's tw) is ever read by the simulation
+import { SRC, newTelemetry, noteDamage, noteLoss, noteDetached, sampleTelemetry, timelinePoint, telemetryOf } from './telemetry.js';
 
 const PI = Math.PI, TAU = PI * 2;
 const T = TILE_CODE;
@@ -104,6 +106,8 @@ export class World {
     this.teams = [0, 1].map((t) => this.vehicles.filter((v) => v.team === t));
     this.lastSeen = [0, 1].map((t) => this.teams[1 - t].map((v) => ({ id: v.id, x: r2(v.x), y: r2(v.y), t: 0, alive: true })));
     for (const v of this.vehicles) this.updateCells(v);
+    for (const v of this.vehicles) v.tel = newTelemetry(v, this.vehicles.length);
+    for (const v of this.vehicles) timelinePoint(this, v);
     for (const v of this.vehicles) {
       const c = tileCodeAt(this.map, v.x, v.y);
       if (c === T.wall || c === T.barrier || c === T.pit) throw new Error(`spawn for vehicle ${v.id} is on a ${TILE_NAME[c]} tile`);
@@ -120,13 +124,13 @@ export class World {
       stun: 0, nitro: 0, overdrive: 0, hovering: false, boosting: false, sawing: false, repairing: false,
       item: null, cmd: IDLE, said: undefined, lastHitBy: -1, lastHitT: -99, revealT: -1, mineCd: 0,
       grid: [new Int16Array(GRID_W * GRID_L).fill(-1), new Int16Array(GRID_W * GRID_L).fill(-1)],
-      cols: [], stats: newStats(), violations: 0, cutOff: false, comU: 0, comV: 0, burning: 0, wreckT: 0, rams: 0,
+      cols: [], stats: newStats(), tel: null, violations: 0, cutOff: false, comU: 0, comV: 0, burning: 0, wreckT: 0, rams: 0,
       parts: e.design.parts.map((p, i) => {
         const def = PARTS[p.type];
         const [cx, cy] = centerOf(p), [w, l] = dimsOf(p.type, p.dir);
         return { i, type: p.type, def, x: p.x, y: p.y, z: p.z, dir: p.dir || 'N', hp: def.hp, maxHp: def.hp, alive: true, decor: !!def.decor,
           cells: cellsOf(p), cu: cy * CELL, cv: -cx * CELL, len: (p.dir === 'E' || p.dir === 'W' ? w : l) * CELL,
-          u: 0, v: 0, wx: 0, wy: 0, cd: 0, ang: 0, under: -1, heat: 0, fire: 0, fireBy: -1, burnt: false };
+          u: 0, v: 0, wx: 0, wy: 0, cd: 0, ang: 0, under: -1, heat: 0, fire: 0, fireBy: -1, burnt: false, ti: SRC[p.type], tw: null };
       }),
     };
     v.core = v.parts.find((p) => p.type === 'core');
@@ -215,8 +219,11 @@ export class World {
   }
 
   // ── damage ────────────────────────────────────────────────────────────
-  /** shotAng: travel direction of the shot (radians), used for slope ricochets. */
-  damage(v, p, amount, dtype, src, shotAng, cause) {
+  /**
+   * shotAng: travel direction of the shot (radians), used for slope ricochets.
+   * via: what dealt it, for the telemetry only (telemetry.js, noteDamage): an SRC number, the weapon piece, or a blast.
+   */
+  damage(v, p, amount, dtype, src, shotAng, cause, via) {
     if (!p.alive || !v.alive || !(amount > 0)) return 0;
     const def = p.def;
     if (def.deflect && shotAng !== undefined && (dtype === 'kinetic' || dtype === 'explosive')
@@ -230,6 +237,7 @@ export class World {
     if (!p.decor) {
       v.hpNow -= dealt;
       v.stats.damageTaken += dealt;
+      noteDamage(this, v, p, dealt, dtype, src, shotAng, via);
       if (src && src !== v) {
         if (src.team !== v.team) {   // what a keg or a barrel does to your own side is not to your credit
           src.stats.damageDealt += dealt;
@@ -240,11 +248,11 @@ export class World {
       // decor riding on this piece gets shaken off
       for (const d of v.decor) if (d.alive && d.under === p.i) { d.hp -= amount; if (d.hp <= 0) this.destroy(v, d, src, dtype); }
     }
-    if (p.hp <= 0) this.destroy(v, p, src, cause || dtype);
+    if (p.hp <= 0) this.destroy(v, p, src, cause || dtype, via);
     return dealt;
   }
 
-  destroy(v, p, src, cause) {
+  destroy(v, p, src, cause, via) {
     if (!p.alive) return;
     p.alive = false;
     this.event({ k: 'part', v: v.id, i: p.i, c: cause });
@@ -253,6 +261,7 @@ export class World {
     p.hp = 0;
     for (const [cx, cy] of p.cells) v.grid[p.z][cellIndex(cx, cy)] = -1;
     v.stats.partsLost++;
+    noteLoss(this, v, p, src, cause, via);
     if (src && src.team !== v.team) src.stats.partsDestroyed++;
     if (p.fire > 0) { p.fire = 0; v.burning--; }
     if (p === v.core) { this.kill(v, src, cause); return; }
@@ -272,6 +281,9 @@ export class World {
     v.said = undefined; // the dead say nothing: their last message is not repeated to the team every tick
     this.event({ k: 'death', v: v.id, by: v.killedBy, c: cause, x: r2(v.x), y: r2(v.y) });
   }
+
+  /** What the match has noted about `v` so far (telemetry.js): per-weapon use, damage by source, side and range, losses, a timeline. */
+  telemetry(v) { return telemetryOf(this, v); }
 
   /** Indexes of living pieces touching piece p: beside it on its layer, or stacked on/under it. */
   touching(v, p) {
@@ -295,11 +307,11 @@ export class World {
       let busy = false;
       while (this.pendingBlasts.length) {
         busy = true;
-        const { v, p, src, blast, x, y } = this.pendingBlasts.shift();
-        if (blast) { this.blast(x, y, blast, src); continue; }
+        const { v, p, src, blast, x, y, barrel } = this.pendingBlasts.shift();
+        if (blast) { this.blast(x, y, blast, src, barrel); continue; }
         if (!v.alive) continue;
         this.event({ k: 'boom', x: r2(p.wx), y: r2(p.wy), r: 0.9 });
-        for (const i of this.touching(v, p)) this.damage(v, v.parts[i], p.def.volatile, 'explosive', src);
+        for (const i of this.touching(v, p)) this.damage(v, v.parts[i], p.def.volatile, 'explosive', src, undefined, undefined, SRC.reactor);
       }
       for (const v of this.vehicles) {
         if (!v.dirty || !v.alive) { v.dirty = false; continue; }
@@ -319,6 +331,7 @@ export class World {
           if (q.fire > 0) { q.fire = 0; v.burning--; }
           for (const [cx, cy] of q.cells) v.grid[q.z][cellIndex(cx, cy)] = -1;
           v.stats.partsLost++;
+          noteDetached(this, v, q);
           this.event({ k: 'part', v: v.id, i: q.i, c: 'detached' });
           if (q.def.blast) this.pendingBlasts.push({ x: q.wx, y: q.wy, blast: q.def.blast, src: null });   // a keg that falls off goes off
         }
@@ -351,6 +364,10 @@ export class World {
   explode(x, y, r, dmg, fmin, team, src, maxParts, opts = {}) {
     this.event({ k: 'boom', x: r2(x), y: r2(y), r });
     const heat = opts.heat ?? this.rules.blastHeat;
+    // for the telemetry: whose blast (opts.gun: the weapon piece that fired it, opts.label: an SRC number), where it went off,
+    // and which way the shell was going (opts.ang) when it is the splash of a direct shot
+    const via = { ti: opts.label ?? (opts.gun ? opts.gun.ti : SRC.blast), tw: opts.gun ? opts.gun.tw : null, ox: x, oy: y, shotAng: opts.ang };
+    let struck = false;
     if (this.map.live) this.blastTiles(x, y, r, dmg, src);
     for (const b of this.bombs) if (b.fuse > 0.06 && Math.hypot(b.x - x, b.y - y) < r) b.fuse = 0.06;   // a blast sets off a keg lying in it, one tick later
     for (const v of this.vehicles) {
@@ -387,15 +404,16 @@ export class World {
       for (let k = 0; k < hit.length && k < maxParts; k++) {
         const [p, d] = hit[k];
         const f = scale * (1 - (1 - fmin) * (d / r));
-        this.damage(v, p, dmg * f, 'explosive', src);
+        if (this.damage(v, p, dmg * f, 'explosive', src, undefined, undefined, via) > 0 && src && src.team !== v.team) struck = true;
         if (p.alive) this.warm(v, p, heat * f, src ? src.id : -1);
       }
     }
+    if (struck && opts.count && via.tw) via.tw.hits++;   // a mortar shell that hurt somebody was a hit
   }
 
   /** A keg or a barrel going off: spares nobody, throws things, sets them alight. */
-  blast(x, y, b, src) {
-    this.explode(x, y, b.r, b.dmg, 0.35, -1, src, b.max, { heat: 3 });   // enough to light anything that burns, out to the edge
+  blast(x, y, b, src, barrel) {
+    this.explode(x, y, b.r, b.dmg, 0.35, -1, src, b.max, { heat: 3, label: barrel ? SRC.barrel : SRC.keg });   // enough to light anything that burns, out to the edge
   }
 
   // ── fire ──────────────────────────────────────────────────────────────
@@ -435,7 +453,7 @@ export class World {
         any = true;
         const by = p.fireBy >= 0 ? this.vehicles[p.fireBy] : null;
         for (const i of this.touching(v, p)) this.warm(v, v.parts[i], R.fireSpread * dt, p.fireBy);
-        this.damage(v, p, R.fireDps * dt, 'fire', by);
+        this.damage(v, p, R.fireDps * dt, 'fire', by, undefined, undefined, SRC.fire);
         if (!p.alive) continue;
         p.fire -= dt;
         if (p.fire <= 0) { p.fire = 0; p.heat = 0; v.burning--; this.event({ k: 'out', v: v.id, i: p.i }); }
@@ -517,7 +535,7 @@ export class World {
           for (const p of v.parts) if (p.alive && !p.decor && (p.wx - b.x) ** 2 + (p.wy - b.y) ** 2 < reach) { b.fuse = 0; break touch; }
         }
       }
-      if (b.fuse <= 0) this.pendingBlasts.push({ x: b.x, y: b.y, blast: b.blast, src: b.owner >= 0 ? this.vehicles[b.owner] : null });
+      if (b.fuse <= 0) this.pendingBlasts.push({ x: b.x, y: b.y, blast: b.blast, src: b.owner >= 0 ? this.vehicles[b.owner] : null, barrel: !!b.barrel });
       else keep.push(b);
     }
     this.bombs = keep;
@@ -559,7 +577,7 @@ export class World {
         }
         // a cable under load works the piece it is hooked into loose: held long enough, the piece comes away
         if (rope.tear) {
-          this.damage(b, pb, rope.tear * dt, 'kinetic', a, undefined, 'torn');
+          this.damage(b, pb, rope.tear * dt, 'kinetic', a, undefined, 'torn', pa);
           if (!pb.alive) a.stats.piecesTorn++;
         }
       }
@@ -701,6 +719,7 @@ export class World {
       }
     }
 
+    sampleTelemetry(this);
     this.checkEnd();
   }
 
@@ -846,7 +865,7 @@ export class World {
       const k = hovering ? 0.25 : 1, d = R.lavaDps * dt * k;
       for (const p of v.parts) {
         if (!p.alive || p.decor) continue;
-        this.damage(v, p, d, 'burn', null);
+        this.damage(v, p, d, 'burn', null, undefined, undefined, SRC.lava);
         if (p.alive && p.z === 0) this.warm(v, p, R.lavaHeat * dt * k, -1);   // and it sets the underside alight
       }
     } else if (tile === T.pad && sp < 2) {
@@ -869,7 +888,7 @@ export class World {
     if (Math.hypot(v.x - z.x, v.y - z.y) > z.r) {
       st.timeOutsideZone += dt;
       const d = R.zoneDps * dt;
-      for (const p of v.parts) if (p.alive && !p.decor) this.damage(v, p, d, 'burn', null);
+      for (const p of v.parts) if (p.alive && !p.decor) this.damage(v, p, d, 'burn', null, undefined, undefined, SRC.zone);
     }
   }
 
@@ -934,11 +953,11 @@ export class World {
   }
 
   /** A collision lands on one piece and buckles the ones around it. */
-  crumple(v, p, dmg, src) {
+  crumple(v, p, dmg, src, via = SRC.ram) {
     const share = this.rules.ramSpread;
     const around = share > 0 ? [...this.touching(v, p)] : [];
-    this.damage(v, p, dmg, 'ram', src);
-    for (const i of around) this.damage(v, v.parts[i], dmg * share, 'ram', src);
+    this.damage(v, p, dmg, 'ram', src, undefined, undefined, via);
+    for (const i of around) this.damage(v, v.parts[i], dmg * share, 'ram', src, undefined, undefined, via);
   }
 
   collideWalls(v) {
@@ -986,7 +1005,7 @@ export class World {
         const hit = (0.5 / k) * vn * vn * this.rules.ramK;
         // a crate or a barrel takes the knock too, and harder through a spike or a plow
         if (-vn > 2) this.damageTile(btx, bty, hit * this.rules.ramTile * (part.def.ramOut || 1), v);
-        if (-vn > 3) this.damage(v, part, hit * 0.5 * (part.def.ramIn || 1), 'ram', null);
+        if (-vn > 3) this.damage(v, part, hit * 0.5 * (part.def.ramIn || 1), 'ram', null, undefined, undefined, SRC.wall);
       }
       v.x += bnx * best; v.y += bny * best;
       this.updateCells(v);
@@ -998,10 +1017,14 @@ export class World {
     const cmd = v.stun > 0 ? IDLE : v.cmd, st = v.stats;
     const od = v.overdrive > 0 ? ITEMS.overdrive.mult : 1;
     let wanted = false, blocked = true;
+    let fired = false, starved = false;   // telemetry: did anything fire or cycle this tick, did a gun that was lined up lack the energy
     for (const w of v.weapons) {
       if (!w.alive) continue;
       const d = w.def;
-      if (w.cd > 0) w.cd -= dt;
+      if (w.cd > 0) {
+        w.cd -= dt;
+        if (w.cd > 0) { w.tw.firingTime += dt; fired = true; }   // telemetry: a gun between two shots is a gun firing
+      }
       const mount = v.th + DIR_ANGLE[w.dir];
       const raw = cmd.aims && cmd.aims[w.i] !== undefined ? cmd.aims[w.i] : cmd.aim;
       let desired = raw;
@@ -1023,41 +1046,41 @@ export class World {
       const mx = w.wx + ca * reach, my = w.wy + sa * reach;
       if (d.weapon === 'flame') {
         const need = d.energyUse * dt;
-        if (v.energy < need) { st.timeEnergyStarved += dt; continue; }
+        if (v.energy < need) { st.timeEnergyStarved += dt; starved = true; continue; }
         v.energy -= need;
         v.revealT = this.t + this.rules.revealTime;
-        st.shots += dt;
-        if (this.flame(v, d, mx, my, a, dt, od)) st.hits += dt;
+        st.shots += dt; w.tw.shots += dt; w.tw.firingTime += dt; fired = true;
+        if (this.flame(v, d, mx, my, a, dt, od, w)) { st.hits += dt; w.tw.hits += dt; }
         this.beams.push([r2(mx), r2(my), r2(mx + ca * d.range), r2(my + sa * d.range), 3, v.team]);
         continue;
       }
       if (d.weapon === 'beam') {
         const need = d.energyUse * dt;
-        if (v.energy < need) { st.timeEnergyStarved += dt; continue; }
+        if (v.energy < need) { st.timeEnergyStarved += dt; starved = true; continue; }
         v.energy -= need;
         v.revealT = this.t + this.rules.revealTime;
         let hitAny = false;
         const end = this.ray(mx, my, a, d.range, v.team,
           (e) => { const pool = e.shield + e.overshield; if (pool <= 0) return false; this.drainShield(e, d.dps * dt * od); return true; },
-          (e, p) => { this.damage(e, p, d.dps * dt * od, d.dtype, v); hitAny = true; return true; },
+          (e, p) => { this.damage(e, p, d.dps * dt * od, d.dtype, v, undefined, undefined, w); hitAny = true; return true; },
           (tx, ty) => this.damageTile(tx, ty, d.dps * dt * od, v));
-        if (hitAny) st.hits += dt;
-        st.shots += dt;
+        if (hitAny) { st.hits += dt; w.tw.hits += dt; }
+        st.shots += dt; w.tw.shots += dt; w.tw.firingTime += dt; fired = true;
         this.beams.push([r2(mx), r2(my), r2(end.x), r2(end.y), 0, v.team]);
         continue;
       }
       if (w.cd > 0) continue;
       if (d.weapon === 'hook' && w.hooked) continue;   // its cable is out
-      if (v.energy < d.energyShot) { st.timeEnergyStarved += dt; continue; }
+      if (v.energy < d.energyShot) { st.timeEnergyStarved += dt; starved = true; continue; }
       v.energy -= d.energyShot;
       v.revealT = this.t + this.rules.revealTime;
       w.cd = d.cooldown;
-      st.shots++;
+      st.shots++; w.tw.shots++; w.tw.firingTime += dt; fired = true;
       if (d.weapon === 'rail') {
         let dmg = d.dmg * od, n = 0, counted = false;
         const end = this.ray(mx, my, a, d.range, v.team,
           (e) => { const pool = e.shield + e.overshield; if (pool <= 0) return false; const used = Math.min(pool, dmg); this.drainShield(e, used); dmg -= used; return dmg <= 0.5; },
-          (e, p) => { this.push(e, p.wx, p.wy, ca * dmg * this.rules.hitPush, sa * dmg * this.rules.hitPush); this.damage(e, p, dmg, d.dtype, v, a); if (!counted) { st.hits++; counted = true; } dmg *= d.pierceFalloff; return ++n >= d.pierce; },
+          (e, p) => { this.push(e, p.wx, p.wy, ca * dmg * this.rules.hitPush, sa * dmg * this.rules.hitPush); this.damage(e, p, dmg, d.dtype, v, a, undefined, w); if (!counted) { st.hits++; w.tw.hits++; counted = true; } dmg *= d.pierceFalloff; return ++n >= d.pierce; },
           (tx, ty) => this.damageTile(tx, ty, dmg, v));
         this.event({ k: 'rail', x1: r2(mx), y1: r2(my), x2: r2(end.x), y2: r2(end.y), team: v.team });
         this.kick(v, d, ca, sa);
@@ -1071,7 +1094,7 @@ export class World {
         const want = clamp(dist, d.minRange, d.range);
         tx = w.wx + ((tx - w.wx) / dist) * want; ty = w.wy + ((ty - w.wy) / dist) * want; dist = want;
         this.projectiles.push({ id: this.nextId++, k: 'lob', x: mx, y: my, x0: mx, y0: my, tx, ty, t: 0, T: dist / d.projSpeed, h: 0, peak: 1.6 + dist * 0.2,
-          vx: ca, vy: sa, team: v.team, owner: v.id, dmg: d.dmg * od, splash: d.splash });
+          vx: ca, vy: sa, team: v.team, owner: v.id, dmg: d.dmg * od, splash: d.splash, from: w.i });
         this.kick(v, d, ca, sa);
         continue;
       }
@@ -1099,6 +1122,7 @@ export class World {
       this.kick(v, d, ca, sa);
     }
     if (wanted && blocked) st.timeFireOutOfArc += dt;
+    v.tel.fire = (wanted ? 1 : 0) | (blocked ? 2 : 0) | (fired ? 4 : 0) | (starved ? 8 : 0);   // read by sampleTelemetry
 
     // saws
     v.sawing = false;
@@ -1119,7 +1143,8 @@ export class World {
         }
         if (tc) {
           v.energy -= need; v.sawing = true;
-          this.damage(tv, tv.parts[tc.bot >= 0 ? tc.bot : tc.top], s.def.dps * dt * od, 'melee', v);
+          s.tw.firingTime += dt; v.tel.fire |= 4;
+          this.damage(tv, tv.parts[tc.bot >= 0 ? tc.bot : tc.top], s.def.dps * dt * od, 'melee', v, undefined, undefined, s);
         }
       }
     }
@@ -1127,7 +1152,7 @@ export class World {
     // pistons: punch what is right in front of them
     for (const s of v.pistons) {
       if (!s.alive) continue;
-      if (s.cd > 0) { s.cd -= dt; continue; }
+      if (s.cd > 0) { s.cd -= dt; v.tel.fire |= 4; continue; }
       const P = s.def.punch;
       if (!cmd.melee || v.energy < P.energy) continue;
       const a = v.th + DIR_ANGLE[s.dir], ca = Math.cos(a), sa = Math.sin(a);
@@ -1147,13 +1172,15 @@ export class World {
       const tile = !tc && !bomb && this.map.live && ftx >= 0 && fty >= 0 && ftx < this.map.w && fty < this.map.h && this.map.tileHp[fty * this.map.w + ftx] > 0;
       if (!tc && !bomb && !tile) continue;
       v.energy -= P.energy; s.cd = P.cooldown; st.punches++;
+      s.tw.shots++; v.tel.fire |= 4;
       this.event({ k: 'punch', x: r2(tx), y: r2(ty), a: r2(a) });
       if (tc) {
+        s.tw.hits++;
         const j = P.impulse * (v.nitro > 0 ? ITEMS.nitro.mult : 1);
         this.push(tv, tc.wx, tc.wy, ca * j, sa * j);
         this.push(v, s.wx, s.wy, -ca * j, -sa * j);   // and the same back
         tv.lastHitBy = v.id; tv.lastHitT = this.t;
-        this.crumple(tv, tv.parts[tc.bot >= 0 ? tc.bot : tc.top], P.dmg * od, v);
+        this.crumple(tv, tv.parts[tc.bot >= 0 ? tc.bot : tc.top], P.dmg * od, v, s);
       } else if (bomb) { bomb.vx = v.vx + ca * 11; bomb.vy = v.vy + sa * 11; bomb.owner = v.id; bomb.team = v.team; }   // it is the batter's keg now: it will go off on the car it came from
       else this.damageTile(ftx, fty, P.dmg * 4 * od, v);
     }
@@ -1164,7 +1191,7 @@ export class World {
    * and singed, top piece of each stud column; crates and barrels in it take the heat as damage.
    * Returns whether it reached anything.
    */
-  flame(v, d, mx, my, a, dt, od) {
+  flame(v, d, mx, my, a, dt, od, gun) {
     const ca = Math.cos(a), sa = Math.sin(a), cosCone = Math.cos(d.cone);
     let reached = false;
     for (const e of this.teams[1 - v.team]) {
@@ -1179,7 +1206,7 @@ export class World {
         if (!p.alive) continue;
         reached = true;
         const near = 1 - 0.5 * (dist / d.range);   // hotter up close
-        this.damage(e, p, d.dps * near * dt * od, d.dtype, v);
+        this.damage(e, p, d.dps * near * dt * od, d.dtype, v, undefined, undefined, gun);
         if (p.alive) this.warm(e, p, d.heat * near * dt, v.id);
       }
     }
@@ -1252,7 +1279,7 @@ export class World {
         p.t += dt;
         const s = Math.min(1, p.t / p.T);
         p.x = p.x0 + (p.tx - p.x0) * s; p.y = p.y0 + (p.ty - p.y0) * s; p.h = 4 * p.peak * s * (1 - s);
-        if (s >= 1) this.explode(p.tx, p.ty, p.splash.r, p.dmg, 0.35, p.team, this.vehicles[p.owner], p.splash.max || 6, { shieldable: true });
+        if (s >= 1) this.explode(p.tx, p.ty, p.splash.r, p.dmg, 0.35, p.team, this.vehicles[p.owner], p.splash.max || 6, { shieldable: true, gun: this.vehicles[p.owner].parts[p.from], count: true });
         else keep.push(p);
         continue;
       }
@@ -1274,7 +1301,7 @@ export class World {
         const tc = tileCodeAt(map, p.x, p.y);
         if (TILE_SHOTS[tc]) {
           if (TILE_HP[tc]) this.damageTile(Math.floor(p.x / TILE), Math.floor(p.y / TILE), p.dmg, this.vehicles[p.owner]);
-          if (p.splash) this.explode(p.x - sx, p.y - sy, p.splash.r, p.dmg * p.splash.f, 0.4, p.team, this.vehicles[p.owner], 4);
+          if (p.splash) this.explode(p.x - sx, p.y - sy, p.splash.r, p.dmg * p.splash.f, 0.4, p.team, this.vehicles[p.owner], 4, { gun: this.vehicles[p.owner].parts[p.from], ang: Math.atan2(p.vy, p.vx) });
           dead = true; break;
         }
         for (const e of enemiesOf[1 - p.team]) {
@@ -1290,8 +1317,9 @@ export class World {
           }
           const part = this.partAt(e, p.x, p.y);
           if (!part) continue;
-          const src = this.vehicles[p.owner];
+          const src = this.vehicles[p.owner], gun = src.parts[p.from];
           src.stats.hits++;
+          if (gun && gun.tw) gun.tw.hits++;
           if (p.k === 'hook') {   // it bites: the two are tied together
             const w = src.parts[p.from];
             if (src.alive && w.alive && !w.hooked) {
@@ -1302,8 +1330,8 @@ export class World {
             }
           }
           this.push(e, p.x, p.y, (p.vx / p.speed) * p.dmg * this.rules.hitPush, (p.vy / p.speed) * p.dmg * this.rules.hitPush);
-          this.damage(e, part, p.dmg, p.dtype, src, Math.atan2(p.vy, p.vx));
-          if (p.splash) this.explode(p.x, p.y, p.splash.r, p.dmg * p.splash.f, 0.4, p.team, src, p.splash.max || 5, { skip: part });
+          this.damage(e, part, p.dmg, p.dtype, src, Math.atan2(p.vy, p.vx), undefined, gun);
+          if (p.splash) this.explode(p.x, p.y, p.splash.r, p.dmg * p.splash.f, 0.4, p.team, src, p.splash.max || 5, { skip: part, gun, ang: Math.atan2(p.vy, p.vx) });
           dead = true; break;
         }
       }
@@ -1327,7 +1355,7 @@ export class World {
       }
       if (trig) {
         this.event({ k: 'mineboom', id: m.id });
-        this.explode(m.x, m.y, M.radius, m.dmg, 0.4, m.team, this.vehicles[m.owner], 6, { ground: true });
+        this.explode(m.x, m.y, M.radius, m.dmg, 0.4, m.team, this.vehicles[m.owner], 6, { ground: true, label: SRC.mine });
       } else keep.push(m);
     }
     this.mines = keep;

@@ -20,7 +20,7 @@ export class MatchPool {
     return w;
   }
 
-  /** spec.teams = [[{id, source}], ...]; spec.want = 'full' | 'summary' | 'score' */
+  /** spec.teams = [[{id, source}], ...]; spec.want = 'full' | 'summary' | 'digest' (telemetry and insights, no timeline or logs) | 'score' */
   run(spec, { timeoutMs = this.timeoutMs } = {}) {
     return new Promise((resolve, reject) => {
       this.queue.push({ spec, timeoutMs, resolve, reject });

@@ -56,7 +56,7 @@ async function exercise(client, label) {
   const info = client.getServerVersion();
   assert.equal(info.name, 'ironyard');
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((t) => t.name).sort(), ['evaluate_bot', 'get_bot', 'get_replay', 'get_rules', 'leaderboard', 'list_bots', 'list_maps', 'list_parts', 'list_replays', 'run_match', 'run_tournament', 'submit_bot', 'validate_design']);
+  assert.deepEqual(tools.map((t) => t.name).sort(), ['evaluate_bot', 'get_bot', 'get_replay', 'get_rules', 'leaderboard', 'list_bots', 'list_maps', 'list_parts', 'list_replays', 'run_match', 'run_tournament', 'scout_bot', 'submit_bot', 'validate_design']);
 
   const rules = text(await client.callTool({ name: 'get_rules', arguments: {} }));
   assert.match(rules, /controller contract/); assert.match(rules, /railgun/);
@@ -81,6 +81,12 @@ async function exercise(client, label) {
   const good = JSON.parse(text(await client.callTool({ name: 'validate_design', arguments: { blueprint: { deck: DECK, chassis: CHASSIS, accent: 'red' } } })));
   assert.equal(good.ok, true, good.errors.join('; ')); assert.ok(good.stats.cost <= 1200 && good.stats.topSpeed > 3); assert.equal(good.stats.weapons.cannon, 3);
   assert.match(good.picture, /DECK/); assert.match(good.picture, /CHASSIS/);
+  // …and, being legal, an analysis worked out from the hit rules: ahead of the core stand a slope, a plate, a cannon, a plate and a reactor
+  assert.equal(bad.analysis, undefined);
+  const an = good.analysis;
+  assert.deepEqual(an.coreProtection.front, { hp: 480, hpVsBullet: 1080, hpVsShell: 690, pieces: 5, first: 'slope' });
+  assert.equal(an.coreProtection.rear.pieces, 2); assert.equal(an.weapons.length, 3); assert.deepEqual(an.blindArcsDeg, [[20, 340]]);
+  assert.ok(an.dpsByRange[14] > 60 && an.dpsByRangeRear[14] === 0 && an.energy.capacity === good.stats.energyCap && an.insights.length >= 1 && an.insights.length <= 6);
 
   // broken source is rejected and nothing is saved
   const broken = await client.callTool({ name: 'submit_bot', arguments: { name: 'broken', source: 'const design = {parts:[]}; function tick(){ return {} }' } });
@@ -104,6 +110,18 @@ async function exercise(client, label) {
   const m1 = JSON.parse(text(await client.callTool({ name: 'run_match', arguments: { team_a: [name], team_b: ['rookie'], map: 'canyon', seed: 5, save_replay: true } })));
   const m2 = JSON.parse(text(await client.callTool({ name: 'run_match', arguments: { team_a: [name], team_b: ['rookie'], map: 'canyon', seed: 5 } })));
   assert.equal(m1.result, m2.result); assert.equal(m1.duration, m2.duration);
+  // the report says why: insights first, the telemetry behind them — and `brief` drops the bulky parts
+  for (const v of m2.vehicles) {
+    assert.ok(v.insights.length >= 1 && v.insights.length <= 6 && v.insights.every((x) => typeof x === 'string'));
+    assert.ok(v.design && v.telemetry.weapons.length > 0 && v.telemetry.timeline.hull.length === v.telemetry.timeline.dist.length && Array.isArray(v.telemetry.losses));
+    assert.ok(v.telemetry.fire.timeTargetInReach >= v.telemetry.fire.timeFiring && v.telemetry.taken.bySide && v.telemetry.dealt.byRange);
+  }
+  assert.deepEqual(m1.vehicles.map((v) => v.insights), m2.vehicles.map((v) => v.insights), 'with or without a replay');
+  const m3 = JSON.parse(text(await client.callTool({ name: 'run_match', arguments: { team_a: [name], team_b: ['rookie'], map: 'canyon', seed: 5, brief: true } })));
+  for (const v of m3.vehicles) {
+    assert.ok(v.design === undefined && v.telemetry.timeline === undefined && v.telemetry.losses === undefined);
+    assert.deepEqual(v.insights, m2.vehicles[v.id].insights); assert.deepEqual(v.telemetry.weapons, m2.vehicles[v.id].telemetry.weapons);
+  }
   assert.ok(fs.existsSync(m1.replayFile));
   assert.ok(JSON.parse(fs.readFileSync(m1.replayFile, 'utf8')).frames.length > 50);
 
@@ -120,6 +138,15 @@ async function exercise(client, label) {
   assert.equal(tr.rows.length, 5);
   assert.equal(tr.rows[0].length, 1 + tr.vehicles.length);
   assert.ok(tr.rows.every((r) => r[0] >= 2 && r[0] <= 6 && r[1].length === 6 && r[1][3] <= 100));
+  // …and what the match's telemetry says, for everybody or for one vehicle
+  const tel = JSON.parse(text(await client.callTool({ name: 'get_replay', arguments: { file: replayName, view: 'telemetry' } })));
+  assert.equal(tel.vehicles.length, m2.vehicles.length); assert.match(tel.legend, /metres/);
+  assert.deepEqual(tel.vehicles.map((v) => v.telemetry), m2.vehicles.map((v) => v.telemetry));
+  assert.deepEqual(tel.vehicles.map((v) => v.insights), m2.vehicles.map((v) => v.insights));
+  const tel1 = JSON.parse(text(await client.callTool({ name: 'get_replay', arguments: { file: replayName, view: 'telemetry', vehicle: 1 } })));
+  assert.deepEqual(tel1.vehicles.map((v) => v.id), [1]);
+  const telNone = await client.callTool({ name: 'get_replay', arguments: { file: replayName, view: 'telemetry', vehicle: 9 } });
+  assert.equal(telNone.isError, true); assert.match(text(telNone), /no vehicle 9/);
   const noFile = await client.callTool({ name: 'get_replay', arguments: { file: '../../../etc/passwd' } });
   assert.equal(noFile.isError, true);
   const noSuch = await client.callTool({ name: 'get_replay', arguments: { file: 'nothing-here.json' } });
@@ -149,9 +176,27 @@ async function exercise(client, label) {
 
   const ev = JSON.parse(text(await client.callTool({ name: 'evaluate_bot', arguments: { name, maps: ['proving', 'sumo'], opponents: ['rookie', 'bulldozer', 'hornet'] } })));
   assert.equal(ev.matches, 12); assert.equal(ev.wins + ev.draws + ev.losses, 12);
+  // the diagnosis: every match's telemetry added up, apart for wins and for losses
+  const dx = ev.diagnosis;
+  assert.equal(dx.wins.matches, ev.wins); assert.equal(dx.losses.matches, ev.losses); assert.equal(dx.draws ? dx.draws.matches : 0, ev.draws);
+  for (const g of [dx.wins, dx.losses].filter((x) => x.matches > 0)) {
+    assert.ok(g.meanHullLeft >= 0 && g.meanHullLeft <= 1 && g.meanDuration > 0 && g.meanRange > 0 && g.fire.timeTargetInReach >= g.fire.timeFiring);
+    assert.ok(Object.keys(g.takenByWeapon).length <= 5 && Object.values(g.timeInBand).every((x) => x > 0 && x <= 1));
+    assert.ok(Array.isArray(g.commonInsights) && g.commonInsights.every((x) => x.kind !== 'outcome' && x.matches >= 1 && x.matches <= g.matches && typeof x.example === 'string'));
+    assert.ok(Object.values(g.firstPiecesLost).every((n) => n >= 1 && n <= g.matches));
+  }
+  assert.ok(JSON.stringify(dx).length < 8000, `the diagnosis is ${JSON.stringify(dx).length} bytes`);
 
   const tour = JSON.parse(text(await client.callTool({ name: 'run_tournament', arguments: { bots: [name, 'rookie', 'wasp'], maps: ['proving'] } })));
   assert.equal(tour.matches, 6); assert.equal(tour.standings.length, 3);
+
+  // a scouting report: the vehicle, and a record that says how much of it is on file (here no 1v1 has been played)
+  const scout = JSON.parse(text(await client.callTool({ name: 'scout_bot', arguments: { name: 'rookie' } })));
+  assert.equal(scout.bot.name, 'Rookie'); assert.ok(scout.design.weapons.mg >= 2 && scout.design.coreProtection.front.pieces > 0 && scout.design.insights.length > 0);
+  assert.equal(scout.record.queue, '1v1'); assert.ok(scout.record.scheduled >= 16 && scout.record.onFile === 0); assert.match(scout.record.note, /on file/);
+  assert.ok(scout.hints.length >= 2 && scout.hints.length <= 4);
+  const noBot = await client.callTool({ name: 'scout_bot', arguments: { name: 'nope' } });
+  assert.equal(noBot.isError, true); assert.match(text(noBot), /unknown bot "nope"\. Known bots: .*rookie/);
 
   const unknown = await client.callTool({ name: 'run_match', arguments: { team_a: ['nope'], team_b: ['rookie'] } });
   assert.equal(unknown.isError, true); assert.match(text(unknown), /unknown bot/);
@@ -211,7 +256,7 @@ async function exercise(client, label) {
     assert.equal((await ping({ authorization: 'Bearer open-sesame' })).status, 200);
     const client = new Client({ name: 'e2e', version: '1.0.0' });
     await client.connect(new StreamableHTTPClientTransport(new URL(url), { requestInit: { headers: { authorization: 'Bearer open-sesame' } } }));
-    assert.equal((await client.listTools()).tools.length, 13);
+    assert.equal((await client.listTools()).tools.length, 14);
     await client.close();
     console.log('http with a token: ok');
   } finally { child.kill(); }
