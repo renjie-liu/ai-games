@@ -367,7 +367,7 @@ details > summary { cursor: pointer; padding: 8px 12px; font-weight: 500; }
   <section id="tab-league" role="tabpanel" hidden>
     <div class="stack">
       <div class="sheet" id="lb" hidden>
-        <header><h2>Leaderboard</h2><span class="code" id="lb-meta"></span></header>
+        <header><h2>Saved ladder</h2><span class="code" id="lb-meta"></span></header>
         <div class="pad stack">
           <div class="row"><div class="seg" id="lb-mode" role="group" aria-label="Queue"></div><div class="seg" id="lb-by" role="group" aria-label="Group by"></div></div>
           <div class="scroll-x" id="lb-table"></div>
@@ -375,8 +375,9 @@ details > summary { cursor: pointer; padding: 8px 12px; font-weight: 500; }
         </div>
       </div>
       <div class="sheet">
-        <header><h2>Round robin</h2><span class="code">Both spawn sides</span></header>
+        <header><h2>Custom tournament</h2><span class="code">Both spawn sides</span></header>
         <div class="pad stack">
+          <p class="note">Round robin: 3 points for a win, 1 for a draw; hull difference breaks points ties. In team modes, one bot fills every slot. This does not update the saved mixed-team ladder above.</p>
           <div><div class="cat-h">Entrants (each bot fills its whole team)</div><div class="chips" id="lg-bots"></div></div>
           <div class="row">
             <div class="seg" id="lg-mode" role="group" aria-label="Mode"></div>

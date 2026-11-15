@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MAP_IDS } from '../engine/index.js';
-import { authorOf, draft, schedule, rate, byAuthor, entrantsNow, ladderMarkdown, TEAM_ROUNDS } from '../node/ladder.js';
+import { authorOf, modelOf, draft, schedule, rate, byAuthor, entrantsNow, ladderMarkdown, ladderSnapshot, TEAM_ROUNDS } from '../node/ladder.js';
 
 const field = (n, authors) => Array.from({ length: n }, (_, i) => ({ id: `bot${String(i).padStart(2, '0')}`, kind: 'user', author: authors[i % authors.length], hash: 'h' + i }));
 
@@ -42,7 +42,7 @@ test('a season: every pair on every map from both sides in 1v1; mixed teams over
   assert.equal(solo.length, 15 * MAP_IDS.length * 2);
   assert.ok(solo.every((m) => m.mode === '1v1' && m.teams[0].length === 1 && m.teams[1].length === 1));
   const duo = schedule('2v2', es);
-  assert.equal(duo.length, TEAM_ROUNDS * 1 * 2, 'six bots make two teams of two a round (two sit out), played from both sides');
+  assert.equal(duo.length, TEAM_ROUNDS * 1 * 2 * 2, 'six bots make two teams of two; each pairing plays both slots from both sides');
   assert.ok(duo.every((m) => m.teams[0].length === 2 && m.teams[1].length === 2 && MAP_IDS.includes(m.map)));
   assert.ok(new Set(duo.map((m) => m.map)).size === MAP_IDS.length, 'the rounds go round the maps');
   const mates = new Set(duo.map((m) => m.teams[0].join('+')));
@@ -80,4 +80,95 @@ test('ratings: winners rise, team-mates move together, the order results arrive 
 
   const md = ladderMarkdown({ engine: 'x', entrants: 6, queues: { '2v2': { matches: tms.length, onFile: tms.length, standings: tt, authors } } });
   assert.match(md, /## 2v2/); assert.match(md, /\| 1 \| `bot00` \| a \|/);
+});
+
+
+test('every selected bot plays every team slot equally, including minority authors', () => {
+  const es = field(13, ['house']).concat(['astra', 'sol', 'quillback', 'grindstone'].map(id => ({ id, author: id, kind: 'user', hash: id })));
+  for (const size of [2, 3]) {
+    const ms = schedule(`${size}v${size}`, es), slots = Object.fromEntries(es.map(e => [e.id, Array(size).fill(0)]));
+    for (const m of ms) for (const team of m.teams) team.forEach((id, slot) => slots[id][slot]++);
+    for (const [id, counts] of Object.entries(slots)) {
+      assert.ok(counts.every(n => n > 0), `${id} visits each slot`);
+      assert.equal(new Set(counts).size, 1, `${id} has exact slot balance`);
+    }
+    for (let i = 0; i < ms.length; i += 2) {
+      assert.deepEqual(ms[i].teams, ms[i + 1].teams);
+      assert.equal(ms[i].map, ms[i + 1].map);
+      assert.notEqual(ms[i].swap, ms[i + 1].swap);
+    }
+  }
+});
+
+test('the joint fit matches an independently solved symmetric likelihood for solo and correlated teams', () => {
+  for (const size of [1, 2, 3]) {
+    const es = field(size * 2, ['house']);
+    const teams = [es.slice(0, size).map(e => e.id), es.slice(size).map(e => e.id)];
+    const ms = Array.from({ length: 12 }, (_, i) => ({ teams, key: String(i) }));
+    const results = Object.fromEntries(ms.map((m, i) => [m.key, { w: i < 10 ? 0 : 1 }]));
+    // Symmetry gives winners +z and losers -z. Solve the scalar stationarity
+    // equation by bisection, independent of the production matrix optimiser.
+    const sigmoid = z => 1 / (1 + Math.exp(-z));
+    let lo = 0, hi = 10;
+    for (let i = 0; i < 80; i++) { const mid = (lo + hi) / 2;
+      if (12 * sigmoid(2 * size * mid) - 10 + 2 * (sigmoid(mid) - 0.5) > 0) hi = mid; else lo = mid;
+    }
+    const delta = (lo + hi) / 2 * 400 / Math.LN10;
+    const table = rate(es, ms, results);
+    for (const r of table) assert.equal(r.rating, Math.round(1500 + (teams[0].includes(r.id) ? delta : -delta)));
+    assert.deepEqual(rate(es, ms.slice().reverse(), results), table);
+  }
+});
+
+test('unscored failures and zero-game bots do not acquire fictitious draws or ranks', () => {
+  const es = field(3, ['house']);
+  const ms = [{ key: 'bad', teams: [['bot00'], ['bot01']] }, { key: 'good', teams: [['bot00'], ['bot01']] }];
+  const rows = rate(es, ms, { bad: { w: null, void: true, err: 'worker failed' }, good: { w: 0 } });
+  assert.equal(rows.find(r => r.id === 'bot00').played, 1);
+  assert.equal(rows.find(r => r.id === 'bot01').d, 0);
+  assert.equal(rows.find(r => r.id === 'bot02').rank, null);
+  assert.equal(byAuthor(rate(es, ms, {})).length, 0);
+});
+
+test('model attribution and snapshot completion are explicit', () => {
+  assert.equal(modelOf("const meta = {author:'Garage',model:'gpt-6-astra'}"), 'gpt-6-astra');
+  assert.equal(modelOf("const meta = {author:'Claude Fable'}"), null);
+  const standings = rate(field(2, ['garage']), [], {});
+  const board = {engine:'test',method:'test',budget:1200,entrants:2,complete:false,
+    queues:{'1v1':{matches:16,onFile:0,errorCount:1,standings,authors:[]}}};
+  const snap = ladderSnapshot(board);
+  assert.equal(snap.complete, false); assert.equal(snap.queues['1v1'].onFile, 0);
+  assert.equal(snap.queues['1v1'].standings[0][7], null);
+  assert.equal(snap.queues['1v1'].standings[0][8], null);
+  const md = ladderMarkdown(board);
+  assert.match(md, /Provisional/); assert.match(md, /Not recorded/); assert.match(md, /1 contain errors/);
+});
+
+
+test('the ladder reports and retries unattributed and runtime failures instead of counting draws', async () => {
+  const fs = await import('node:fs'); const os = await import('node:os'); const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ironyard-score-check-'));
+  const previous = process.env.IRONYARD_LADDER_DIR;
+  process.env.IRONYARD_LADDER_DIR = dir;
+  try {
+    const { ladder } = await import('../node/ladder.js?result-check-test');
+    let calls = 0;
+    const good = () => ({ winner: 0, teams: [{ hull: 1 }, { hull: 0 }], errors: [] });
+    const first = await ladder({ run: async () => {
+      const n = calls++;
+      if (n === 0) throw new Error('worker unavailable');
+      return { ...good(), errors: n === 1 ? ['bot tick threw'] : [] };
+    } }, { queues: ['1v1'] });
+    const q = first.queues['1v1'];
+    assert.equal(first.complete, false); assert.equal(q.errorCount, 2);
+    assert.equal(q.onFile, q.matches - 2);
+    assert.ok(q.standings.every(r => r.d === 0), 'failures were not draws');
+    let retried = 0;
+    const second = await ladder({ run: async () => { retried++; return good(); } }, { queues: ['1v1'] });
+    assert.equal(retried, 2); assert.equal(second.complete, true);
+    assert.equal(second.errors, undefined);
+  } finally {
+    if (previous === undefined) delete process.env.IRONYARD_LADDER_DIR; else process.env.IRONYARD_LADDER_DIR = previous;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

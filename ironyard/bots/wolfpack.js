@@ -151,7 +151,7 @@ function tick(state, api) {
 
   // ── role behaviour ──
   if (role === 'mender' && mates.length && !detour) {
-    let ward = null, worst = 2;
+    let ward = null, worst = Infinity;
     for (const a of mates) { const s = a.hpFrac + U.dist(self, a) / 60; if (s < worst) { worst = s; ward = a; } }
     cmd.target = ward.hpFrac < 0.98 ? ward.id : null;
     const from = foe ? U.angleTo(foe, ward) : ward.heading + Math.PI;
