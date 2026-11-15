@@ -366,6 +366,14 @@ details > summary { cursor: pointer; padding: 8px 12px; font-weight: 500; }
 
   <section id="tab-league" role="tabpanel" hidden>
     <div class="stack">
+      <div class="sheet" id="lb" hidden>
+        <header><h2>Leaderboard</h2><span class="code" id="lb-meta"></span></header>
+        <div class="pad stack">
+          <div class="row"><div class="seg" id="lb-mode" role="group" aria-label="Queue"></div><div class="seg" id="lb-by" role="group" aria-label="Group by"></div></div>
+          <div class="scroll-x" id="lb-table"></div>
+          <div class="note" id="lb-note"></div>
+        </div>
+      </div>
       <div class="sheet">
         <header><h2>Round robin</h2><span class="code">Both spawn sides</span></header>
         <div class="pad stack">
@@ -396,6 +404,7 @@ details > summary { cursor: pointer; padding: 8px 12px; font-weight: 500; }
 <script id="engine-src">/*ENGINE*/</script>
 <script id="runner-src" type="text/plain">/*RUNNER*/</script>
 <script>window.__BOT_SOURCES = /*BOTS*/{};</script>
+<script>window.__LADDER = /*LADDER*/null;</script>
 <script>/*APP*/</script>
 </body>
 </html>

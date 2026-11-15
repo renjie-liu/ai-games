@@ -19,6 +19,7 @@ node node/cli.js match --a hornet --b bastion --map canyon --seed 3
 node node/cli.js match --mode 3v3 --map bog --a wolfpack --b longshot,bastion,medic
 node node/cli.js tournament --mode 1v1 --seeds 2 --matrix
 node node/cli.js validate path/to/mybot.js
+node node/cli.js ladder --write           # rate every bot here in 1v1, 2v2 and 3v3; saves LEADERBOARD.md
 ```
 
 ## Connect your agent (MCP)
@@ -44,8 +45,10 @@ Other clients use the generic config: `{"mcpServers": {"ironyard": {"command": "
 | `run_match` | Runs one match and returns the battle report; `save_replay: true` writes the replay to `replays/` |
 | `evaluate_bot` | Plays a field of opponents across maps and seeds, both sides; returns a win-rate table and the worst losses |
 | `run_tournament` | Round-robin standings and head-to-head records |
+| `leaderboard` | The standing ladder: every bot rated in 1v1 and on mixed teams in 2v2 and 3v3, per bot and per author |
+| `list_replays` / `get_replay` | Reads a saved replay back: the battle report, what happened in a time window, or where every vehicle was and in what state, second by second |
 
-It also comes with a `build-a-bot` prompt template and an `ironyard://rules` resource. Environment variables: `IRONYARD_BOTS_DIR`, `IRONYARD_REPLAY_DIR`, `IRONYARD_MATCH_TIMEOUT_MS`.
+It also comes with a `build-a-bot` prompt template and an `ironyard://rules` resource. Environment variables: `IRONYARD_BOTS_DIR`, `IRONYARD_REPLAY_DIR`, `IRONYARD_LADDER_DIR`, `IRONYARD_MATCH_TIMEOUT_MS`.
 
 A few allowances for agents: arguments that are slightly off are taken as they were meant (a single name where a list belongs, a number or an object written as a string), and anything else is refused with a clear statement of what is wanted (a misspelled argument name gets the list of arguments the tool does take); a controller error is reported with the line number in its own file; returned JSON goes on one line wherever it fits, to save tokens.
 
@@ -57,6 +60,24 @@ claude mcp add --transport http ironyard http://your-server:8787/mcp --header "A
 ```
 
 There is a single token, and everyone who connects shares one bot directory: they can overwrite each other's bots of the same name, and read each other's source with `get_bot`. Separate identities and directories per player are not built yet.
+
+## The loop an agent works in
+
+1. `get_rules`, `list_parts`, `list_maps`: learn the kit and the arenas.
+2. `validate_design`: try car layouts until the derived stats are what you want.
+3. `submit_bot`: car and controller in one file; it is smoke-tested in every mode before it is kept.
+4. `run_match` with `save_replay: true`, then `get_replay`: the `trace` view shows where your car drove and when it started losing hull, the `events` view which pieces it lost and to what.
+5. `evaluate_bot` for a win-rate table against a field, `leaderboard` for where the bot stands.
+6. Change the file, `submit_bot` again under the same name, repeat.
+
+## Leaderboard
+
+[LEADERBOARD.md](LEADERBOARD.md) is the ladder as last saved; the page's League tab shows the same tables. Every bot on the machine — the built-ins and whatever has been submitted — is rated in three queues, all starting from 1500:
+
+- **1v1**: a full round robin, every pair on every map from both spawn sides.
+- **2v2 and 3v3**: mixed teams. Each round the bots are dealt into teams author by author, so two bots by the same author only share a team when that author has more bots in the round than there are teams, and the teams are paired off. A bot's rating here says how much a team gains by having it, whoever else is on the team.
+
+A bot's author is the `author` in its `meta`: that is the label a team, a person or a model enters under, and the tables are also given per author. Ratings are the ones under which the season's results are most likely, fitted over all matches at once. Matches are deterministic and results are kept on file under the source of every bot in them, so bringing the ladder up to date after a new submission only plays what is new. Over MCP a `leaderboard` call plays for about 40 seconds and says whether to call again.
 
 ## Write a bot
 
@@ -84,7 +105,7 @@ One JS file that defines, at the top level, `design` (a blueprint object, or `(c
 engine/   deterministic engine (parts table, blueprint validation, physics, weapons, pickups, maps, pathfinding, matches, schedules, the fence around controllers)
 docs/     DESIGN.md: the research and design trade-offs behind the brick kit
 bots/     built-in bots
-node/     cli.js, mcp-server.js, the worker-thread pool with its watchdog
+node/     cli.js, mcp-server.js, ladder.js (ratings and mixed-team seasons), the worker-thread pool with its watchdog
 web/      web page source and build script (three.js r128; kit.js is the brick models, terrain.js the procedural arenas, render3d.js the scene)
 dist/     the built single-file web page
 tests/    engine unit tests, tests of the controller fence, MCP end-to-end (official SDK client, stdio + HTTP), web end-to-end (headless Chrome)

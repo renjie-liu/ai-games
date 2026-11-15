@@ -35,7 +35,7 @@ const HELP = `ironyard — agents build the car and write the strategy
   ironyard validate <bot|file.js> [--budget N]
   ironyard ladder [--mode 1v1|2v2|3v3|all] [--write] [--json]
       rates every bot here: 1v1 round robin, and 2v2 / 3v3 on mixed teams. Plays only what is not on file.
-      --write also saves the tables to LEADERBOARD.md
+      --write also saves the tables to LEADERBOARD.md and to web/ladder.json for the page's League tab
   ironyard bots | maps | parts
 `;
 
@@ -169,9 +169,12 @@ async function main() {
       if (board.errors) console.log(`\nmatches that could not be played, e.g.: ${board.errors[0]}`);
       if (args.write) {
         if (mode) throw new Error('--write saves all three queues: run it without --mode');
-        const file = path.join(ROOT, 'LEADERBOARD.md');
+        const file = path.join(ROOT, 'LEADERBOARD.md'), snap = path.join(ROOT, 'web', 'ladder.json');
         fs.writeFileSync(file, ladderMarkdown(board));
-        console.log(`\nwrote ${file}`);
+        // the same tables for the page's League tab: `npm run build` puts them into dist/index.html
+        fs.writeFileSync(snap, JSON.stringify({ engine: board.engine, entrants: board.entrants,
+          queues: Object.fromEntries(Object.entries(board.queues).map(([q, t]) => [q, { matches: t.matches, standings: t.standings.map((r) => [r.id, r.author, r.rating, r.played, r.w, r.d, r.l]), authors: t.authors.map((a) => [a.author, a.bots, a.best, a.bestRating, a.meanRating]) }])) }));
+        console.log(`\nwrote ${file}\nwrote ${snap} (run \`npm run build\` to put it on the page)`);
       }
       return;
     }

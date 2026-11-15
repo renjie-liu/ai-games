@@ -24,12 +24,17 @@ const three = fs.readFileSync(path.join(root, 'node_modules/three/build/three.mi
 const threeVersion = JSON.parse(fs.readFileSync(path.join(root, 'node_modules/three/package.json'), 'utf8')).version;
 if (!threeVersion.startsWith('0.128.')) throw new Error('the page is written against three r128 (matches the cdnjs UMD build)');
 
+// the standings `ironyard ladder --write` last saved, shown on the page's League tab (none: the card stays hidden)
+const ladderFile = path.join(here, 'ladder.json');
+const ladderSnapshot = fs.existsSync(ladderFile) ? JSON.parse(fs.readFileSync(ladderFile, 'utf8')) : null;
+
 const tpl = fs.readFileSync(path.join(here, 'index.template.html'), 'utf8');
 const fill = (threeTag) => tpl
   .replace('<!--THREE-->', () => threeTag)
   .replace('/*ENGINE*/', () => engine)
   .replace('/*RUNNER*/', () => runner)
   .replace('/*BOTS*/{}', () => safe(JSON.stringify(bots)))
+  .replace('/*LADDER*/null', () => safe(JSON.stringify(ladderSnapshot)))
   .replace('/*APP*/', () => app);
 
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });

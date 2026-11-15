@@ -95,7 +95,7 @@ function showTab(name, push = true) {
   if (name === 'garage' || name === 'rules') ensurePreview(); // the rules table borrows the garage's rendered thumbnails
   if (name === 'garage' && preview) { preview.resize(); renderBlueprint(); }
   if (name === 'lab') refreshLabList();
-  if (name === 'league') renderLeagueSetup();
+  if (name === 'league') { renderLadder(); renderLeagueSetup(); }
 }
 
 // ── arena: setup form ───────────────────────────────────────────────────
@@ -556,6 +556,29 @@ function bindLab() {
 
 // ── league ──────────────────────────────────────────────────────────────
 const L = S.league;
+// The ladder as `ironyard ladder --write` last saved it; the build puts it into the page. None: no card.
+const LB = { queue: '1v1', by: 'bot' };
+function renderLadder() {
+  const data = window.__LADDER;
+  if (!data || !data.queues) return;
+  $('lb').hidden = false;
+  if (!data.queues[LB.queue]) LB.queue = Object.keys(data.queues)[0];
+  const q = data.queues[LB.queue], byBot = LB.by === 'bot';
+  seg($('lb-mode'), Object.keys(data.queues).map((m) => [m, m]), () => LB.queue, (m) => { LB.queue = m; renderLadder(); });
+  seg($('lb-by'), [['bot', 'By bot'], ['author', 'By author']], () => LB.by, (b) => { LB.by = b; renderLadder(); });
+  $('lb-meta').textContent = `Engine ${data.engine} · ${data.entrants} bots · ${q.matches} matches`;
+  const head = byBot ? ['#', 'Bot', 'Author', 'Rating', 'Played', 'W', 'D', 'L', 'Win %'] : ['#', 'Author', 'Bots', 'Best bot', 'Best rating', 'Mean rating'];
+  const rows = byBot
+    ? q.standings.map(([id, author, rating, played, w, d, l], i) => [i + 1, botLabel(id), author, rating, played, w, d, l, played ? Math.round((w / played) * 100) : 0])
+    : q.authors.map(([author, bots, best, bestRating, meanRating], i) => [i + 1, author, bots, botLabel(best), bestRating, meanRating]);
+  const num = (i) => (byBot ? i === 0 || i >= 3 : i === 0 || i === 2 || i >= 4);
+  $('lb-table').replaceChildren(el('table', {}, el('thead', {}, el('tr', {}, ...head.map((h, i) => el('th', { class: num(i) ? 'n' : '', text: h })))),
+    el('tbody', {}, ...rows.map((r) => el('tr', {}, ...r.map((c, i) => el('td', { class: num(i) ? 'n' : '', text: String(c) })))))));
+  $('lb-note').textContent = LB.queue === '1v1'
+    ? 'Every pair of bots on every map, from both spawn sides. Ratings start at 1500.'
+    : 'Mixed teams: each round the bots are dealt into teams, keeping bots by the same author apart where the numbers allow. A rating here says how much a team gains by having that bot.';
+}
+
 function renderLeagueSetup() {
   L.bots ||= new Set(Object.keys(builtin));
   L.maps ||= new Set(['proving', 'canyon', 'sumo']);
