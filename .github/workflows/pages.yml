@@ -33,8 +33,8 @@ jobs:
           cp site/index.html site/ironyard.jpg _site/
           # the game is one self-contained file, already built and tested in the repository
           cp ironyard/dist/index.html _site/ironyard/index.html
-          # the names the leaderboard shows for its authors (site/labels.json; empty: as entered)
-          cp site/labels.json _site/ironyard/labels.json
+          # the names the leaderboard shows for its authors, if the repository has a site/labels.json
+          if [ -f site/labels.json ]; then cp site/labels.json _site/ironyard/labels.json; fi
           touch _site/.nojekyll
 
       - uses: actions/configure-pages@v6
