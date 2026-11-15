@@ -211,3 +211,11 @@ test('tournament bookkeeping', () => {
   const table = standings(entrants, [{ a: 'a', b: 'b', winner: 0, hull: [1, 0] }, { a: 'a', b: 'c', winner: -1, hull: [0.5, 0.5] }, { a: 'b', b: 'c', winner: 1, hull: [0, 1] }]);
   assert.deepEqual(table.map((r) => [r.id, r.points]), [['a', 4], ['c', 4], ['b', 0]]);
 });
+
+
+test('Wolfpack mender selects a distant ally instead of dereferencing a null repair target', () => {
+  const r = runMatch({ mode: '3v3', map: 'bog', seed: 38, swap: true,
+    teams: [['angler', 'astra', 'boxer'], ['thumper', 'quillback', 'wolfpack']].map(t => t.map(loadBot)),
+    maxTime: 40, record: false });
+  for (const v of r.vehicles) assert.deepEqual(v.errors, [], `${v.bot}: no controller errors`);
+});

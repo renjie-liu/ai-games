@@ -8,6 +8,8 @@ import os from 'node:os';
 import { runMatch } from '../engine/index.js';
 import { loadBot } from '../node/loader.js';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const appUrl = (file = 'index.html', hash = '') => (process.env.IRONYARD_TEST_BASE_URL
+  ? new URL(file, process.env.IRONYARD_TEST_BASE_URL).href : 'file://' + path.join(root, 'dist', file)) + hash;
 // a replay file to import later, made with the same engine the page runs
 const replayFile = path.join(os.tmpdir(), 'ironyard-replay-test.json');
 fs.writeFileSync(replayFile, JSON.stringify(runMatch({ mode: '1v1', map: 'canyon', seed: 4, teams: [[loadBot('hornet')], [loadBot('wasp')]] })));
@@ -18,12 +20,32 @@ await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => { if (m.type() === 'error' && !/ERR_TUNNEL|Failed to load resource/.test(m.text())) errors.push(m.text()); });
-await page.goto('file://' + path.join(root, 'dist/index.html'));
+await page.goto(appUrl());
 const ready = () => page.waitForFunction(() => document.getElementById('busy').hidden && document.querySelectorAll('.vlabel').length > 0 && !document.getElementById('run').disabled, { timeout: 30000 });
 await ready();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const text = (sel) => page.$eval(sel, (n) => n.textContent);
 const tab = (t) => page.evaluate((x) => document.querySelector(`.tab[data-tab="${x}"]`).click(), t);
+
+// Saved ladder: attribution, per-mode ranks, author grouping and partial-season state.
+await tab('league');
+const snapshot = await page.evaluate(() => window.__LADDER);
+assert.equal(await page.$$eval('#lb-table tbody tr', rows => rows.length), snapshot.entrants);
+assert.match(await text('#lb-table'), /Recorded model/);
+assert.match(await text('#lb-table'), /gpt-6-astra/);
+assert.match(await text('#lb-table'), /Not recorded/);
+assert.match(await text('#lb-note'), /no overall or model ranking/);
+const selectQueue = async q => page.evaluate(q => [...document.querySelectorAll('#lb-mode button')].find(b => b.textContent === q).click(), q);
+await selectQueue('2v2');
+assert.equal(await page.$eval('#lb-table tbody tr td:nth-child(2)', n => n.textContent), 'Astra — Starforge');
+assert.match(await text('#lb-note'), /every team slot/);
+await page.evaluate(() => [...document.querySelectorAll('#lb-by button')].find(b => b.textContent === 'By author').click());
+assert.match(await text('#lb-note'), /ordered by their best bot/);
+await page.evaluate(() => { window.__LADDER.queues['2v2'].onFile = 0; });
+await selectQueue('2v2');
+assert.match(await text('#lb-meta'), /Provisional/);
+await page.evaluate(s => { window.__LADDER = s; }, snapshot);
+await selectQueue('Overview');
 
 // 1. garage: build a small two-layer car by tapping studs, mirror it, save, land in the arena with it
 await tab('garage');
@@ -124,7 +146,7 @@ await ready();
 assert.equal(await page.evaluate(() => location.hash), '#arena');
 
 // 7. deep link + reload keeps the custom bot
-await page.goto('file://' + path.join(root, 'dist/index.html') + '#rules');
+await page.goto(appUrl('index.html', '#rules'));
 await sleep(1500);
 assert.equal(await page.evaluate(() => document.getElementById('tab-rules').hidden), false);
 assert.match(await text('#rules'), /Parts list/);
@@ -140,8 +162,8 @@ assert.deepEqual(errors, []);
   const errs2 = [];
   p2.on('pageerror', (e) => errs2.push(e.message));
   await p2.setRequestInterception(true);
-  p2.on('request', (r) => (/^https?:/.test(r.url()) ? r.abort() : r.continue()));
-  await p2.goto('file://' + path.join(root, 'dist/artifact.html'), { waitUntil: 'domcontentloaded' });
+  p2.on('request', (r) => (/^https?:/.test(r.url()) && new URL(r.url()).origin !== new URL(appUrl('artifact.html')).origin ? r.abort() : r.continue()));
+  await p2.goto(appUrl('artifact.html'), { waitUntil: 'domcontentloaded' });
   await p2.waitForFunction(() => document.getElementById('busy').hidden && document.querySelectorAll('.vlabel').length > 0, { timeout: 40000 });
   assert.equal(await p2.evaluate(() => typeof THREE), 'undefined');
   assert.equal(await p2.$eval('#view2d', (n) => n.getAttribute('aria-pressed')), 'true');

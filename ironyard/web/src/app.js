@@ -557,26 +557,51 @@ function bindLab() {
 // ── league ──────────────────────────────────────────────────────────────
 const L = S.league;
 // The ladder as `ironyard ladder --write` last saved it; the build puts it into the page. None: no card.
-const LB = { queue: '1v1', by: 'bot' };
+const LB = { queue: 'overview', by: 'bot' };
 function renderLadder() {
   const data = window.__LADDER;
   if (!data || !data.queues) return;
   $('lb').hidden = false;
-  if (!data.queues[LB.queue]) LB.queue = Object.keys(data.queues)[0];
-  const q = data.queues[LB.queue], byBot = LB.by === 'bot';
-  seg($('lb-mode'), Object.keys(data.queues).map((m) => [m, m]), () => LB.queue, (m) => { LB.queue = m; renderLadder(); });
+  const modes = Object.keys(data.queues), overview = LB.queue === 'overview';
+  if (!overview && !data.queues[LB.queue]) LB.queue = modes[0];
+  seg($('lb-mode'), [['overview', 'Overview'], ...modes.map((m) => [m, m])], () => LB.queue, (m) => { LB.queue = m; renderLadder(); });
+  $('lb-by').hidden = overview;
   seg($('lb-by'), [['bot', 'By bot'], ['author', 'By author']], () => LB.by, (b) => { LB.by = b; renderLadder(); });
-  $('lb-meta').textContent = `Engine ${data.engine} · ${data.entrants} bots · ${q.matches} matches`;
-  const head = byBot ? ['#', 'Bot', 'Author', 'Rating', 'Played', 'W', 'D', 'L', 'Win %'] : ['#', 'Author', 'Bots', 'Best bot', 'Best rating', 'Mean rating'];
-  const rows = byBot
-    ? q.standings.map(([id, author, rating, played, w, d, l], i) => [i + 1, botLabel(id), author, rating, played, w, d, l, played ? Math.round((w / played) * 100) : 0])
-    : q.authors.map(([author, bots, best, bestRating, meanRating], i) => [i + 1, author, bots, botLabel(best), bestRating, meanRating]);
-  const num = (i) => (byBot ? i === 0 || i >= 3 : i === 0 || i === 2 || i >= 4);
+  const selected = overview ? Object.values(data.queues) : [data.queues[LB.queue]];
+  const total = selected.reduce((n, q) => n + q.matches, 0);
+  const done = selected.reduce((n, q) => n + (q.onFile ?? q.matches), 0);
+  const errors = selected.reduce((n, q) => n + (q.errorCount || 0), 0);
+  const status = errors ? 'Contains errors' : done < total ? 'Provisional' : 'Complete';
+  $('lb-meta').textContent = `${status} · ${data.entrants} bots · ${done}/${total} matches · ${data.budget ?? 1200}cr`;
+  const rank = (row, i) => row.length >= 9 ? (row[8] ?? '—') : row[3] ? i + 1 : '—';
+  let head, rows, num;
+  if (overview) {
+    const bots = new Map();
+    for (const mode of modes) data.queues[mode].standings.forEach((r, i) => {
+      if (!bots.has(r[0])) bots.set(r[0], { row: r, ranks: {} });
+      bots.get(r[0]).ranks[mode] = rank(r, i);
+    });
+    head = ['Bot', 'Author', 'Recorded model', ...modes.map(m => `${m} rank`)];
+    rows = [...bots.values()].map(({ row: r, ranks }) => [botLabel(r[0]), r[1], r[7] || 'Not recorded', ...modes.map(m => ranks[m] ?? '—')]);
+    num = i => i >= 3;
+  } else {
+    const q = data.queues[LB.queue], byBot = LB.by === 'bot';
+    head = byBot ? ['#', 'Bot', 'Author', 'Recorded model', 'Rating', 'Played', 'W', 'D', 'L', 'Win %'] : ['#', 'Author', 'Bots', 'Best bot', 'Best rating', 'Mean rating'];
+    rows = byBot
+      ? q.standings.map((r, i) => [rank(r, i), botLabel(r[0]), r[1], r[7] || 'Not recorded', r[2], r[3], r[4], r[5], r[6], r[3] ? Math.round(r[4] / r[3] * 100) : 0])
+      : q.authors.map(([author, bots, best, bestRating, meanRating], i) => [i + 1, author, bots, botLabel(best), bestRating, meanRating]);
+    num = i => byBot ? i === 0 || i >= 4 : i === 0 || i === 2 || i >= 4;
+  }
   $('lb-table').replaceChildren(el('table', {}, el('thead', {}, el('tr', {}, ...head.map((h, i) => el('th', { class: num(i) ? 'n' : '', text: h })))),
     el('tbody', {}, ...rows.map((r) => el('tr', {}, ...r.map((c, i) => el('td', { class: num(i) ? 'n' : '', text: String(c) })))))));
-  $('lb-note').textContent = LB.queue === '1v1'
-    ? 'Every pair of bots on every map, from both spawn sides. Ratings start at 1500.'
-    : 'Mixed teams: each round the bots are dealt into teams, keeping bots by the same author apart where the numbers allow. A rating here says how much a team gains by having that bot.';
+  const notes = overview
+    ? 'Separate rankings for each mode; no overall or model ranking. Listed in 1v1 order. Model labels come from bot source metadata; missing attribution is not inferred.'
+    : LB.by === 'author'
+      ? 'Authors are ordered by their best bot, then mean rating. An author is a self-declared entrant label, not necessarily a model.'
+      : LB.queue === '1v1'
+        ? 'Every pair, all eight maps, seed 1, both spawn sides. Rating fits all results with a 1500 anchor; rank uses unrounded rating, not win percentage.'
+        : '40 mixed-team rounds; each pairing plays every team slot from both spawn sides. Rating estimates individual contribution, accounting for teammates and opponents. Game counts and map exposure differ.';
+  $('lb-note').textContent = `${notes} This is a saved snapshot; custom tournaments below do not change it.${errors ? ' Match errors require review before comparing scores.' : ''}`;
 }
 
 function renderLeagueSetup() {
