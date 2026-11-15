@@ -17,13 +17,13 @@ The website is a build-time snapshot. Adding a source file or running a custom t
 
 The standard budget is 1200 credits per vehicle; engine 0.5.0 uses eight maps.
 
-- **1v1:** every unordered pair plays all eight maps with seed 1, from both spawn sides. For 19 bots: `19 × 18 / 2 × 8 × 2 = 2736` matches; each bot plays 288.
+- **1v1:** every unordered pair plays all eight maps with seed 1, from both spawn sides. For 20 bots: `20 × 19 / 2 × 8 × 2 = 3040` matches; each bot plays 304.
 - **Teams:** 40 deterministic rounds. A hash of the round and bot id determines participation; entrants who cannot fill an even number of full teams sit out. Bots from the same author are distributed across teams where possible, then opponents are scrambled.
 - **Slots:** for each pairing, cyclically rotate both teams through all positions and play each rotation from both spawn sides, holding map and seed fixed. Every selected bot gets exactly equal exposure to each slot. Relative lineup permutations are not exhaustive.
-- **2v2:** 19 bots form eight teams per round (three sit out): `40 × 4 pairings × 2 slots × 2 sides = 640` matches.
-- **3v3:** 19 bots form six teams per round (one sits out): `40 × 3 pairings × 3 slots × 2 sides = 720` matches.
+- **2v2:** 20 bots form ten teams per round (none sit out): `40 × 5 pairings × 2 slots × 2 sides = 800` matches.
+- **3v3:** 20 bots form six teams per round (two sit out): `40 × 3 pairings × 3 slots × 2 sides = 720` matches.
 
-Total: **4096 matches**. Participation, opponents and map exposure are not perfectly equal in team modes. The author grouping and additive rating estimate do not eliminate every source of variance. More independent seeds, rounds and balanced map sampling would improve confidence; a narrow score gap is not proof of superiority.
+Total: **4560 matches**. Participation, opponents and map exposure are not perfectly equal in team modes. The author grouping and additive rating estimate do not eliminate every source of variance. More independent seeds, rounds and balanced map sampling would improve confidence; a narrow score gap is not proof of superiority.
 
 ## Rating formula
 
@@ -74,7 +74,7 @@ Rerunning every affected match after the Wolfpack repair-target fix left this 17
 
 In that 17-bot season, Quillback and Grindstone both displayed 1641 in 3v3; their unrounded fitted ratings put Quillback ahead. The current expanded season is recorded in [LEADERBOARD.md](../LEADERBOARD.md).
 
-## Current 19-bot season
+## Historical 19-bot season
 
 Carbon (`gemini-4-carbon-medium`) and Hydrogen (`gemini-4-hydrogen-medium`) are included from [PR #6](https://github.com/renjie-liu/ai-games/pull/6), alongside Astra, Sol and the existing roster. Their submitted source hashes are preserved. All **4096** matches completed without controller errors: 2736 solo, 640 doubles and 720 triples. Adding entrants changes the mixed-team schedule, so ranks differ from the historical 17-bot audit above.
 
@@ -86,3 +86,19 @@ Carbon (`gemini-4-carbon-medium`) and Hydrogen (`gemini-4-hydrogen-medium`) are 
 | astra | gpt-6-astra | 2 | 2 | 2 |
 | carbon | gemini-4-carbon-medium | 3 | 4 | 3 |
 | hydrogen | gemini-4-hydrogen-medium | 6 | 6 | 11 |
+
+## Current 20-bot season with Muse
+
+Muse Spark’s `tailwind` joins unchanged from [PR #8](https://github.com/renjie-liu/ai-games/pull/8). All **4560** ladder matches completed without controller errors: 3040 solo, 800 doubles and 720 triples. Adding this entrant changes both the solo field and mixed-team schedule. The separate seven-entry, same-bot-team tournament is documented in [TOURNAMENT.md](../TOURNAMENT.md).
+
+| Bot | Recorded model | 1v1 | 2v2 | 3v3 |
+|---|---|---:|---:|---:|
+| quillback | Fable | 1 | 4 | 2 |
+| grindstone | Opus | 4 | 2 | 5 |
+| sol | gpt-6-sol | 5 | 5 | 3 |
+| astra | gpt-6-astra | 3 | 1 | 1 |
+| carbon | gemini-4-carbon-medium | 2 | 3 | 4 |
+| hydrogen | gemini-4-hydrogen-medium | 8 | 8 | 16 |
+| tailwind | Muse Spark | 6 | 6 | 6 |
+
+The locally verified 1v1 snapshot differs slightly from the aggregate originally attached to PR #8: Tailwind records 208 wins / 96 losses rather than 209 / 95, and Wasp records 105 wins rather than 103. Both team-mode tables match that submission exactly. Repeating all 32 Wasp-versus-Tailwind/Wolfpack solo matches reproduced the local outcomes and hull scores. The original PR did not include per-match results, so the cause of its aggregate difference is not established; this published snapshot uses the verified local results on Node v24.22.1.

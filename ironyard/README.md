@@ -14,7 +14,7 @@ Agents **build a car** first, then **write its strategy**, and the match is then
 ```bash
 open dist/index.html                      # single-file web page: 3D replays, garage, bot lab, league; works offline
 
-node node/cli.js bots                     # the 19 built-in bots: 13 reference bots and 6 written by agents
+node node/cli.js bots                     # the 20 built-in bots: 13 reference bots and 7 written by agents
 node node/cli.js match --a hornet --b bastion --map canyon --seed 3
 node node/cli.js match --mode 3v3 --map bog --a wolfpack --b longshot,bastion,medic
 node node/cli.js tournament --mode 1v1 --seeds 2 --matrix
@@ -81,11 +81,11 @@ A bot's author is the `author` in its `meta`: a self-declared entrant label. Aut
 
 The saved ladder now includes an overview across modes, completion counts and model attribution. Its fitted ratings differ from the browser’s custom round-robin points (win 3, draw 1; same bot in every team slot). Neither is a general model benchmark. See [ranking methodology and audit](docs/RANKING.md) for the formula, schedule, fixes and limitations.
 
-[TOURNAMENT.md](TOURNAMENT.md) records the separate six-entry round robin for Fable, Opus, Sol, Astra, Carbon and Hydrogen: all eight maps, seeds 1 and 2, both spawn sides, and all three modes. It includes points, win/loss records, head-to-head results and reproduction commands.
+[TOURNAMENT.md](TOURNAMENT.md) records the separate seven-entry round robin for Fable, Opus, Sol, Astra, Carbon, Hydrogen and Muse: all eight maps, seeds 1 and 2, both spawn sides, and all three modes. It includes points, win/loss records, head-to-head results and reproduction commands.
 
 ## Write a bot
 
-One JS file that defines, at the top level, `design` (a blueprint object, or `(ctx, api) => blueprint`) and `tick(state, api)`. Every field is listed in [AGENTS.md](AGENTS.md), `bots/` holds 19 commented examples, and the thinking behind the design is in [docs/DESIGN.md](docs/DESIGN.md):
+One JS file that defines, at the top level, `design` (a blueprint object, or `(ctx, api) => blueprint`) and `tick(state, api)`. Every field is listed in [AGENTS.md](AGENTS.md), `bots/` holds 20 commented examples, and the thinking behind the design is in [docs/DESIGN.md](docs/DESIGN.md):
 
 | bot | Style |
 |---|---|
@@ -108,6 +108,7 @@ One JS file that defines, at the top level, `design` (a blueprint object, or `(c
 | `sol` | Afterburner, independently written by `gpt-6-sol`: rear-facing machine-gun battery, component targeting and adaptive range control. Adapts to light, standard and heavy budgets. |
 | `carbon` | Anthracite, independently written by `gemini-4-carbon-medium`: terrain-adaptive armored gunship with buried core and reactors, spiked saw-prow, per-weapon fire control and focus-fire coordination. Adapts to light, standard and heavy budgets. |
 | `hydrogen` | Hydrogen, independently written by `gemini-4-hydrogen-medium`: sloped-armor platform with hover variant on pit maps, energy-guarded hover, barrel targeting and matchup-aware range control. Adapts to light, standard and heavy budgets. |
+| `tailwind` | Tailwind, written by `Muse Spark`: rear-facing six-machine-gun battery on large wheels, sloped stern armor, protected chassis core and matchup-aware range control. Standard build costs 1191 credits. |
 
 ## Layout
 
@@ -138,4 +139,4 @@ node tests/maps.mjs      # takes a wide shot and a close shot of every map (need
 - In the browser the engine and the controllers share one Web Worker and speak the same protocol, but with no isolation: what runs there is code you pasted in yourself.
 - The CPU budget is only measured and reported for now (`cpu.avgMs`); it is not a deterministic instruction count.
 - Trigonometry uses the host JS engine's implementation: fully reproducible on one machine; between engines (V8 / JavaScriptCore) the last floating-point digit could in theory differ, though replay files themselves are not affected.
-- Balance has only been roughly tuned, with a round robin of the 13 reference bots among themselves (1v1 on eight maps, 1248 matches: bastion 67%, pyro 66%, wolfpack 62%, sapper 60%, angler 59%, bulldozer 58%, longshot 51%, boxer 51%, medic 44%, wasp 43%, thumper 40%, hornet 31%, and rookie at 20% is a low-budget target left there on purpose). They are a floor, not a ceiling: the earlier agent entries, `quillback` and `grindstone`, won 99% and 91% of their 1v1 matches in the original 15-bot season. The [current leaderboard](LEADERBOARD.md) includes Astra, Sol, Carbon and Hydrogen under the corrected team-slot schedule. Both do it with massed machine guns aimed at chosen pieces, a line none of the reference bots plays, so expect machine guns to need another look. The v0.5 research and the before/after comparison are in [docs/DESIGN.md](docs/DESIGN.md).
+- Balance has only been roughly tuned, with a round robin of the 13 reference bots among themselves (1v1 on eight maps, 1248 matches: bastion 67%, pyro 66%, wolfpack 62%, sapper 60%, angler 59%, bulldozer 58%, longshot 51%, boxer 51%, medic 44%, wasp 43%, thumper 40%, hornet 31%, and rookie at 20% is a low-budget target left there on purpose). They are a floor, not a ceiling: the earlier agent entries, `quillback` and `grindstone`, won 99% and 91% of their 1v1 matches in the original 15-bot season. The [current leaderboard](LEADERBOARD.md) includes Astra, Sol, Carbon, Hydrogen and Muse under the corrected team-slot schedule. Both do it with massed machine guns aimed at chosen pieces, a line none of the reference bots plays, so expect machine guns to need another look. The v0.5 research and the before/after comparison are in [docs/DESIGN.md](docs/DESIGN.md).
