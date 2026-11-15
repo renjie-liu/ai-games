@@ -6,7 +6,8 @@ import {
   MAPS, MAP_IDS, MODES, PARTS, ITEMS, TILES, BUDGETS, DEFAULT_BUDGET,
   validateDesign, renderDesign, makeSchedule, standings, describeMap,
 } from '../engine/index.js';
-import { listBots, readBotSource } from './loader.js';
+import { listBots, readBotSource, ROOT } from './loader.js';
+import { ladder, ladderMarkdown, QUEUES } from './ladder.js';
 import { MatchPool, withSources } from './runner.js';
 
 function parseArgs(argv) {
@@ -32,6 +33,9 @@ const HELP = `ironyard — agents build the car and write the strategy
       a bot can also be a path to a .js file
   ironyard tournament [--bots all|a,b,c] [--mode 1v1] [--maps all|proving,sumo] [--seeds 2] [--json]
   ironyard validate <bot|file.js> [--budget N]
+  ironyard ladder [--mode 1v1|2v2|3v3|all] [--write] [--json]
+      rates every bot here: 1v1 round robin, and 2v2 / 3v3 on mixed teams. Plays only what is not on file.
+      --write also saves the tables to LEADERBOARD.md
   ironyard bots | maps | parts
 `;
 
@@ -47,7 +51,7 @@ async function main() {
   if (cmd === 'maps') {
     for (const id of MAP_IDS) {
       const m = MAPS[id];
-      console.log(`\n${id} — ${m.name} / ${m.zh}  (${m.w}x${m.h} tiles, ${m.width}x${m.height} m)\n${m.desc}`);
+      console.log(`\n${id} — ${m.name}  (${m.w}x${m.h} tiles, ${m.width}x${m.height} m)\n${m.desc}`);
       console.log(m.rows.join('\n'));
     }
     console.log('\nlegend: ' + Object.values(TILES).map((t) => `${t.ch}=${t.name}`).join('  ') + '  A/B/C,a/b/c=spawns  *=item');
@@ -150,6 +154,25 @@ async function main() {
       }
       const errs = results.filter((r) => r.error);
       if (errs.length) console.log(`\n${errs.length} matches errored, e.g.: ${errs[0].error}`);
+      return;
+    }
+    if (cmd === 'ladder') {
+      const mode = args.mode && args.mode !== 'all' ? String(args.mode) : null;
+      if (mode && !QUEUES.includes(mode)) throw new Error(`unknown mode "${mode}". Valid: ${QUEUES.join(', ')}, all`);
+      const board = await ladder(pool, { queues: mode ? [mode] : QUEUES });
+      if (args.json) return console.log(JSON.stringify(board));
+      console.log(`${board.entrants} bots, ${board.matchesPlayedNow} matches played just now (the rest were on file)`);
+      for (const [q, t] of Object.entries(board.queues)) {
+        console.log(`\n${q} — ${t.onFile} matches\n` + '#'.padStart(3) + '  ' + 'bot'.padEnd(16) + 'author'.padEnd(16) + 'rating'.padStart(7) + 'played'.padStart(8) + '  W-D-L'.padEnd(14) + 'win%'.padStart(5));
+        for (const r of t.standings) console.log(String(r.rank).padStart(3) + '  ' + r.id.padEnd(16) + r.author.slice(0, 15).padEnd(16) + String(r.rating).padStart(7) + String(r.played).padStart(8) + ('  ' + r.w + '-' + r.d + '-' + r.l).padEnd(14) + String(Math.round(r.winRate * 100)).padStart(5));
+      }
+      if (board.errors) console.log(`\nmatches that could not be played, e.g.: ${board.errors[0]}`);
+      if (args.write) {
+        if (mode) throw new Error('--write saves all three queues: run it without --mode');
+        const file = path.join(ROOT, 'LEADERBOARD.md');
+        fs.writeFileSync(file, ladderMarkdown(board));
+        console.log(`\nwrote ${file}`);
+      }
       return;
     }
     console.log(HELP);

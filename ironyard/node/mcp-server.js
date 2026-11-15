@@ -13,8 +13,9 @@ import readline from 'node:readline';
 import crypto from 'node:crypto';
 import {
   MAPS, MAP_IDS, MODES, PARTS, ITEMS, TILES, RULES, BUDGETS, DEFAULT_BUDGET, CELL, GRID_HX, GRID_HY, GRID_W, GRID_L, PAINTS, DECOR_LIMIT,
-  validateDesign, parseBlueprint, renderDesign, makeSchedule, standings, ENGINE_VERSION,
+  validateDesign, parseBlueprint, renderDesign, makeSchedule, standings, summarize, FLAG, ENGINE_VERSION,
 } from '../engine/index.js';
+import { ladder, QUEUES } from './ladder.js';
 import { rulesMarkdown } from '../engine/rulesdoc.js';
 import { listBots, readBotSource, makeBot, BOT_NAME_RE, USER_DIR, BUILTIN_DIR, ROOT } from './loader.js';
 import { MatchPool, withSources } from './runner.js';
@@ -25,6 +26,8 @@ const REPLAY_DIR = process.env.IRONYARD_REPLAY_DIR ? path.resolve(process.env.IR
 // One request may carry several calls, and every call can queue matches: a batch is kept small.
 const MAX_BATCH = 16, BATCH_MSG = `a batch may carry at most ${MAX_BATCH} calls`;
 const overfull = (msg) => Array.isArray(msg) && msg.length > MAX_BATCH;
+// How long one leaderboard call may spend playing matches before it answers with what it has.
+const LADDER_BUDGET_MS = Number(process.env.IRONYARD_LADDER_BUDGET_MS || 40_000);
 const pool = new MatchPool({ timeoutMs: Number(process.env.IRONYARD_MATCH_TIMEOUT_MS || 30_000) });
 const log = (...a) => process.stderr.write(`[ironyard-mcp] ${a.join(' ')}\n`);
 
@@ -320,6 +323,91 @@ const TOOLS = [
         headToHead: Object.fromEntries(table.map((r) => [r.id, Object.fromEntries(Object.entries(r.vs).map(([k, v]) => [k, `${v.w}-${v.d}-${v.l}`]))])),
         errors: results.filter((r) => r.error).slice(0, 3).map((r) => r.error),
       };
+    },
+  },
+  {
+    name: 'leaderboard',
+    title: 'Leaderboard',
+    description: 'The standing ladder of every bot on this server, built-in and submitted, rated in three queues. 1v1 is a full round robin on every map from both sides. 2v2 and 3v3 are played on mixed teams: each round the bots are dealt into teams, keeping bots by the same author (the `author` in a bot\'s `meta`) apart where the numbers allow, so a team-queue rating says how much a team gains by having that bot, whoever else is on it. Returns rank, rating, W-D-L and win rate per bot, and the same grouped by author. Only matches that are not on file are played, and a call plays for about 40 seconds at most: when `complete` is false the tables are from the season so far, and calling again carries on. Pass `mode` to bring one queue up to date.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        mode: { type: 'string', enum: QUEUES, description: 'One queue only. Default: all three.' },
+        top: { type: 'integer', minimum: 1, maximum: 500, description: 'Rows to return per queue. Default: all.' },
+      },
+      additionalProperties: false,
+    },
+    run: async (a) => {
+      const board = await ladder(pool, { queues: a.mode ? [a.mode] : QUEUES, budgetMs: LADDER_BUDGET_MS });
+      if (a.top) for (const t of Object.values(board.queues)) t.standings = t.standings.slice(0, a.top);
+      if (!board.complete) {
+        const left = Object.values(board.queues).reduce((n, t) => n + t.matches - t.onFile, 0);
+        board.note = `${left} matches of this season are still to be played: the tables below are from what is on file so far. Call leaderboard again to carry on.`;
+      }
+      return board;
+    },
+  },
+  {
+    name: 'list_replays',
+    title: 'Saved replays',
+    description: 'Lists the replays saved on this server by run_match with save_replay: true, newest first. Read one back with get_replay.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    run: async () => {
+      if (!fs.existsSync(REPLAY_DIR)) return { replays: [] };
+      const replays = fs.readdirSync(REPLAY_DIR).filter((f) => f.endsWith('.json')).map((f) => { const st = fs.statSync(path.join(REPLAY_DIR, f)); return { file: f, kB: Math.round(st.size / 1024), saved: st.mtime.toISOString() }; });
+      return { replays: replays.sort((x, y) => (x.saved < y.saved ? 1 : -1)).slice(0, 100) };
+    },
+  },
+  {
+    name: 'get_replay',
+    title: 'Read a replay',
+    description: 'Reads back a replay that run_match saved, in a form small enough to reason about. view "summary": the battle report (result, per-vehicle stats, first pieces lost, your api.log lines). view "events": everything that happened in a time window, in order — pieces lost and to what, fires, hooks, punches, blasts, pickups, deaths. view "trace": where every vehicle was and in what state, sampled every `step` seconds — use it to see what your controller actually did: where it drove, when it stood still, when it started losing hull. The frame-by-frame file itself stays on the server for the web viewer.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', description: 'A file name from list_replays, or the replayFile that run_match returned.' },
+        view: { type: 'string', enum: ['summary', 'events', 'trace'], description: 'Default "summary".' },
+        from: { type: 'number', minimum: 0, description: 'Start of the window in seconds. Default 0.' },
+        to: { type: 'number', minimum: 0, description: 'End of the window in seconds. Default: the end of the match.' },
+        step: { type: 'number', minimum: 0.1, maximum: 10, description: 'trace only: seconds between samples. Default 0.5; widened if the window would give more than 400 rows.' },
+        kinds: { type: 'array', items: { type: 'string' }, description: 'events only: keep these kinds, e.g. ["part", "death", "fire", "hook"]. Default: all.' },
+      },
+      required: ['file'], additionalProperties: false,
+    },
+    run: async (a) => {
+      const name = path.basename(String(a.file));
+      if (!/^[\w.+-]+\.json$/.test(name)) throw new Error('file must be a replay file name ending in .json, as list_replays gives it');
+      const full = path.join(REPLAY_DIR, name);
+      if (!fs.existsSync(full)) throw new Error(`no replay "${name}" here; list_replays shows what is saved (run_match with save_replay: true saves one)`);
+      const res = JSON.parse(fs.readFileSync(full, 'utf8'));
+      const view = a.view || 'summary';
+      if (view === 'summary') return summarize(res);
+      const from = a.from ?? 0, to = Math.min(a.to ?? res.duration, res.duration);
+      if (!(to >= from)) throw new Error(`the window is empty: from ${from} to ${to} (the match lasted ${res.duration} s)`);
+      const vehicles = res.vehicles.map((v) => ({ id: v.id, team: v.team, name: v.name, bot: v.bot }));
+      if (view === 'events') {
+        const kinds = a.kinds && a.kinds.length ? new Set(a.kinds.map(String)) : null;
+        const all = res.events.filter((e) => e.t >= from && e.t <= to && (!kinds || kinds.has(e.k)));
+        const piece = (e) => (e.k === 'part' && res.vehicles[e.v] ? { ...e, type: res.vehicles[e.v].design.parts[e.i].type } : e);
+        return { file: name, window: [from, to], vehicles, kindsSeen: [...new Set(all.map((e) => e.k))], shown: Math.min(all.length, 400), total: all.length,
+          note: all.length > 400 ? 'more than 400 events in this window: narrow it with from/to or kinds' : undefined,
+          legend: 'k = kind, t = seconds, v = vehicle id, i = piece index, c = cause; a "part" event is a piece lost', events: all.slice(0, 400).map(piece) };
+      }
+      if (!res.frames || !res.frames.length) throw new Error('this replay has no frames');
+      let step = a.step ?? 0.5;
+      if ((to - from) / step > 400) step = Math.ceil(((to - from) / 400) * 10) / 10;
+      const rows = [];
+      let next = from;
+      for (const f of res.frames) {
+        if (f.t + 1e-9 < next || f.t > to + 1e-9) continue;
+        next = f.t + step;
+        rows.push([f.t, ...f.v.map((r) => {
+          const state = !(r[6] & FLAG.alive) ? 'dead' : [r[6] & FLAG.fire && 'burning', r[6] & FLAG.stun && 'stunned', r[6] & FLAG.boost && 'boosting', r[6] & FLAG.hover && 'hovering'].filter(Boolean).join('+');
+          return [r[0], r[1], Math.round((r[2] * 180) / Math.PI), Math.round(r[5] * 100), Math.round(r[3] * 100), state];
+        })]);
+      }
+      return { file: name, window: [from, to], step, vehicles,
+        legend: 'each row: [t, then one entry per vehicle in the order of `vehicles`: [x m, y m, heading deg, hull %, energy %, state]]', rows };
     },
   },
 ];

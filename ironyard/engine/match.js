@@ -132,6 +132,7 @@ export function runMatch(o) {
       c.design = val.design; c.designStats = val.stats;
       const meta = plain(readJson(textOf(c.port.meta)));
       c.name = String(bot.name || meta.name || bot.id).slice(0, 32);
+      c.author = typeof meta.author === 'string' ? meta.author.slice(0, 40) : '';
       ctl.push(c);
       entries.push({ team: t, slot: k, spawn: slots[k], design: val.design, name: c.name, botId: bot.id });
     });
@@ -194,7 +195,7 @@ export function runMatch(o) {
   const vehicles = world.vehicles.map((v) => {
     const c = ctl[v.id], s = v.stats;
     return {
-      id: v.id, team: v.team, slot: c.k, name: v.name, bot: v.botId,
+      id: v.id, team: v.team, slot: c.k, name: v.name, bot: v.botId, author: c.author,
       alive: v.alive, deathT: v.deathT === null ? null : rnd(v.deathT), deathCause: v.deathCause, killedBy: v.killedBy,
       hpFrac: Math.round(Math.max(0, v.hpNow / v.hpMax) * 1000) / 1000,
       coreFrac: Math.round(Math.max(0, v.core.hp / v.core.maxHp) * 1000) / 1000,
@@ -259,7 +260,7 @@ export function summarize(res, { events = 40 } = {}) {
     winner: res.winner, result: res.winner === null ? 'unfinished' : res.winner < 0 ? 'draw' : `team ${res.winner} wins`,
     reason: res.reason, duration: res.duration, teams: res.teams,
     vehicles: res.vehicles.map((v) => ({
-      id: v.id, team: v.team, slot: v.slot, name: v.name, bot: v.bot,
+      id: v.id, team: v.team, slot: v.slot, name: v.name, bot: v.bot, author: v.author,
       alive: v.alive, death: v.alive ? null : { t: v.deathT, cause: v.deathCause, by: who(v.killedBy) },
       hullLeft: v.hpFrac, coreLeft: v.coreFrac,
       design: { cost: v.designStats.cost, mass: v.designStats.mass, weightClass: v.designStats.weightClass, topSpeed: v.designStats.topSpeed, turnRate: v.designStats.turnRate, dps: v.designStats.dps, weapons: v.designStats.weapons },
