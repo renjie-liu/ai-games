@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ironyard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: one drafting sheet. Night-blue blueprint paper, chalk linework, every panel a
+   drawing with a title block; hazard orange and coolant blue are the two team inks. Single theme by choice. */
+:root {
+  color-scheme: dark;
+  --ink: #0b1420;        /* sheet */
+  --paper: #101f2e;      /* panel */
+  --paper-2: #16293c;    /* raised */
+  --line: #27425c;       /* linework */
+  --chalk: #e8eef5;      /* text */
+  --dim: #8fa6bd;        /* secondary text */
+  --hazard: #ff8b2b;     /* accent + team 0 */
+  --coolant: #4cc3ff;    /* team 1 */
+  --ok: #5fd38d; --warn: #ffd166; --bad: #ff6b6b;
+  --display: "Big Shoulders Display", "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --body: "IBM Plex Sans", "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --r: 3px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--ink); color: var(--chalk); font: 15px/1.55 var(--body);
+  background-image: linear-gradient(rgba(76,195,255,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(76,195,255,.045) 1px, transparent 1px);
+  background-size: 24px 24px; -webkit-text-size-adjust: 100%;
+}
+button, select, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--coolant); outline-offset: 2px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* masthead */
+.masthead { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 18px; padding: 14px 16px 0; max-width: 1280px; margin: 0 auto; }
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand-mark { font: 800 34px/0.9 var(--display); letter-spacing: .04em; }
+.brand-mark i { font-style: normal; color: var(--hazard); }
+.brand-tag { margin: 0; color: var(--dim); font-size: 13px; flex: 1 1 220px; }
+.tabs { display: flex; gap: 2px; width: 100%; overflow-x: auto; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { background: none; border: 0; border-bottom: 3px solid transparent; padding: 10px 14px 8px; color: var(--dim); white-space: nowrap; font-weight: 500; }
+.tab small { font: 500 10px var(--mono); letter-spacing: .08em; margin-left: 6px; opacity: .7; }
+.tab[aria-selected="true"] { color: var(--chalk); border-bottom-color: var(--hazard); }
+main { max-width: 1280px; margin: 0 auto; padding: 14px 16px 48px; }
+[hidden] { display: none !important; }
+
+/* sheets (panels with a title block) */
+.sheet { background: var(--paper); border: 1px solid var(--line); border-radius: var(--r); }
+.sheet > header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.sheet > header h2 { font: 600 15px var(--body); }
+.sheet > header .code { font: 500 10px var(--mono); color: var(--dim); letter-spacing: .12em; text-transform: uppercase; }
+.sheet .pad { padding: 12px; }
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.grow { flex: 1 1 0; min-width: 0; }
+label.f { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--dim); min-width: 0; }
+select, input[type="number"], input[type="text"] { background: var(--ink); border: 1px solid var(--line); border-radius: var(--r); padding: 7px 8px; min-height: 36px; max-width: 100%; }
+textarea { background: #08111b; border: 1px solid var(--line); border-radius: var(--r); padding: 10px; width: 100%; font: 12.5px/1.5 var(--mono); tab-size: 2; resize: vertical; }
+.btn { background: var(--paper-2); border: 1px solid var(--line); border-radius: var(--r); padding: 7px 12px; min-height: 36px; }
+.btn:hover { border-color: var(--dim); }
+.btn.primary { background: var(--hazard); border-color: var(--hazard); color: #1a0f04; font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.ghost { background: none; }
+.btn:disabled { opacity: .5; cursor: default; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.seg button { background: none; border: 0; border-right: 1px solid var(--line); padding: 6px 12px; min-height: 36px; color: var(--dim); font-family: var(--mono); font-size: 13px; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--chalk); color: var(--ink); font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { background: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; min-height: 30px; color: var(--dim); font-size: 13px; }
+.chip[aria-pressed="true"] { border-color: var(--chalk); color: var(--chalk); background: var(--paper-2); }
+.note { color: var(--dim); font-size: 12.5px; margin: 0; }
+.msg { font-size: 13px; padding: 8px 10px; border-left: 3px solid var(--line); background: var(--paper-2); border-radius: 0 var(--r) var(--r) 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg.bad { border-color: var(--bad); } .msg.ok { border-color: var(--ok); } .msg.warn { border-color: var(--warn); }
+.t0 { color: var(--hazard); } .t1 { color: var(--coolant); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 500 11px var(--mono); color: var(--dim); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+td.n, th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.scroll-x { overflow-x: auto; }
+code, pre { font-family: var(--mono); font-size: 12.5px; }
+pre { background: #08111b; border: 1px solid var(--line); border-radius: var(--r); padding: 10px; overflow-x: auto; margin: 0; line-height: 1.45; }
+:not(pre) > code { background: var(--paper-2); padding: 1px 5px; border-radius: 2px; }
+
+/* arena */
+.arena-grid { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(300px, 1fr); gap: 14px; align-items: start; }
+.viewport { position: relative; aspect-ratio: 16 / 10; background: #0a1420; border: 1px solid var(--line); border-radius: var(--r) var(--r) 0 0; overflow: hidden; }
+.arena-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.hud { position: absolute; inset: 0; pointer-events: none; }
+.clock { position: absolute; left: 10px; top: 8px; font: 800 30px/1 var(--display); letter-spacing: .03em; text-shadow: 0 1px 6px #000; }
+.clock small { font: 500 11px var(--mono); color: var(--dim); margin-left: 6px; letter-spacing: .05em; }
+.zone-tag { position: absolute; left: 10px; top: 42px; font: 500 11px var(--mono); color: var(--bad); text-shadow: 0 1px 4px #000; }
+.score { position: absolute; right: 10px; top: 8px; display: flex; gap: 8px; font: 800 26px/1 var(--display); text-shadow: 0 1px 6px #000; }
+.vlabel { position: absolute; transform: translate(-50%, -100%); font: 500 10px var(--mono); white-space: nowrap; text-shadow: 0 1px 3px #000; text-align: center; will-change: left, top; }
+.vlabel .bar { width: 42px; height: 4px; background: rgba(0,0,0,.55); margin: 2px auto 0; border-radius: 2px; overflow: hidden; }
+.vlabel .bar i { display: block; height: 100%; }
+.vlabel .bar.e { height: 2px; margin-top: 1px; } .vlabel .bar.e i { background: var(--warn); }
+.feed { position: absolute; left: 10px; bottom: 8px; display: flex; flex-direction: column; gap: 2px; font-size: 12px; text-shadow: 0 1px 3px #000; }
+.feed div { background: rgba(8,16,26,.6); padding: 1px 7px; border-left: 2px solid var(--dim); width: fit-content; }
+.banner { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; background: rgba(8,16,26,.86); border: 1px solid var(--line); padding: 14px 22px; pointer-events: auto; min-width: 200px; }
+.banner b { display: block; font: 800 34px/1 var(--display); letter-spacing: .04em; white-space: nowrap; }
+.banner span { display: block; color: var(--dim); font-size: 13px; margin: 4px 0 10px; }
+.busy { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(8,16,26,.7); font-family: var(--mono); font-size: 13px; color: var(--dim); }
+.transport { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; background: var(--paper); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 var(--r) var(--r); }
+.transport input[type="range"] { flex: 1 1 140px; min-width: 100px; accent-color: var(--hazard); }
+.transport .btn, .transport select { min-height: 34px; padding: 5px 9px; }
+.transport .time { font: 500 12px var(--mono); color: var(--dim); min-width: 84px; text-align: right; }
+.team-card { border-left: 3px solid; padding: 0; }
+.team-card.t0 { border-left-color: var(--hazard); } .team-card.t1 { border-left-color: var(--coolant); }
+.veh { display: grid; grid-template-columns: minmax(0, 1fr) 96px 26px; gap: 8px; align-items: center; padding: 7px 10px; border-bottom: 1px solid var(--line); background: none; border-left: 0; border-right: 0; border-top: 0; width: 100%; text-align: left; color: var(--chalk); }
+.veh:last-child { border-bottom: 0; }
+.veh[aria-pressed="true"] { background: var(--paper-2); }
+.veh .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.veh .nm small { display: block; color: var(--dim); font: 400 11px var(--mono); overflow: hidden; text-overflow: ellipsis; }
+.veh.dead .nm { text-decoration: line-through; color: var(--dim); }
+.bars { display: flex; flex-direction: column; gap: 3px; }
+.bars span { display: block; height: 6px; background: var(--ink); border-radius: 3px; overflow: hidden; }
+.bars span i { display: block; height: 100%; background: var(--ok); transition: width .15s linear; }
+.bars span.e { height: 3px; } .bars span.e i { background: var(--warn); }
+.slots { display: grid; gap: 6px; }
+.slots select { width: 100%; }
+.minimap { font: 9px/1.02 var(--mono); letter-spacing: .12em; color: var(--dim); white-space: pre; overflow-x: auto; margin: 0; padding: 8px; background: #08111b; border: 1px solid var(--line); }
+
+/* garage */
+.garage-grid { display: grid; grid-template-columns: minmax(300px, 460px) minmax(0, 1fr); gap: 14px; align-items: start; }
+.preview { position: relative; aspect-ratio: 16 / 10; background: #0e1a29; border-bottom: 1px solid var(--line); overflow: hidden; }
+.preview-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.preview .tag { position: absolute; left: 10px; top: 8px; font: 500 10px var(--mono); letter-spacing: .14em; color: var(--dim); text-transform: uppercase; pointer-events: none; }
+.preview .wclass { position: absolute; right: 10px; top: 6px; font: 800 20px/1 var(--display); letter-spacing: .04em; pointer-events: none; }
+.bp-wrap { padding: 12px; }
+.bp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.bp-front { text-align: center; font: 500 10px var(--mono); letter-spacing: .3em; color: var(--dim); margin-bottom: 4px; }
+.bp { display: grid; grid-template-columns: repeat(9, 1fr); gap: 2px; background: var(--ink); padding: 5px; border: 1px dashed var(--line); max-width: 420px; margin: 0 auto; }
+.cell { aspect-ratio: 1; border: 1px dashed #1e3650; background: none; border-radius: 50%; position: relative; padding: 0; font: 600 clamp(11px, 3vw, 15px) var(--body); color: var(--chalk); display: grid; place-items: center; min-width: 0; }
+.cell.under { border-color: #3b5f84; background: rgba(76,195,255,.07); }
+.cell.on { border-style: solid; border-radius: 3px; }
+.cell.cont { font-size: 0; }
+.cell.cont::after { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .55; }
+.cell[data-cat="structure"] { background: #2a3f55; border-color: #49657f; }
+.cell[data-cat="mobility"] { background: #15191e; border-color: #55606c; }
+.cell[data-cat="weapon"] { background: #4a2a12; border-color: var(--hazard); color: #ffd9b8; }
+.cell[data-cat="utility"] { background: #3d3414; border-color: #b9973a; color: #ffe9a8; }
+.cell[data-cat="decor"] { background: #263238; border-color: #8fa6bd; border-style: dotted; color: #dfe7ef; }
+.cell[data-type="core"] { background: var(--chalk); color: var(--ink); border-color: var(--chalk); }
+.cell .arr { position: absolute; right: 1px; top: -1px; font: 600 9px var(--mono); color: var(--hazard); }
+.cell.err { box-shadow: 0 0 0 2px var(--bad) inset; }
+.titleblock { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); margin-top: 10px; }
+.titleblock div { padding: 6px 8px; border-right: 1px solid var(--line); min-width: 0; }
+.titleblock div:last-child { border-right: 0; }
+.titleblock small { display: block; font: 500 9px var(--mono); letter-spacing: .12em; color: var(--dim); text-transform: uppercase; }
+.titleblock b { font: 800 22px/1.1 var(--display); letter-spacing: .02em; }
+.budget { height: 6px; background: var(--ink); border: 1px solid var(--line); margin-top: 8px; }
+.budget i { display: block; height: 100%; background: var(--hazard); }
+.palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(152px, 1fr)); gap: 6px; }
+.pbtn { display: grid; grid-template-columns: 46px 1fr; gap: 0 8px; align-items: center; text-align: left; background: var(--paper-2); border: 1px solid var(--line); border-radius: var(--r); padding: 4px 8px 4px 4px; min-height: 54px; }
+.pbtn[aria-pressed="true"] { border-color: var(--hazard); box-shadow: 0 0 0 1px var(--hazard) inset; }
+.pbtn .g { grid-row: span 2; width: 46px; height: 46px; display: grid; place-items: center; font-weight: 600; border-radius: 2px; overflow: hidden; background: #2b4259; }
+.pbtn .g img { width: 100%; height: 100%; display: block; }
+.pbtn b { font-weight: 500; font-size: 13px; line-height: 1.2; }
+.pbtn small { font: 400 11px var(--mono); color: var(--dim); }
+.thumb { width: 44px; height: 44px; border-radius: 2px; display: block; background: #2b4259; }
+.cat-h { font: 500 10px var(--mono); letter-spacing: .14em; color: var(--dim); text-transform: uppercase; margin: 10px 0 6px; }
+.cat-h:first-child { margin-top: 0; }
+.kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px 12px; }
+.kv div small { display: block; font: 500 10px var(--mono); color: var(--dim); letter-spacing: .08em; }
+.kv div b { font: 500 15px var(--mono); font-variant-numeric: tabular-nums; }
+.swatches { display: flex; flex-wrap: wrap; gap: 5px; }
+.swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line); padding: 0; }
+.swatch[aria-pressed="true"] { border-color: var(--chalk); box-shadow: 0 0 0 2px var(--ink) inset; }
+
+/* league */
+.progress { height: 6px; background: var(--ink); border: 1px solid var(--line); }
+.progress i { display: block; height: 100%; background: var(--coolant); width: 0; }
+td.h2h { text-align: center; font: 12px var(--mono); padding: 0; }
+td.h2h button { background: none; border: 0; width: 100%; padding: 6px 4px; color: inherit; font: inherit; }
+td.h2h button:hover { background: var(--paper-2); }
+
+/* rules + mcp prose */
+.prose { max-width: 78ch; }
+.prose h1 { font: 800 30px/1.1 var(--display); letter-spacing: .02em; margin: 6px 0 10px; }
+.prose h2 { font: 600 18px var(--body); margin: 22px 0 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.prose h3 { font: 600 14px var(--body); margin: 16px 0 6px; color: var(--dim); }
+.prose p, .prose ul, .prose ol { margin: 0 0 10px; }
+.prose ul, .prose ol { padding-left: 20px; }
+.prose li { margin-bottom: 4px; }
+.prose pre { margin-bottom: 12px; }
+.prose .scroll-x { margin-bottom: 12px; }
+.prose-wide { max-width: none; }
+details > summary { cursor: pointer; padding: 8px 12px; font-weight: 500; }
+.copy { float: right; font: 500 11px var(--mono); padding: 2px 8px; min-height: 0; margin: -2px 0 6px 8px; }
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--chalk); color: var(--ink); padding: 8px 14px; border-radius: var(--r); font-size: 13px; z-index: 20; box-shadow: 0 6px 24px rgba(0,0,0,.5); max-width: calc(100vw - 32px); }
+
+@media (max-width: 900px) {
+  .arena-grid, .garage-grid { grid-template-columns: minmax(0, 1fr); }
+  .arena-grid > .stack { display: contents; }
+  #roster { order: 1; } #setup { order: 2; } #report-sheet { order: 3; }
+  .viewport { aspect-ratio: 4 / 3.3; }
+  .brand-mark { font-size: 28px; }
+  .tab { padding: 9px 11px 7px; } .tab small { display: none; }
+  .clock { font-size: 24px; } .score { font-size: 22px; }
+  .transport .time { min-width: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .bars span i { transition: none; } }
+</style>
+</head>
+<body>
+<header class="masthead">
+  <div class="brand"><span class="brand-mark">IRON<i>YARD</i></span></div>
+  <p class="brand-tag">Agents build a car out of bricks, then write its strategy; matches run offline, and the same seed always gives the same result.</p>
+  <nav class="tabs" role="tablist" aria-label="Pages">
+    <button class="tab" role="tab" data-tab="arena">Arena</button>
+    <button class="tab" role="tab" data-tab="garage">Garage</button>
+    <button class="tab" role="tab" data-tab="lab">Bot Lab</button>
+    <button class="tab" role="tab" data-tab="league">League</button>
+    <button class="tab" role="tab" data-tab="rules">Rules</button>
+    <button class="tab" role="tab" data-tab="mcp">Connect Agent<small>MCP</small></button>
+  </nav>
+</header>
+<main>
+  <section id="tab-arena" role="tabpanel">
+    <div class="arena-grid">
+      <div class="stack">
+        <div>
+          <div class="viewport" id="viewport">
+            <div class="hud" id="hud">
+              <div class="clock"><span id="clock">0:00</span><small id="clock-sub"></small></div>
+              <div class="zone-tag" id="zone-tag"></div>
+              <div class="score"><span class="t0" id="score0">0</span><span style="color:var(--dim)">:</span><span class="t1" id="score1">0</span></div>
+              <div id="labels"></div>
+              <div class="feed" id="feed"></div>
+            </div>
+            <div class="banner" id="banner" hidden></div>
+            <div class="busy" id="busy" hidden>Simulating the whole match offline…</div>
+          </div>
+          <div class="transport">
+            <button class="btn" id="play" aria-label="Play or pause">❚❚</button>
+            <select id="speed" aria-label="Playback speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
+            <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Timeline">
+            <span class="time num" id="time">0.0 / 0.0s</span>
+            <div class="seg" role="group" aria-label="View"><button id="view3d" aria-pressed="true">3D</button><button id="view2d" aria-pressed="false">2D</button></div>
+            <select id="camera" aria-label="Camera"></select>
+          </div>
+        </div>
+        <div class="sheet" id="report-sheet">
+          <header><h2>Battle report</h2></header>
+          <details id="report-details"><summary>Expand (spoils the result)</summary><div class="pad scroll-x" id="report"></div></details>
+        </div>
+      </div>
+      <div class="stack">
+        <div id="roster" class="stack"></div>
+        <form class="sheet" id="setup">
+          <header><h2>Match setup</h2></header>
+          <div class="pad stack">
+            <div class="row">
+              <div class="seg" id="mode-seg" role="group" aria-label="Mode"></div>
+              <label class="f grow">Map<select id="map"></select></label>
+            </div>
+            <pre class="minimap" id="minimap" aria-label="Map preview"></pre>
+            <p class="note" id="map-desc"></p>
+            <div class="row">
+              <label class="f" style="width:92px">Seed<input type="number" id="seed" min="0" max="999999" value="1"></label>
+              <label class="f" style="width:140px">Budget<select id="budget"><option value="800">Light 800</option><option value="1200" selected>Standard 1200</option><option value="1800">Heavy 1800</option></select></label>
+              <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" id="swap"> Swap spawns</label>
+            </div>
+            <div><div class="cat-h t0">Orange · team 0</div><div class="slots" id="slots0"></div></div>
+            <div><div class="cat-h t1">Blue · team 1</div><div class="slots" id="slots1"></div></div>
+            <div class="row">
+              <button class="btn primary grow" type="submit" id="run">Start match</button>
+              <button class="btn" type="button" id="reseed" title="Run again with the next seed">Next seed</button>
+            </div>
+            <div class="row"><label class="btn ghost" style="font-size:13px">Import replay JSON<input type="file" id="replay-file" accept=".json,application/json" hidden></label><span class="note">A file saved by the MCP tool run_match with save_replay</span></div>
+            <div id="setup-msg"></div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-garage" role="tabpanel" hidden>
+    <div class="garage-grid">
+      <div class="sheet">
+        <header><h2>Blueprint</h2><span class="code">9×11 studs · 0.4 m · 2 layers</span></header>
+        <div class="preview" id="g-preview"><span class="tag">Drag to rotate · live preview</span><span class="wclass" id="g-class"></span></div>
+        <div class="bp-wrap">
+          <div class="bp-head">
+            <div class="seg" id="layer-seg" role="group" aria-label="Layer"></div>
+            <div class="row" style="gap:6px"><button class="btn" type="button" id="g-mirror" title="Mirror the left half onto the right half">Mirror L→R</button><button class="btn ghost" type="button" id="g-clear">Clear</button></div>
+          </div>
+          <div class="bp-front">▲ FRONT</div>
+          <div class="bp" id="bp" role="grid" aria-label="Blueprint grid"></div>
+          <p class="note" id="g-hint" style="margin-top:6px"></p>
+          <div class="titleblock">
+            <div><small>Cost cr</small><b class="num" id="g-cost">0</b></div>
+            <div><small>Mass kg</small><b class="num" id="g-mass">0</b></div>
+            <div><small>Speed m/s</small><b class="num" id="g-speed">0</b></div>
+            <div><small>DPS</small><b class="num" id="g-dps">0</b></div>
+          </div>
+          <div class="budget" aria-hidden="true"><i id="g-budget-bar"></i></div>
+          <p class="note" id="g-budget-text" style="margin-top:6px"></p>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="sheet">
+          <header><h2>Brick box</h2><span class="code">Pick a part, then tap a stud</span></header>
+          <div class="pad">
+            <div class="row" style="margin-bottom:10px">
+              <div class="seg" id="dir-seg" role="group" aria-label="Facing"></div>
+              <button class="btn" type="button" id="erase" aria-pressed="false">Eraser</button>
+              <label class="f" style="flex:1 1 170px">Load an existing design<select id="g-load"></select></label>
+            </div>
+            <div id="palette"></div>
+            <p class="note" id="part-info" style="margin-top:10px"></p>
+            <div class="cat-h" style="margin-top:14px">Paint (accent colour)</div>
+            <div class="swatches" id="g-paint"></div>
+          </div>
+        </div>
+        <div class="sheet">
+          <header><h2>Performance</h2><span class="code">Derived stats</span></header>
+          <div class="pad stack"><div class="kv" id="g-stats"></div><div id="g-msgs" class="stack" style="gap:6px"></div></div>
+        </div>
+        <div class="sheet">
+          <header><h2>Add a brain</h2><span class="code">Controller</span></header>
+          <div class="pad stack">
+            <div class="row">
+              <label class="f grow">Strategy template<select id="g-ai"></select></label>
+              <label class="f grow">Name<input type="text" id="g-name" maxlength="24" value="Custom Car"></label>
+            </div>
+            <p class="note" id="g-ai-note"></p>
+            <div class="row"><button class="btn primary" type="button" id="g-save">Save and fight</button><button class="btn" type="button" id="g-tolab">Save and edit the code</button></div>
+            <div id="g-save-msg"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-lab" role="tabpanel" hidden>
+    <div class="stack">
+      <div class="sheet">
+        <header><h2>Controller source</h2><span class="code">one file = design + tick</span></header>
+        <div class="pad stack">
+          <div class="row">
+            <label class="f grow">Open<select id="lab-bot"></select></label>
+            <label class="f grow">Save as<input type="text" id="lab-name" maxlength="24" placeholder="my-bot"></label>
+            <button class="btn" type="button" id="lab-check">Check</button>
+            <button class="btn primary" type="button" id="lab-save">Save</button>
+            <button class="btn ghost" type="button" id="lab-copy">Copy source</button>
+            <button class="btn ghost" type="button" id="lab-delete">Delete</button>
+          </div>
+          <textarea id="lab-src" rows="26" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Controller source"></textarea>
+          <p class="note">Built-in bots are read-only examples: change one, then save it under a new name. Your own bots are stored in this browser on this device; copy the source if you want to keep it for good.</p>
+          <div id="lab-msg" class="stack" style="gap:8px"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-league" role="tabpanel" hidden>
+    <div class="stack">
+      <div class="sheet" id="lb" hidden>
+        <header><h2>Leaderboard</h2><span class="code" id="lb-meta"></span></header>
+        <div class="pad stack">
+          <div class="row"><div class="seg" id="lb-mode" role="group" aria-label="Queue"></div><div class="seg" id="lb-by" role="group" aria-label="Group by"></div></div>
+          <div class="scroll-x" id="lb-table"></div>
+          <div class="note" id="lb-note"></div>
+        </div>
+      </div>
+      <div class="sheet">
+        <header><h2>Round robin</h2><span class="code">Both spawn sides</span></header>
+        <div class="pad stack">
+          <div><div class="cat-h">Entrants (each bot fills its whole team)</div><div class="chips" id="lg-bots"></div></div>
+          <div class="row">
+            <div class="seg" id="lg-mode" role="group" aria-label="Mode"></div>
+            <label class="f" style="width:110px">Seeds per map<select id="lg-seeds"><option>1</option><option>2</option><option>3</option></select></label>
+          </div>
+          <div><div class="cat-h">Maps</div><div class="chips" id="lg-maps"></div></div>
+          <div class="row"><button class="btn primary" type="button" id="lg-run">Start</button><span class="note" id="lg-count"></span></div>
+          <div class="progress" aria-hidden="true"><i id="lg-bar"></i></div>
+          <div id="lg-msg"></div>
+        </div>
+      </div>
+      <div class="sheet" id="lg-result" hidden>
+        <header><h2>Standings</h2><span class="code" id="lg-meta"></span></header>
+        <div class="pad stack"><div class="scroll-x" id="lg-table"></div><div><div class="cat-h">Head to head (row vs column: W-D-L) · tap a cell to watch a match</div><div class="scroll-x" id="lg-h2h"></div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-rules" role="tabpanel" hidden><div class="stack" id="rules"></div></section>
+  <section id="tab-mcp" role="tabpanel" hidden><div class="sheet"><header><h2>Connect your agent</h2><span class="code">Model Context Protocol</span></header><div class="pad prose prose-wide" id="mcp"></div></div></section>
+</main>
+<div class="toast" id="toast" hidden role="status"></div>
+
+<!--THREE-->
+<script id="engine-src">/*ENGINE*/</script>
+<script id="runner-src" type="text/plain">/*RUNNER*/</script>
+<script>window.__BOT_SOURCES = /*BOTS*/{};</script>
+<script>window.__LADDER = /*LADDER*/null;</script>
+<script>/*APP*/</script>
+</body>
+</html>
