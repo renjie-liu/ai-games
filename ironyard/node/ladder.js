@@ -16,7 +16,7 @@ import { withSources } from './runner.js';
 
 export const LADDER_DIR = process.env.IRONYARD_LADDER_DIR ? path.resolve(process.env.IRONYARD_LADDER_DIR) : path.join(ROOT, 'ladder');
 export const QUEUES = ['1v1', '2v2', '3v3'];
-export const TEAM_ROUNDS = 24;
+export const TEAM_ROUNDS = 40;
 const SEED = 1, START = 1500, PRIOR = 2;
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const storeFile = () => path.join(LADDER_DIR, 'results.json');
@@ -36,7 +36,7 @@ export function entrantsNow() {
  * plays — whoever does not fit into an even number of full teams sits the round out — and the
  * players are then dealt out one to a team, author by author, the author with the most bots
  * first. Two bots by one author therefore only share a team when that author has more bots in
- * the round than there are teams.
+ * the round than there are teams. The teams are then put in a scrambled order and paired off.
  */
 export function draft(entrants, size, round) {
   const mix = (x) => sha(`${SEED}|${size}|${round}|${x}`);
@@ -49,7 +49,8 @@ export function draft(entrants, size, round) {
   const dealt = [...groups].sort((a, b) => b[1].length - a[1].length || (mix('author:' + a[0]) < mix('author:' + b[0]) ? -1 : 1)).flatMap((g) => g[1]);
   const teams = Array.from({ length: n }, () => []);
   dealt.forEach((e, k) => teams[k % n].push(e));
-  return teams;
+  // who meets whom is scrambled again: dealt in author order, the smallest authors would always be on neighbouring teams
+  return teams.map((t) => ({ t, h: mix('team:' + t.map((e) => e.id).sort().join('+')) })).sort((a, b) => (a.h < b.h ? -1 : 1)).map((x) => x.t);
 }
 
 /** Every match of a queue's season, in a fixed order: [{ mode, map, seed, swap, teams: [[id, ...], [id, ...]] }]. */
@@ -73,8 +74,9 @@ const keyOf = (m, hashOf) => `${m.mode}|${m.map}|${m.seed}|${m.swap ? 1 : 0}|${m
 
 /**
  * Ratings from a season's results: the ratings under which the results are most likely, where
- * a side's chance of winning is 1 / (1 + 10^(-d/400)) for a rating lead of d, a team's strength
- * is the mean of its members', and a draw is half a win. Every bot also counts as having drawn
+ * a side's chance of winning is 1 / (1 + 10^(-d/400)) for a lead of d, a team's strength is
+ * what its members add up to (each counts for its rating less 1500, so a bot rated 1700 is worth
+ * 200 points to any team it is on, as it is in 1v1), and a draw is half a win. Every bot also counts as having drawn
  * twice against a 1500 — enough to keep a bot that has only ever won, or only ever lost, on
  * the scale. All matches are weighed together, so the order they were played in does not matter
  * and two bots with the same record against the same field get the same rating.
@@ -87,13 +89,13 @@ export function rate(entrants, matches, results) {
     const x = row[id]; x.played++;
     if (s === 0.5) x.d++; else if ((s === 1) === (side === 0)) x.w++; else x.l++;
   }
-  const mean = (ids) => ids.reduce((t, id) => t + R[id], 0) / ids.length;
+  const strength = (ids) => ids.reduce((t, id) => t + R[id] - START, 0);
   const chance = (d) => 1 / (1 + 10 ** (-d / 400));
   const ids = entrants.map((e) => e.id), SCALE = 400 / Math.LN10;
   for (let it = 0; it < 200 && played.length; it++) {
     const pull = Object.fromEntries(ids.map((id) => [id, 0])), firm = Object.fromEntries(ids.map((id) => [id, 0]));
     for (const { teams, s } of played) {
-      const e = chance(mean(teams[0]) - mean(teams[1])), give = e * (1 - e);
+      const e = chance(strength(teams[0]) - strength(teams[1])), give = e * (1 - e);
       for (const id of teams[0]) { pull[id] += s - e; firm[id] += give; }
       for (const id of teams[1]) { pull[id] -= s - e; firm[id] += give; }
     }
