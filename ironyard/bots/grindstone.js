@@ -7,7 +7,7 @@
 // the enemy carries (rushes keg throwers, keeps flamers and blades at arm's length), dodges
 // shells and kegs, digs in when shoved toward a hole, and never parks on lava.
 // In teams it follows a `{ focus: id }` call and makes one when it is the lowest living slot.
-const meta = { name: 'Grindstone', author: 'Rust Hollow Garage', notes: 'Tracked MG+laser wall: sunk cockpit, shield; aims at whatever stud ends the fight soonest.' };
+const meta = { name: 'Grindstone', author: 'Rust Hollow Garage', model: 'Opus', notes: 'Tracked MG+laser wall: sunk cockpit, shield; aims at whatever stud ends the fight soonest.' };
 
 const design = (ctx, api) => api.util.blueprint('Grindstone', {
   deck: [

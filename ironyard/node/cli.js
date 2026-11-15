@@ -7,7 +7,7 @@ import {
   validateDesign, renderDesign, makeSchedule, standings, describeMap,
 } from '../engine/index.js';
 import { listBots, readBotSource, ROOT } from './loader.js';
-import { ladder, ladderMarkdown, QUEUES } from './ladder.js';
+import { ladder, ladderMarkdown, ladderSnapshot, QUEUES } from './ladder.js';
 import { MatchPool, withSources } from './runner.js';
 
 function parseArgs(argv) {
@@ -164,16 +164,16 @@ async function main() {
       console.log(`${board.entrants} bots, ${board.matchesPlayedNow} matches played just now (the rest were on file)`);
       for (const [q, t] of Object.entries(board.queues)) {
         console.log(`\n${q} — ${t.onFile} matches\n` + '#'.padStart(3) + '  ' + 'bot'.padEnd(16) + 'author'.padEnd(16) + 'rating'.padStart(7) + 'played'.padStart(8) + '  W-D-L'.padEnd(14) + 'win%'.padStart(5));
-        for (const r of t.standings) console.log(String(r.rank).padStart(3) + '  ' + r.id.padEnd(16) + r.author.slice(0, 15).padEnd(16) + String(r.rating).padStart(7) + String(r.played).padStart(8) + ('  ' + r.w + '-' + r.d + '-' + r.l).padEnd(14) + String(Math.round(r.winRate * 100)).padStart(5));
+        for (const r of t.standings) console.log(String(r.rank ?? '—').padStart(3) + '  ' + r.id.padEnd(16) + r.author.slice(0, 15).padEnd(16) + String(r.rating).padStart(7) + String(r.played).padStart(8) + ('  ' + r.w + '-' + r.d + '-' + r.l).padEnd(14) + String(Math.round(r.winRate * 100)).padStart(5));
       }
       if (board.errors) console.log(`\nmatches that could not be played, e.g.: ${board.errors[0]}`);
       if (args.write) {
         if (mode) throw new Error('--write saves all three queues: run it without --mode');
+        if (!board.complete || board.errors?.length) throw new Error('refusing to publish an incomplete or error-containing ladder; fix the reported matches and rerun');
         const file = path.join(ROOT, 'LEADERBOARD.md'), snap = path.join(ROOT, 'web', 'ladder.json');
         fs.writeFileSync(file, ladderMarkdown(board));
         // the same tables for the page's League tab: `npm run build` puts them into dist/index.html
-        fs.writeFileSync(snap, JSON.stringify({ engine: board.engine, entrants: board.entrants,
-          queues: Object.fromEntries(Object.entries(board.queues).map(([q, t]) => [q, { matches: t.matches, standings: t.standings.map((r) => [r.id, r.author, r.rating, r.played, r.w, r.d, r.l]), authors: t.authors.map((a) => [a.author, a.bots, a.best, a.bestRating, a.meanRating]) }])) }));
+        fs.writeFileSync(snap, JSON.stringify(ladderSnapshot(board)));
         console.log(`\nwrote ${file}\nwrote ${snap} (run \`npm run build\` to put it on the page)`);
       }
       return;
