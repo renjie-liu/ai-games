@@ -1,0 +1,43 @@
+# Publishes the website: a landing page, and each game's built page under its own folder.
+# It runs when main changes. For it to work, GitHub Pages has to be switched on once, in
+# Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
+name: Publish the site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# one deployment at a time; a newer one waits for the one in flight instead of cancelling it
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Put the site together
+        run: |
+          mkdir -p _site/ironyard
+          cp site/index.html site/ironyard.jpg _site/
+          # the game is one self-contained file, already built and tested in the repository
+          cp ironyard/dist/index.html _site/ironyard/index.html
+          touch _site/.nojekyll
+
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v5
