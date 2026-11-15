@@ -12,7 +12,7 @@ import http from 'node:http';
 import readline from 'node:readline';
 import crypto from 'node:crypto';
 import {
-  MAPS, MAP_IDS, MODES, PARTS, ITEMS, TILES, RULES, BUDGETS, DEFAULT_BUDGET, CELL, GRID_HX, GRID_HY, GRID_W, GRID_L, PAINTS, DECOR_LIMIT,
+  MAPS, MAP_IDS, MODES, PARTS, ITEMS, TILES, TILE, RULES, BUDGETS, DEFAULT_BUDGET, CELL, GRID_HX, GRID_HY, GRID_W, GRID_L, PAINTS, DECOR_LIMIT,
   validateDesign, parseBlueprint, renderDesign, makeSchedule, standings, summarize, FLAG, ENGINE_VERSION,
 } from '../engine/index.js';
 import { ladder, QUEUES } from './ladder.js';
@@ -148,7 +148,7 @@ const TOOLS = [
       if (!design && !blueprint) throw new Error('give `design` (JSON) or `blueprint` ({ chassis: [rows], deck: [rows] })');
       const d = design || parseBlueprint('blueprint', blueprint, { paint: { accent: blueprint.accent } });
       const v = validateDesign(d, { budget: budget ?? DEFAULT_BUDGET });
-      return { ok: v.ok, errors: v.errors, warnings: v.warnings, stats: v.stats, analysis: v.ok ? analyzeDesign(v) : undefined, picture: v.design ? renderDesign(v.design) : undefined,
+      return { ok: v.ok, errors: v.errors, warnings: v.warnings, stats: v.stats, analysis: v.design && v.stats && (v.ok || v.errors.every((e) => /exceeds budget/.test(e))) ? analyzeDesign(v) : undefined, picture: v.design ? renderDesign(v.design) : undefined,
         design: design ? undefined : v.design };
     },
   },
@@ -246,6 +246,7 @@ const TOOLS = [
         opponents: { type: 'array', items: { type: 'string' }, description: 'Default: every built-in bot.' },
         maps: { type: 'array', items: { type: 'string', enum: MAP_IDS }, description: 'Default: all maps.' },
         seeds: { type: 'integer', minimum: 1, maximum: 5, description: 'Seeds per pairing and map. Default 1.' },
+        baseline: { type: 'string', description: 'Another bot to play through exactly the same matches — for instance the version you are trying to improve on. Adds `comparedWith`: its record next to yours per opponent, and the matches whose result changed.' },
         budget: budgetSchema,
       },
       required: ['name'], additionalProperties: false,
@@ -282,6 +283,42 @@ const TOOLS = [
       }));
       const table = standings(entrants, results);
       const me = table.find((r) => r.id === name);
+      // the same matches with another bot in this one's place: what changed, opponent by opponent and match by match
+      let comparedWith;
+      if (a.baseline !== undefined) {
+        const base = String(a.baseline);
+        if (base === name) throw new Error('baseline must be a different bot from the one being evaluated');
+        const baseSource = readBotSource(base);
+        const key = (m) => `${m.b}|${m.map}|${m.seed}|${m.swap ? 1 : 0}`;
+        const mark = (w, mine) => (w === mine ? 'win' : w < 0 ? 'draw' : 'loss');
+        const now = new Map(results.map((m) => [key(m), mark(m.winner, 0)]));
+        const then = new Map();
+        await Promise.all(schedule.filter((m) => m.b !== base).map(async (m) => {
+          try {
+            const s = await pool.run({ map: m.map, mode, seed: m.seed, swap: m.swap, budget: a.budget ?? DEFAULT_BUDGET, want: 'score',
+              teams: m.teams.map((t, side) => t.map((id) => (side === 0 ? { id: base, source: baseSource } : { id, source: sources[id] }))) });
+            then.set(key(m), mark(s.winner, 0));
+          } catch (e) { then.set(key(m), e.detail && e.detail.bot === base ? 'loss' : 'draw'); }
+        }));
+        const per = {}, gained = [], lost = [];
+        let bw = 0, bl = 0, bd = 0;
+        for (const m of schedule) {
+          const k = key(m), was = then.get(k), is = now.get(k);
+          if (was === undefined) continue;
+          const row = (per[m.b] ||= { now: [0, 0], baseline: [0, 0] });
+          if (is === 'win') row.now[0]++; else if (is === 'loss') row.now[1]++;
+          if (was === 'win') { row.baseline[0]++; bw++; } else if (was === 'loss') { row.baseline[1]++; bl++; } else bd++;
+          const at = { opponent: m.b, map: m.map, seed: m.seed, ...(m.swap ? { swap: true } : {}) };
+          if (is === 'win' && was !== 'win') gained.push(at); else if (is !== 'win' && was === 'win') lost.push(at);
+        }
+        comparedWith = {
+          baseline: base, baselineRecord: `${bw}W ${bd}D ${bl}L`,
+          vsOpponent: Object.fromEntries(Object.entries(per).map(([o, r]) => [o, `now ${r.now[0]}-${r.now[1]}, baseline ${r.baseline[0]}-${r.baseline[1]} (${r.now[0] - r.baseline[0] >= 0 ? '+' : ''}${r.now[0] - r.baseline[0]})`])),
+          matchesGained: gained.length, matchesLost: lost.length,
+          lost: lost.slice(0, 12), gained: gained.slice(0, 12),
+          note: lost.length > 12 || gained.length > 12 ? 'lists are cut at 12; replay any of them with run_match (team_a: you or the baseline, team_b: the opponent, same map, seed and swap)' : 'replay any of these with run_match (team_a: you or the baseline, team_b: the opponent, same map, seed and swap)',
+        };
+      }
       losses.sort((x, y) => (y.hullLeft[1] - y.hullLeft[0]) - (x.hullLeft[1] - x.hullLeft[0]));
       const failed = results.filter((r) => r.error);
       return {
@@ -289,6 +326,7 @@ const TOOLS = [
         vsOpponent: Object.fromEntries(Object.entries(me.vs).map(([k, v]) => [k, `${v.w}W ${v.d}D ${v.l}L`])),
         byMap: Object.fromEntries(Object.entries(byMap).map(([k, v]) => [k, `${v.w}W ${v.d}D ${v.l}L`])),
         howMyVehiclesDied: deaths,
+        ...(comparedWith ? { comparedWith } : {}),
         diagnosis: diagnose(results.filter((r) => r.digest).map((r) => r.digest)),
         matchesWithMyRuntimeErrors: errors,
         worstLosses: losses.slice(0, 6).map((l) => ({ ...l,
@@ -414,17 +452,23 @@ const TOOLS = [
       let step = a.step ?? 0.5;
       if ((to - from) / step > 400) step = Math.ceil(((to - from) / 400) * 10) / 10;
       const rows = [];
+      const tracks = res.vehicles.map((v) => (v.telemetry && v.telemetry.track) || null);
       let next = from;
       for (const f of res.frames) {
         if (f.t + 1e-9 < next || f.t > to + 1e-9) continue;
         next = f.t + step;
-        rows.push([f.t, ...f.v.map((r) => {
+        rows.push([f.t, ...f.v.map((r, vi) => {
           const state = !(r[6] & FLAG.alive) ? 'dead' : [r[6] & FLAG.fire && 'burning', r[6] & FLAG.stun && 'stunned', r[6] & FLAG.boost && 'boosting', r[6] & FLAG.hover && 'hovering'].filter(Boolean).join('+');
-          return [r[0], r[1], Math.round((r[2] * 180) / Math.PI), Math.round(r[5] * 100), Math.round(r[3] * 100), state];
+          const row = [r[0], r[1], Math.round((r[2] * 180) / Math.PI), Math.round(r[5] * 100), Math.round(r[3] * 100), state];
+          // what its controller was asking for, and what it stood on, at the nearest half second
+          const k = tracks[vi], n = k ? Math.round(f.t / k.step) : -1;
+          if (k && n < k.throttle.length) row.push(k.throttle[n], k.steer[n], k.fire[n], k.tile[n]);
+          return row;
         })]);
       }
-      return { file: name, window: [from, to], step, vehicles,
-        legend: 'each row: [t, then one entry per vehicle in the order of `vehicles`: [x m, y m, heading deg, hull %, energy %, state]]', rows };
+      return { file: name, window: [from, to], step, vehicles, tilesAreMetres: TILE,
+        legend: 'each row: [t, then one entry per vehicle in the order of `vehicles`: [x m, y m, heading deg, hull %, energy %, state'
+          + (tracks.some(Boolean) ? ', throttle asked -1..1, steer asked -1..1, fire asked 0/1, tile underneath]]. The last four are absent once the vehicle is dead. Tile (col, row) = floor(x / ' + TILE + '), floor(y / ' + TILE + '); list_maps gives the rows.' : ']]'), rows };
     },
   },
 ];

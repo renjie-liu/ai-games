@@ -72,10 +72,25 @@ What happens under fire:
   moves it (wheels, tracks, hover pads, thrusters) and nothing left that can hurt (guns, flamers, harpoons, saws,
   pistons, spikes, plows, kegs): a hull like that is a wreck.
 * **Shots, beams and blasts hit the deck piece of a stud column first**, then the chassis piece under it.
-  **Rams, saws and mines hit the chassis piece first.** A shot travelling across the vehicle hits whatever column it enters first.
+  **Rams, saws and mines hit the chassis piece first.** A shot travelling across the vehicle hits whatever column it enters first —
+  whether what stands there is on the deck or only on the chassis. (`low` in the tables is about your own firing lanes only: a deck
+  gun shoots over a low deck piece in front of it. To an incoming shot a low piece is a piece like any other.)
 * Slopes: a kinetic or explosive hit arriving against the slope's facing (within 60°) only does 45%.
+* **What a hit is worth** after the piece it lands on has had its say (armor takes 2 off every kinetic or explosive hit, never
+  more than three quarters of it; a slope struck on its face lets 45% through and then takes 1 off). Lasers, flame and saws are not reduced by either:
+
+| weapon | one hit | on a plain piece | on armor | on a slope, face on | on a slope, from elsewhere |
+|---|---|---:|---:|---:|---:|
+| mg | 4 kinetic | 4 | 2 | 0.8 | 3 |
+| cannon | 30 kinetic | 30 | 28 | 12.5 | 29 |
+| railgun | 64 kinetic | 64 | 62 | 27.8 | 63 |
+| missile | 30 x2 explosive | 30 | 28 | 12.5 | 29 |
+| mortar | 46 explosive | 46 | 44 | 19.7 | 45 |
+
 * Decor is not solid: shots pass through it, and it is shaken off when the piece under it takes 20 damage.
-* **Fire.** Every piece has heat. Flamethrowers, lava, and the blasts of kegs and barrels raise it; at heat 1 a piece
+* **Fire.** Every piece has heat. Flamethrowers and lava raise it steadily. Every blast raises it too: the burst of a cannon shell, a missile or a
+  mortar round gives each piece it damages up to 0.35 heat (times that piece's `burn`, less towards the edge of the burst), so three
+  or four bursts on the same plates light them, and the blast of a keg or a barrel lights everything in reach that burns at once. At heat 1 a piece
   that burns catches fire. It then loses 6 hp/s for 6 s (armor does not help) and heats every piece touching
   it by 0.45/s, so the fire walks across the vehicle. A piece burns once. The tables say what burns: plates, bricks,
   wheels and most equipment do; armor, slopes, tracks, spikes, plows, pistons and the core do not, so a row of them is a

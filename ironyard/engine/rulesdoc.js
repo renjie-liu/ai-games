@@ -50,6 +50,11 @@ function partRow(p) {
 
 export function rulesMarkdown() {
   const cats = { structure: 'Structure & defence', mobility: 'Mobility & steering', weapon: 'Weapons', utility: 'Utility', decor: 'Decor (free)' };
+  // what one hit of each gun is worth on the three kinds of surface, by the same arithmetic the engine uses
+  const after = (d, def, faced) => { let x = faced && def.deflect ? d * def.deflect : d; if (def.armor) x = Math.max(x * 0.25, x - def.armor); return Math.round(x * 10) / 10; };
+  const hitTable = ['| weapon | one hit | on a plain piece | on armor | on a slope, face on | on a slope, from elsewhere |', '|---|---|---:|---:|---:|---:|',
+    ...Object.values(PARTS).filter((p) => p.weapon && p.weapon !== 'hook' && p.dmg && (p.dtype === 'kinetic' || p.dtype === 'explosive')).map((p) =>
+      `| ${p.id} | ${p.dmg}${p.salvo ? ' x' + p.salvo : ''} ${p.dtype} | ${p.dmg} | ${after(p.dmg, PARTS.armor, false)} | ${after(p.dmg, PARTS.slope, true)} | ${after(p.dmg, PARTS.slope, false)} |`)].join('\n');
   const partTables = Object.entries(cats).map(([cat, title]) =>
     `**${title}**\n\n| type | glyph | studs | cost | mass kg | hp | placement | numbers | notes |\n|---|---|---|---|---|---|---|---|---|\n` +
     Object.values(PARTS).filter((p) => p.cat === cat).map(partRow).join('\n')).join('\n\n');
@@ -133,10 +138,19 @@ What happens under fire:
   moves it (wheels, tracks, hover pads, thrusters) and nothing left that can hurt (guns, flamers, harpoons, saws,
   pistons, spikes, plows, kegs): a hull like that is a wreck.
 * **Shots, beams and blasts hit the deck piece of a stud column first**, then the chassis piece under it.
-  **Rams, saws and mines hit the chassis piece first.** A shot travelling across the vehicle hits whatever column it enters first.
+  **Rams, saws and mines hit the chassis piece first.** A shot travelling across the vehicle hits whatever column it enters first —
+  whether what stands there is on the deck or only on the chassis. (\`low\` in the tables is about your own firing lanes only: a deck
+  gun shoots over a low deck piece in front of it. To an incoming shot a low piece is a piece like any other.)
 * Slopes: a kinetic or explosive hit arriving against the slope's facing (within 60°) only does ${Math.round(PARTS.slope.deflect * 100)}%.
+* **What a hit is worth** after the piece it lands on has had its say (armor takes ${PARTS.armor.armor} off every kinetic or explosive hit, never
+  more than three quarters of it; a slope struck on its face lets ${Math.round(PARTS.slope.deflect * 100)}% through and then takes ${PARTS.slope.armor} off). Lasers, flame and saws are not reduced by either:
+
+${hitTable}
+
 * Decor is not solid: shots pass through it, and it is shaken off when the piece under it takes ${PARTS.tile.hp} damage.
-* **Fire.** Every piece has heat. Flamethrowers, lava, and the blasts of kegs and barrels raise it; at heat 1 a piece
+* **Fire.** Every piece has heat. Flamethrowers and lava raise it steadily. Every blast raises it too: the burst of a cannon shell, a missile or a
+  mortar round gives each piece it damages up to ${R.blastHeat} heat (times that piece's \`burn\`, less towards the edge of the burst), so three
+  or four bursts on the same plates light them, and the blast of a keg or a barrel lights everything in reach that burns at once. At heat 1 a piece
   that burns catches fire. It then loses ${R.fireDps} hp/s for ${R.fireTime} s (armor does not help) and heats every piece touching
   it by ${R.fireSpread}/s, so the fire walks across the vehicle. A piece burns once. The tables say what burns: plates, bricks,
   wheels and most equipment do; armor, slopes, tracks, spikes, plows, pistons and the core do not, so a row of them is a

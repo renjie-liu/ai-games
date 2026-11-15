@@ -5,6 +5,7 @@
 // hooks from the places where it already does the work (damage, destroy, firing) and
 // `sampleTelemetry` once a tick, which looks at the vehicles ten times a second.
 import { PARTS } from './parts.js';
+import { tileCodeAt, TILE_NAME } from './maps.js';
 
 const TYPES = Object.keys(PARTS);
 /** Every label a point of damage can carry: the part type of the weapon that dealt it, or one of the rest. */
@@ -19,6 +20,7 @@ export const BANDS = ['0-4', '4-8', '8-13', '13-20', '20+'];
 export const SIDES = ['front', 'left', 'right', 'rear'];
 export const bandOf = (d) => (d < 4 ? 0 : d < 8 ? 1 : d < 13 ? 2 : d < 20 ? 3 : 4);
 export const TIMELINE_STEP = 2;      // seconds between timeline samples
+export const TRACK_STEP = 0.5;       // seconds between samples of what the controller asked for and what it stood on
 const EVERY = 6;                     // ticks between looks at the vehicles (10 Hz at 60 Hz physics)
 // what stepWeapons leaves in tel.fire each tick
 const WANTED = 1, UNAIMED = 2, FIRED = 4, STARVED = 8;
@@ -52,6 +54,7 @@ export function newTelemetry(v, nv) {
     stuck: 0, stuckOn: 0, reversing: 0, top: 0,
     losses: [], lossTick: -1, lossBy: null,
     hull: [], energy: [], dist: [], guns: [],
+    trk: [[], [], [], []],             // throttle, steer, fire asked for (0/1), tile underneath — every TRACK_STEP while alive
   };
 }
 
@@ -134,9 +137,16 @@ export function sampleTelemetry(w) {
   if (w.tick % EVERY) return;
   const h = w.dt * EVERY;
   const line = w.tick % Math.max(EVERY, Math.round(TIMELINE_STEP / w.dt / EVERY) * EVERY) === 0;
+  const track = w.tick % Math.round(TRACK_STEP / w.dt) === 0;
   for (const v of w.vehicles) {
     if (!v.alive) continue;
     const T = v.tel, foes = w.teams[1 - v.team], f = T.fire;
+    if (track) {
+      const c = v.cmd, k = T.trk;
+      k[0].push(r1(c.throttle || 0)); k[1].push(r1(c.steer || 0));
+      k[2].push(c.fire === true || (Array.isArray(c.fire) && c.fire.length > 0) ? 1 : 0);
+      k[3].push(tileCodeAt(w.map, v.x, v.y));
+    }
     // the reach of its guns: harpoons are not for shooting people with; a mortar needs no line of sight, and cannot hit close by
     let reach = 0, lob = 0, lobMin = 0;
     for (const g of v.weapons) {
@@ -222,6 +232,8 @@ export function telemetryOf(w, v) {
       movers: T.movers, moversLost: T.moversLost, immobileAt: T.immobileAt },
     losses: T.losses.map((l) => ({ ...l })), lossesByCause,
     timeline: { step: TIMELINE_STEP, hull: T.hull.slice(), energy: T.energy.slice(), dist: T.dist.slice(), weapons: T.guns.slice() },
+    // what the controller asked for and the tile it stood on, while it lived; kept in full results (replays), not in reports
+    track: { step: TRACK_STEP, throttle: T.trk[0].slice(), steer: T.trk[1].slice(), fire: T.trk[2].slice(), tile: T.trk[3].map((c) => TILE_NAME[c] || 'floor') },
   };
 }
 

@@ -137,7 +137,12 @@ async function exercise(client, label) {
   const tr = JSON.parse(text(await client.callTool({ name: 'get_replay', arguments: { file: replayName, view: 'trace', from: 2, to: 6, step: 1 } })));
   assert.equal(tr.rows.length, 5);
   assert.equal(tr.rows[0].length, 1 + tr.vehicles.length);
-  assert.ok(tr.rows.every((r) => r[0] >= 2 && r[0] <= 6 && r[1].length === 6 && r[1][3] <= 100));
+  assert.ok(tr.rows.every((r) => r[0] >= 2 && r[0] <= 6 && r[1][3] <= 100));
+  // a living vehicle's row also says what its controller asked for and what it stood on
+  const alive = tr.rows[0][1];
+  assert.equal(alive.length, 10, JSON.stringify(alive));
+  assert.ok(alive[6] >= -1 && alive[6] <= 1 && alive[7] >= -1 && alive[7] <= 1 && (alive[8] === 0 || alive[8] === 1) && typeof alive[9] === 'string');
+  assert.match(tr.legend, /throttle asked/);
   // …and what the match's telemetry says, for everybody or for one vehicle
   const tel = JSON.parse(text(await client.callTool({ name: 'get_replay', arguments: { file: replayName, view: 'telemetry' } })));
   assert.equal(tel.vehicles.length, m2.vehicles.length); assert.match(tel.legend, /metres/);
@@ -175,6 +180,21 @@ async function exercise(client, label) {
   assert.equal(team.vehicles.length, 6);
 
   const ev = JSON.parse(text(await client.callTool({ name: 'evaluate_bot', arguments: { name, maps: ['proving', 'sumo'], opponents: ['rookie', 'bulldozer', 'hornet'] } })));
+  // the same matches with another bot in its place: record against record, and which matches changed hands
+  const cmp = JSON.parse(text(await client.callTool({ name: 'evaluate_bot', arguments: { name, maps: ['proving'], opponents: ['bulldozer', 'hornet'], baseline: 'rookie' } }))).comparedWith;
+  assert.equal(cmp.baseline, 'rookie');
+  assert.deepEqual(Object.keys(cmp.vsOpponent).sort(), ['bulldozer', 'hornet']);
+  assert.match(cmp.vsOpponent.hornet, /^now \d+-\d+, baseline \d+-\d+ \([+-]\d+\)$/);
+  assert.equal(cmp.matchesGained, cmp.gained.length); assert.equal(cmp.matchesLost, cmp.lost.length);
+  assert.ok(cmp.gained.concat(cmp.lost).every((m) => m.opponent && m.map && m.seed));
+  const self = await client.callTool({ name: 'evaluate_bot', arguments: { name, maps: ['proving'], opponents: ['hornet'], baseline: name } });
+  assert.equal(self.isError, true);
+  // a design that is only over budget still gets its analysis
+  const rich = JSON.parse(text(await client.callTool({ name: 'validate_design', arguments: { design: { parts: [{ type: 'core', x: 0, y: 0, z: 1 },
+    ...[-2, -1, 0, 1, 2].flatMap((x) => [-3, -2, -1, 0, 1, 2, 3].map((y) => ({ type: 'armor', x, y, z: 0 }))),
+    { type: 'track', x: -3, y: -1, z: 0 }, { type: 'track', x: 3, y: -1, z: 0 }, { type: 'railgun', x: 0, y: 1, z: 1, dir: 'N' }, { type: 'railgun', x: -1, y: 1, z: 1, dir: 'N' }, { type: 'railgun', x: 1, y: 1, z: 1, dir: 'N' }] } } })));
+  assert.equal(rich.ok, false); assert.match(rich.errors.join(' '), /exceeds budget/);
+  assert.ok(rich.analysis && rich.analysis.coreProtection.front.pieces > 0, 'analysis for an over-budget design');
   assert.equal(ev.matches, 12); assert.equal(ev.wins + ev.draws + ev.losses, 12);
   // the diagnosis: every match's telemetry added up, apart for wins and for losses
   const dx = ev.diagnosis;

@@ -81,8 +81,10 @@ Carbon (`gemini-4-carbon-medium`) and Hydrogen (`gemini-4-hydrogen-medium`) are 
 | Bot | Recorded model | 1v1 | 2v2 | 3v3 |
 |---|---|---:|---:|---:|
 | quillback | Fable | 1 | 5 | 1 |
-| grindstone | Opus | 4 | 1 | 4 |
-| sol | gpt-6-sol | 5 | 3 | 5 |
-| astra | gpt-6-astra | 2 | 2 | 2 |
-| carbon | gemini-4-carbon-medium | 3 | 4 | 3 |
-| hydrogen | gemini-4-hydrogen-medium | 6 | 6 | 11 |
+| grindstone | Opus | 2 | 2 | 6 |
+| sol | gpt-6-sol | 5 | 4 | 4 |
+| astra | gpt-6-astra | 4 | 1 | 2 |
+| carbon | gemini-4-carbon-medium | 3 | 3 | 3 |
+| hydrogen | gemini-4-hydrogen-medium | 6 | 6 | 7 |
+
+Grindstone's source was revised after the season above was first published: its author reworked the car and the controller through the MCP loop (match insights, telemetry, replays, `evaluate_bot` against the other entries). Every match it plays in was replayed and the table is the season as it now stands; in 1v1 it went from 4th to 2nd, in 3v3 from 4th to 6th. The six-entry tournament file under `docs/tournaments/` is the record of the earlier source, identified there by its hash, and has not been re-run.

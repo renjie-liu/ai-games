@@ -346,7 +346,7 @@ export function parseBlueprint(name, layers, opts = {}) {
       const idx = Number(k.split(':')[0]);
       if (!cont.has(idx)) {
         const x = (idx % GRID_W) - GRID_HX, y = Math.floor(idx / GRID_W) - GRID_HY;
-        throw new Error(`${LAYER_NAME[z]}: stud (${x}, ${y}) is covered by ${k.split(':')[1]} and must be written ":" in the picture`);
+        throw new Error(`${LAYER_NAME[z]}: stud (${x}, ${y}) is covered by ${k.split(':')[1]} and must be written ":" in the picture (rows are drawn front first, so a multi-stud piece's own glyph goes on its left stud in the LOWEST of its rows in the picture, and ":" on every other stud it covers)`);
       }
     }
     for (const idx of cont) {

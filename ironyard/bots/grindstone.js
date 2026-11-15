@@ -1,22 +1,23 @@
-// GRINDSTONE — tracked gun-wall. Three machine-gun turrets and a laser behind a row of
-// slopes, the cockpit sunk into the chassis under an armour lid, a shield generator and two
-// reactors on a pair of track units.
-// It reads the other car stud by stud and works out what a burst from where it stands will
-// actually hit: through the cockpit, by stripping the weapons, or by taking the wheels off a
-// brawler (or the pads off a hover craft), whichever is cheapest. It picks its range from what
-// the enemy carries (rushes keg throwers, keeps flamers and blades at arm's length), dodges
-// shells and kegs, digs in when shoved toward a hole, and never parks on lava.
+// GRINDSTONE — tracked laser wall. Four lasers behind a row of slopes (beams ignore the slopes
+// and armour the other gun cars hide behind), the cockpit sunk into the chassis under an armour
+// lid, three reactors and a battery to keep the beams lit, on a pair of track units whose front
+// studs sit under slopes.
+// It reads the other car stud by stud and works out what a beam from where it stands will
+// actually hit: through the cockpit, by stripping the guns that hurt it most, or by taking the
+// legs off a brawler (or the pads off a hover craft), whichever is cheapest. It picks its range
+// from what the enemy carries, rushes cars that outrange it, backs off a harpoon, swerves round
+// mines, dodges shells and kegs, and edges away from holes and lava instead of freezing on the rim.
 // In teams it follows a `{ focus: id }` call and makes one when it is the lowest living slot.
-const meta = { name: 'Grindstone', author: 'Rust Hollow Garage', model: 'Opus', notes: 'Tracked MG+laser wall: sunk cockpit, shield; aims at whatever stud ends the fight soonest.' };
+const meta = { name: 'Grindstone', author: 'Rust Hollow Garage', model: 'Opus', notes: 'Tracked four-laser wall behind slopes: sunk cockpit, beams through armour at whatever stud ends the fight soonest.' };
 
 const design = (ctx, api) => api.util.blueprint('Grindstone', {
   deck: [
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  .  .  .  .  .  .',
+    '.  .  .  .  .  .  .  .  .',
     '.  .  /^ /^ /^ /^ /^ .  .',
-    '.  .  m^ L^ b  m^ m^ .  .',
-    '.  .  b  G  a  b  b  .  .',
-    '.  .  f^ b  b  i  f^ .  .',
+    '.  .  L^ L^ .  L^ L^ .  .',
+    '.  .  .  r  a  e  .  .  .',
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  .  .  .  .  .  .',
@@ -26,10 +27,10 @@ const design = (ctx, api) => api.util.blueprint('Grindstone', {
   chassis: [
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  .  .  .  .  .  .',
-    '.  .  p  p  p  p  p  .  .',
-    '.  :  p  p  p  p  p  :  .',
-    '.  :  p  r  @  r  p  :  .',
-    '.  T  p  p  p  p  p  T  .',
+    '.  .  .  .  .  .  .  .  .',
+    '.  .  :  :  :  :  :  .  .',
+    '.  .  :  q  q  q  :  .  .',
+    '.  .  T  r  @  r  T  .  .',
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  .  .  .  .  .  .',
@@ -42,13 +43,14 @@ let route = null;
 const MELEE = { saw: 1, spike: 1, plow: 1, piston: 1, harpoon: 1 };
 
 function profile(foe) {
-  const p = { kegs: 0, flame: 0, melee: 0, guns: 0, hover: 0 };
+  const p = { kegs: 0, flame: 0, melee: 0, guns: 0, hover: 0, far: 0 };
   for (const q of foe.parts || []) {
     if (!q.alive) continue;
     if (q.type === 'keg') p.kegs++;
     else if (q.type === 'flamer') p.flame++;
     else if (MELEE[q.type]) p.melee++;
     else if (q.type === 'hover') p.hover++;
+    else if (q.type === 'cannon' || q.type === 'railgun' || q.type === 'missile' || q.type === 'mortar') { p.guns++; p.far++; }
     else if (q.type === 'mg' || q.type === 'cannon' || q.type === 'railgun' || q.type === 'laser' || q.type === 'missile' || q.type === 'mortar') p.guns++;
   }
   return p;
@@ -57,6 +59,7 @@ function profile(foe) {
 // ── targeting: which stud of the enemy does a burst from here actually meet? ──
 const DIRA = { N: 0, W: Math.PI / 2, S: Math.PI, E: -Math.PI / 2 };
 const WEAP = { mg: 1, cannon: 1, railgun: 1, laser: 1, missile: 1, mortar: 1, flamer: 1, harpoon: 1, saw: 1, piston: 1, spike: 0.4, plow: 0.4 };
+const THREAT = { cannon: 3, railgun: 3, laser: 3, missile: 2.5, mortar: 2, flamer: 2, mg: 1, saw: 1.5, piston: 1.5, harpoon: 2.5, spike: 0.4, plow: 0.4 };
 const MOVE = { wheel: 1, bigwheel: 1, track: 1, hover: 1, thruster: 0.5 };
 let gridCache = { id: -1, tick: -1, deck: null, chas: null };
 
@@ -141,7 +144,9 @@ function pickTarget(self, foe, api, tick, beam) {
     if (!p.alive || !WEAP[p.type]) continue;
     const c = rayCost(p);
     nW++; dsum += c;
-    if (c < dmin) { dmin = c; dT = p; }
+    // the gun that hurts us most per hit point in the way: shells and beams get through our slopes, bullets mostly do not
+    const cw = c / (THREAT[p.type] || 1);
+    if (cw < dmin) { dmin = cw; dT = p; }
   }
   if (dT && dsum * 0.6 < bestCost) { bestCost = dsum * 0.6; pick = dT; }
   // take its legs away: worth it against cars that can only hurt what they touch
@@ -290,12 +295,16 @@ function tick(state, api) {
       const legs = foe.parts.some((q) => q.alive && MOVE[q.type]);
       if (!legs && pr.flame + pr.melee > pr.guns) { lo = 8; hi = 11; }
       else if (pr.kegs) { lo = 0; hi = 3; }
+      else if (pr.far && pr.far * 2 >= pr.guns && !pr.flame) { lo = 0; hi = 4; }   // it outranges our lasers: get inside its guns
       else if (pr.flame) { lo = 8; hi = 12; }
-      else if (pr.melee) { lo = 6; hi = 10; }
+      else if (pr.melee && pr.melee >= pr.guns) { lo = 6; hi = 10; }
       const t = U.turnTo(self, cmd.aim.angle);
       cmd.steer = t.steer;
       const err = Math.abs(U.angDiff(cmd.aim.angle, self.heading));
       cmd.throttle = d > hi ? (err < 0.6 ? 1 : 0.2) : d < lo ? -0.8 : 0;
+      // hooked by a harpoon: back straight off, guns still on it; tracks out-pull most cars
+      const hooked = (state.tethers || []).some((t) => t.to === self.id && t.from === foe.id);
+      if (hooked && (pr.melee || pr.flame)) cmd.throttle = -1;
       // do not fight with a hole or lava at our back or under our feet
       const here = hazardDist(api, self.x, self.y);
       const need = self.radius + 1.6;
@@ -392,14 +401,30 @@ function guard(state, api, cmd) {
   }
   if (s.hovering) return cmd;
   const c = Math.cos(s.heading), n = Math.sin(s.heading);
+  // an enemy mine on the line we are about to drive: swerve round it
+  const mv = Math.sign(cmd.throttle || 0);
+  if (mv) for (const m of state.mines || []) {
+    const dx = m.x - s.x, dy = m.y - s.y, ahead = (dx * c + dy * n) * mv, side = -dx * n + dy * c;
+    if (ahead > 0 && ahead < 4.5 && Math.abs(side) < s.radius + 0.9) { cmd.steer = (side > 0 ? -1 : 1) * mv; break; }
+  }
   for (const k of [0.15, 0.3, 0.5, 0.8]) {
     if (!bad(nav, s.x + s.vx * k, s.y + s.vy * k) || bad(nav, s.x, s.y)) continue;
     cmd.throttle = s.vx * c + s.vy * n > 0 ? -1 : 1; cmd.brake = 1;
     return cmd;
   }
   const dir = Math.sign(cmd.throttle || 0);
-  if (dir) for (const d of [0.3, 0.7, 1.1, 1.7, 2.3]) for (const w of [-0.5, 0, 0.5]) {
-    if (bad(nav, s.x + c * d * dir - n * w, s.y + n * d * dir + c * w) && !bad(nav, s.x, s.y)) { cmd.throttle = 0; return cmd; }
+  if (dir && !bad(nav, s.x, s.y)) {
+    const at = (d, w) => bad(nav, s.x + c * d * dir - n * w, s.y + n * d * dir + c * w);
+    for (const d of [0.3, 0.7, 1.1, 1.7, 2.3]) if (at(d, 0)) { cmd.throttle = 0; return cmd; }
+    // a hole or lava only off one side: keep going, edge away from it instead of freezing on the rim
+    let L = false, R = false;
+    for (const d of [0.3, 0.7, 1.1, 1.7, 2.3]) { if (at(d, 0.5)) L = true; if (at(d, -0.5)) R = true; }
+    if (L && R) { cmd.throttle = 0; return cmd; }
+    if (L || R) {
+      if (dir > 0) { cmd.steer = L ? -0.8 : 0.8; cmd.throttle = Math.min(cmd.throttle, 0.6); }
+      else cmd.throttle = 0;
+    }
   }
   return cmd;
 }
+

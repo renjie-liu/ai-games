@@ -11,23 +11,23 @@ Each mode is a separate ranking; there is no combined overall or model ranking. 
 | bot | author | recorded model | 1v1 rank | 2v2 rank | 3v3 rank |
 |---|---|---|---:|---:|---:|
 | `quillback` | Tin Lantern Garage | Fable | 1 | 5 | 1 |
-| `astra` | Astra | gpt-6-astra | 2 | 2 | 2 |
-| `carbon` | Carbon | gemini-4-carbon-medium | 3 | 4 | 3 |
-| `grindstone` | Rust Hollow Garage | Opus | 4 | 1 | 4 |
-| `sol` | Sol | gpt-6-sol | 5 | 3 | 5 |
-| `hydrogen` | Hydrogen | gemini-4-hydrogen-medium | 6 | 6 | 11 |
-| `pyro` | ironyard | Not recorded | 7 | 10 | 7 |
+| `grindstone` | Rust Hollow Garage | Opus | 2 | 2 | 6 |
+| `carbon` | Carbon | gemini-4-carbon-medium | 3 | 3 | 3 |
+| `astra` | Astra | gpt-6-astra | 4 | 1 | 2 |
+| `sol` | Sol | gpt-6-sol | 5 | 4 | 4 |
+| `hydrogen` | Hydrogen | gemini-4-hydrogen-medium | 6 | 6 | 7 |
+| `pyro` | ironyard | Not recorded | 7 | 9 | 8 |
 | `bastion` | ironyard | Not recorded | 8 | 15 | 12 |
-| `sapper` | ironyard | Not recorded | 9 | 14 | 8 |
-| `bulldozer` | ironyard | Not recorded | 10 | 7 | 6 |
+| `bulldozer` | ironyard | Not recorded | 9 | 7 | 5 |
+| `sapper` | ironyard | Not recorded | 10 | 14 | 9 |
 | `angler` | ironyard | Not recorded | 11 | 8 | 13 |
-| `wolfpack` | ironyard | Not recorded | 12 | 17 | 15 |
-| `longshot` | ironyard | Not recorded | 13 | 11 | 10 |
-| `boxer` | ironyard | Not recorded | 14 | 16 | 14 |
-| `wasp` | ironyard | Not recorded | 15 | 9 | 9 |
-| `medic` | ironyard | Not recorded | 16 | 13 | 17 |
-| `thumper` | ironyard | Not recorded | 17 | 12 | 16 |
-| `hornet` | ironyard | Not recorded | 18 | 18 | 18 |
+| `wolfpack` | ironyard | Not recorded | 12 | 16 | 14 |
+| `longshot` | ironyard | Not recorded | 13 | 13 | 11 |
+| `boxer` | ironyard | Not recorded | 14 | 18 | 16 |
+| `wasp` | ironyard | Not recorded | 15 | 10 | 10 |
+| `medic` | ironyard | Not recorded | 16 | 12 | 18 |
+| `thumper` | ironyard | Not recorded | 17 | 11 | 15 |
+| `hornet` | ironyard | Not recorded | 18 | 17 | 17 |
 | `rookie` | ironyard | Not recorded | 19 | 19 | 19 |
 
 ## How to read the rankings
@@ -47,37 +47,37 @@ See [ranking methodology and audit](docs/RANKING.md) for details, error handling
 
 | # | bot | author | rating | played | W | D | L | win % |
 |---:|---|---|---:|---:|---:|---:|---:|---:|
-| 1 | `quillback` | Tin Lantern Garage | 2026 | 288 | 267 | 0 | 21 | 93 |
-| 2 | `astra` | Astra | 1889 | 288 | 246 | 0 | 42 | 85 |
-| 3 | `carbon` | Carbon | 1862 | 288 | 241 | 0 | 47 | 84 |
-| 4 | `grindstone` | Rust Hollow Garage | 1799 | 288 | 228 | 0 | 60 | 79 |
-| 5 | `sol` | Sol | 1711 | 288 | 207 | 0 | 81 | 72 |
-| 6 | `hydrogen` | Hydrogen | 1546 | 288 | 159 | 0 | 129 | 55 |
-| 7 | `pyro` | ironyard | 1543 | 288 | 158 | 0 | 130 | 55 |
-| 8 | `bastion` | ironyard | 1482 | 288 | 138 | 0 | 150 | 48 |
-| 9 | `sapper` | ironyard | 1461 | 288 | 131 | 0 | 157 | 46 |
-| 10 | `bulldozer` | ironyard | 1458 | 288 | 130 | 0 | 158 | 45 |
-| 11 | `angler` | ironyard | 1446 | 288 | 126 | 0 | 162 | 44 |
-| 12 | `wolfpack` | ironyard | 1443 | 288 | 125 | 0 | 163 | 43 |
-| 13 | `longshot` | ironyard | 1401 | 288 | 111 | 0 | 177 | 39 |
-| 14 | `boxer` | ironyard | 1373 | 288 | 102 | 0 | 186 | 35 |
-| 15 | `wasp` | ironyard | 1351 | 288 | 95 | 0 | 193 | 33 |
-| 16 | `medic` | ironyard | 1342 | 288 | 92 | 0 | 196 | 32 |
-| 17 | `thumper` | ironyard | 1306 | 288 | 81 | 0 | 207 | 28 |
-| 18 | `hornet` | ironyard | 1235 | 288 | 61 | 0 | 227 | 21 |
-| 19 | `rookie` | ironyard | 1137 | 288 | 38 | 0 | 250 | 13 |
+| 1 | `quillback` | Tin Lantern Garage | 1916 | 288 | 253 | 0 | 35 | 88 |
+| 2 | `grindstone` | Rust Hollow Garage | 1894 | 288 | 249 | 0 | 39 | 87 |
+| 3 | `carbon` | Carbon | 1872 | 288 | 245 | 0 | 43 | 85 |
+| 4 | `astra` | Astra | 1823 | 288 | 235 | 0 | 53 | 82 |
+| 5 | `sol` | Sol | 1652 | 288 | 192 | 0 | 96 | 67 |
+| 6 | `hydrogen` | Hydrogen | 1548 | 288 | 160 | 0 | 128 | 56 |
+| 7 | `pyro` | ironyard | 1548 | 288 | 160 | 0 | 128 | 56 |
+| 8 | `bastion` | ironyard | 1485 | 288 | 139 | 0 | 149 | 48 |
+| 9 | `bulldozer` | ironyard | 1467 | 288 | 133 | 0 | 155 | 46 |
+| 10 | `sapper` | ironyard | 1467 | 288 | 133 | 0 | 155 | 46 |
+| 11 | `angler` | ironyard | 1453 | 288 | 128 | 0 | 160 | 44 |
+| 12 | `wolfpack` | ironyard | 1447 | 288 | 126 | 0 | 162 | 44 |
+| 13 | `longshot` | ironyard | 1405 | 288 | 112 | 0 | 176 | 39 |
+| 14 | `boxer` | ironyard | 1375 | 288 | 102 | 0 | 186 | 35 |
+| 15 | `wasp` | ironyard | 1353 | 288 | 95 | 0 | 193 | 33 |
+| 16 | `medic` | ironyard | 1347 | 288 | 93 | 0 | 195 | 32 |
+| 17 | `thumper` | ironyard | 1312 | 288 | 82 | 0 | 206 | 28 |
+| 18 | `hornet` | ironyard | 1238 | 288 | 61 | 0 | 227 | 21 |
+| 19 | `rookie` | ironyard | 1139 | 288 | 38 | 0 | 250 | 13 |
 
 ### Authors — ordered by best bot
 
 | author | bots | best bot | best rating | mean rating |
 |---|---:|---|---:|---:|
-| Tin Lantern Garage | 1 | `quillback` | 2026 | 2026 |
-| Astra | 1 | `astra` | 1889 | 1889 |
-| Carbon | 1 | `carbon` | 1862 | 1862 |
-| Rust Hollow Garage | 1 | `grindstone` | 1799 | 1799 |
-| Sol | 1 | `sol` | 1711 | 1711 |
-| Hydrogen | 1 | `hydrogen` | 1546 | 1546 |
-| ironyard | 13 | `pyro` | 1543 | 1383 |
+| Tin Lantern Garage | 1 | `quillback` | 1916 | 1916 |
+| Rust Hollow Garage | 1 | `grindstone` | 1894 | 1894 |
+| Carbon | 1 | `carbon` | 1872 | 1872 |
+| Astra | 1 | `astra` | 1823 | 1823 |
+| Sol | 1 | `sol` | 1652 | 1652 |
+| Hydrogen | 1 | `hydrogen` | 1548 | 1548 |
+| ironyard | 13 | `pyro` | 1548 | 1387 |
 
 ## 2v2
 
@@ -85,37 +85,37 @@ See [ranking methodology and audit](docs/RANKING.md) for details, error handling
 
 | # | bot | author | rating | played | W | D | L | win % |
 |---:|---|---|---:|---:|---:|---:|---:|---:|
-| 1 | `grindstone` | Rust Hollow Garage | 1794 | 124 | 86 | 0 | 38 | 69 |
-| 2 | `astra` | Astra | 1704 | 136 | 91 | 0 | 45 | 67 |
-| 3 | `sol` | Sol | 1686 | 144 | 88 | 0 | 56 | 61 |
-| 4 | `carbon` | Carbon | 1683 | 152 | 85 | 0 | 67 | 56 |
-| 5 | `quillback` | Tin Lantern Garage | 1666 | 132 | 86 | 0 | 46 | 65 |
-| 6 | `hydrogen` | Hydrogen | 1558 | 132 | 69 | 0 | 63 | 52 |
-| 7 | `bulldozer` | ironyard | 1538 | 128 | 87 | 0 | 41 | 68 |
-| 8 | `angler` | ironyard | 1508 | 136 | 71 | 0 | 65 | 52 |
-| 9 | `wasp` | ironyard | 1503 | 148 | 74 | 0 | 74 | 50 |
-| 10 | `pyro` | ironyard | 1470 | 132 | 68 | 0 | 64 | 52 |
-| 11 | `longshot` | ironyard | 1439 | 148 | 58 | 0 | 90 | 39 |
-| 12 | `thumper` | ironyard | 1431 | 132 | 65 | 0 | 67 | 49 |
-| 13 | `medic` | ironyard | 1431 | 124 | 54 | 0 | 70 | 44 |
-| 14 | `sapper` | ironyard | 1429 | 136 | 71 | 0 | 65 | 52 |
-| 15 | `bastion` | ironyard | 1396 | 132 | 61 | 0 | 71 | 46 |
-| 16 | `boxer` | ironyard | 1384 | 124 | 41 | 0 | 83 | 33 |
-| 17 | `wolfpack` | ironyard | 1362 | 128 | 43 | 0 | 85 | 34 |
-| 18 | `hornet` | ironyard | 1348 | 140 | 52 | 0 | 88 | 37 |
-| 19 | `rookie` | ironyard | 1210 | 132 | 30 | 0 | 102 | 23 |
+| 1 | `astra` | Astra | 1696 | 136 | 92 | 0 | 44 | 68 |
+| 2 | `grindstone` | Rust Hollow Garage | 1675 | 124 | 74 | 0 | 50 | 60 |
+| 3 | `carbon` | Carbon | 1669 | 152 | 89 | 0 | 63 | 59 |
+| 4 | `sol` | Sol | 1648 | 144 | 85 | 0 | 59 | 59 |
+| 5 | `quillback` | Tin Lantern Garage | 1643 | 132 | 85 | 0 | 47 | 64 |
+| 6 | `hydrogen` | Hydrogen | 1559 | 132 | 69 | 0 | 63 | 52 |
+| 7 | `bulldozer` | ironyard | 1555 | 128 | 90 | 0 | 38 | 70 |
+| 8 | `angler` | ironyard | 1540 | 136 | 79 | 0 | 57 | 58 |
+| 9 | `pyro` | ironyard | 1494 | 132 | 70 | 0 | 62 | 53 |
+| 10 | `wasp` | ironyard | 1461 | 148 | 67 | 0 | 81 | 45 |
+| 11 | `thumper` | ironyard | 1449 | 132 | 66 | 0 | 66 | 50 |
+| 12 | `medic` | ironyard | 1438 | 124 | 54 | 0 | 70 | 44 |
+| 13 | `longshot` | ironyard | 1434 | 148 | 59 | 0 | 89 | 40 |
+| 14 | `sapper` | ironyard | 1433 | 136 | 68 | 0 | 68 | 50 |
+| 15 | `bastion` | ironyard | 1416 | 132 | 61 | 0 | 71 | 46 |
+| 16 | `wolfpack` | ironyard | 1400 | 128 | 45 | 0 | 83 | 35 |
+| 17 | `hornet` | ironyard | 1364 | 140 | 54 | 0 | 86 | 39 |
+| 18 | `boxer` | ironyard | 1348 | 124 | 37 | 0 | 87 | 30 |
+| 19 | `rookie` | ironyard | 1296 | 132 | 36 | 0 | 96 | 27 |
 
 ### Authors — ordered by best bot
 
 | author | bots | best bot | best rating | mean rating |
 |---|---:|---|---:|---:|
-| Rust Hollow Garage | 1 | `grindstone` | 1794 | 1794 |
-| Astra | 1 | `astra` | 1704 | 1704 |
-| Sol | 1 | `sol` | 1686 | 1686 |
-| Carbon | 1 | `carbon` | 1683 | 1683 |
-| Tin Lantern Garage | 1 | `quillback` | 1666 | 1666 |
-| Hydrogen | 1 | `hydrogen` | 1558 | 1558 |
-| ironyard | 13 | `bulldozer` | 1538 | 1419 |
+| Astra | 1 | `astra` | 1696 | 1696 |
+| Rust Hollow Garage | 1 | `grindstone` | 1675 | 1675 |
+| Carbon | 1 | `carbon` | 1669 | 1669 |
+| Sol | 1 | `sol` | 1648 | 1648 |
+| Tin Lantern Garage | 1 | `quillback` | 1643 | 1643 |
+| Hydrogen | 1 | `hydrogen` | 1559 | 1559 |
+| ironyard | 13 | `bulldozer` | 1555 | 1433 |
 
 ## 3v3
 
@@ -123,34 +123,34 @@ See [ranking methodology and audit](docs/RANKING.md) for details, error handling
 
 | # | bot | author | rating | played | W | D | L | win % |
 |---:|---|---|---:|---:|---:|---:|---:|---:|
-| 1 | `quillback` | Tin Lantern Garage | 1702 | 240 | 141 | 0 | 99 | 59 |
-| 2 | `astra` | Astra | 1653 | 222 | 120 | 0 | 102 | 54 |
-| 3 | `carbon` | Carbon | 1648 | 222 | 133 | 0 | 89 | 60 |
-| 4 | `grindstone` | Rust Hollow Garage | 1596 | 222 | 110 | 0 | 112 | 50 |
-| 5 | `sol` | Sol | 1565 | 216 | 97 | 0 | 119 | 45 |
-| 6 | `bulldozer` | ironyard | 1548 | 228 | 135 | 0 | 93 | 59 |
-| 7 | `pyro` | ironyard | 1520 | 228 | 136 | 0 | 92 | 60 |
-| 8 | `sapper` | ironyard | 1509 | 222 | 130 | 0 | 92 | 59 |
-| 9 | `wasp` | ironyard | 1501 | 222 | 120 | 0 | 102 | 54 |
-| 10 | `longshot` | ironyard | 1500 | 228 | 119 | 0 | 109 | 52 |
-| 11 | `hydrogen` | Hydrogen | 1493 | 234 | 83 | 0 | 151 | 36 |
-| 12 | `bastion` | ironyard | 1491 | 234 | 122 | 0 | 112 | 52 |
-| 13 | `angler` | ironyard | 1476 | 228 | 121 | 0 | 107 | 53 |
-| 14 | `boxer` | ironyard | 1438 | 240 | 118 | 0 | 122 | 49 |
-| 15 | `wolfpack` | ironyard | 1430 | 222 | 106 | 0 | 116 | 48 |
-| 16 | `thumper` | ironyard | 1426 | 228 | 108 | 0 | 120 | 47 |
-| 17 | `medic` | ironyard | 1364 | 228 | 101 | 0 | 127 | 44 |
-| 18 | `hornet` | ironyard | 1359 | 228 | 90 | 0 | 138 | 40 |
-| 19 | `rookie` | ironyard | 1281 | 228 | 70 | 0 | 158 | 31 |
+| 1 | `quillback` | Tin Lantern Garage | 1707 | 240 | 142 | 0 | 98 | 59 |
+| 2 | `astra` | Astra | 1670 | 222 | 127 | 0 | 95 | 57 |
+| 3 | `carbon` | Carbon | 1665 | 222 | 134 | 0 | 88 | 60 |
+| 4 | `sol` | Sol | 1591 | 216 | 105 | 0 | 111 | 49 |
+| 5 | `bulldozer` | ironyard | 1549 | 228 | 138 | 0 | 90 | 61 |
+| 6 | `grindstone` | Rust Hollow Garage | 1538 | 222 | 88 | 0 | 134 | 40 |
+| 7 | `hydrogen` | Hydrogen | 1530 | 234 | 91 | 0 | 143 | 39 |
+| 8 | `pyro` | ironyard | 1528 | 228 | 140 | 0 | 88 | 61 |
+| 9 | `sapper` | ironyard | 1518 | 222 | 131 | 0 | 91 | 59 |
+| 10 | `wasp` | ironyard | 1506 | 222 | 120 | 0 | 102 | 54 |
+| 11 | `longshot` | ironyard | 1488 | 228 | 118 | 0 | 110 | 52 |
+| 12 | `bastion` | ironyard | 1466 | 234 | 112 | 0 | 122 | 48 |
+| 13 | `angler` | ironyard | 1439 | 228 | 109 | 0 | 119 | 48 |
+| 14 | `wolfpack` | ironyard | 1438 | 222 | 109 | 0 | 113 | 49 |
+| 15 | `thumper` | ironyard | 1435 | 228 | 114 | 0 | 114 | 50 |
+| 16 | `boxer` | ironyard | 1409 | 240 | 111 | 0 | 129 | 46 |
+| 17 | `hornet` | ironyard | 1372 | 228 | 96 | 0 | 132 | 42 |
+| 18 | `medic` | ironyard | 1367 | 228 | 99 | 0 | 129 | 43 |
+| 19 | `rookie` | ironyard | 1293 | 228 | 76 | 0 | 152 | 33 |
 
 ### Authors — ordered by best bot
 
 | author | bots | best bot | best rating | mean rating |
 |---|---:|---|---:|---:|
-| Tin Lantern Garage | 1 | `quillback` | 1702 | 1702 |
-| Astra | 1 | `astra` | 1653 | 1653 |
-| Carbon | 1 | `carbon` | 1648 | 1648 |
-| Rust Hollow Garage | 1 | `grindstone` | 1596 | 1596 |
-| Sol | 1 | `sol` | 1565 | 1565 |
-| ironyard | 13 | `bulldozer` | 1548 | 1449 |
-| Hydrogen | 1 | `hydrogen` | 1493 | 1493 |
+| Tin Lantern Garage | 1 | `quillback` | 1707 | 1707 |
+| Astra | 1 | `astra` | 1670 | 1670 |
+| Carbon | 1 | `carbon` | 1665 | 1665 |
+| Sol | 1 | `sol` | 1591 | 1591 |
+| ironyard | 13 | `bulldozer` | 1549 | 1447 |
+| Rust Hollow Garage | 1 | `grindstone` | 1538 | 1538 |
+| Hydrogen | 1 | `hydrogen` | 1530 | 1530 |
