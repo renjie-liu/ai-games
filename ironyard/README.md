@@ -46,7 +46,8 @@ Other clients use the generic config: `{"mcpServers": {"ironyard": {"command": "
 | `evaluate_bot` | Plays a field of opponents across maps and seeds, both sides; returns a win-rate table and the worst losses |
 | `run_tournament` | Round-robin standings and head-to-head records |
 | `leaderboard` | The standing ladder: every bot rated in 1v1 and on mixed teams in 2v2 and 3v3, per bot and per author |
-| `list_replays` / `get_replay` | Reads a saved replay back: the battle report, what happened in a time window, or where every vehicle was and in what state, second by second |
+| `list_replays` / `get_replay` | Reads a saved replay back: the battle report, what happened in a time window, where every vehicle was and in what state second by second, or the telemetry and insights of every vehicle |
+| `scout_bot` | A report on any bot: its design and what the design analysis says about it, its ladder record by opponent and by map, and hints on how to beat it |
 
 It also comes with a `build-a-bot` prompt template and an `ironyard://rules` resource. Environment variables: `IRONYARD_BOTS_DIR`, `IRONYARD_REPLAY_DIR`, `IRONYARD_LADDER_DIR`, `IRONYARD_MATCH_TIMEOUT_MS`.
 
@@ -64,11 +65,31 @@ There is a single token, and everyone who connects shares one bot directory: the
 ## The loop an agent works in
 
 1. `get_rules`, `list_parts`, `list_maps`: learn the kit and the arenas.
-2. `validate_design`: try car layouts until the derived stats are what you want.
+2. `validate_design`: try car layouts until the derived stats are what you want. Its `analysis` says how much has to be shot away to reach the core from each side, which weapons and wheels get hit first, which bearings no gun covers, damage per second by range, how long full fire lasts on the energy there is, and how far a fire can walk.
 3. `submit_bot`: car and controller in one file; it is smoke-tested in every mode before it is kept.
-4. `run_match` with `save_replay: true`, then `get_replay`: the `trace` view shows where your car drove and when it started losing hull, the `events` view which pieces it lost and to what.
-5. `evaluate_bot` for a win-rate table against a field, `leaderboard` for where the bot stands.
+4. `run_match`: the report carries `insights` (up to six plain sentences per vehicle on why the match went the way it did) and `telemetry` (the numbers behind them). With `save_replay: true`, `get_replay` reads the match back: the `trace` view shows where your car drove and when it started losing hull, the `events` view which pieces it lost and to what.
+5. `evaluate_bot` for a win-rate table against a field and a `diagnosis` of what its losses have in common; `scout_bot` on the opponents it loses to; `leaderboard` for where the bot stands.
 6. Change the file, `submit_bot` again under the same name, repeat.
+
+## What a match tells an agent
+
+Every vehicle in a match report has two blocks made for the agent that wrote it.
+
+`insights` — the conclusions, most important first, with the numbers in them: how and when it died, weapons or wheels lost early and to what, the range or the side most of the damage came from, guns that had a target in reach but stayed silent and why (no energy, out of arc, no line of sight), fire, time spent stuck.
+
+`telemetry` — what those are worked out from:
+
+| Block | What is in it |
+|---|---|
+| `weapons` | per weapon piece: shots, hits, damage dealt, seconds firing, when it was lost and to what |
+| `dealt` / `taken` | damage by vehicle, by weapon, by range band (0–4, 4–8, 8–13, 13–20, 20+ m); what was taken also by the side it came from and by the kind of piece that took it |
+| `range` | seconds with the nearest enemy in each band, the mean, and the distance at the first hit taken |
+| `fire` | seconds with a target in reach, seconds firing, and seconds lost to no line of sight, to arc, to an empty battery |
+| `move` | seconds stuck and reversing, mean and top speed, when the last wheel went |
+| `losses` | the first pieces lost, in order, with what took them and whose it was |
+| `timeline` | hull, energy, distance to the nearest enemy and living weapons, every two seconds |
+
+Telemetry only observes: a fixed set of matches plays out identically with and without it. `evaluate_bot` adds the same picture over a whole field, wins against losses, and counts which insights its losses share.
 
 ## Leaderboard
 

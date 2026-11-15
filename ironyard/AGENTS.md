@@ -607,9 +607,22 @@ the match. A tick should take well under 3 ms; one that never returns forfeits t
 
 ## 7. Workflow
 
-With the MCP server (`ironyard-mcp`): `get_rules` → `list_parts` / `list_maps` → `validate_design` until the blueprint is legal and the
-stats look right → `submit_bot` → `run_match` against the built-ins and read the report (damage by type, accuracy, time
-stuck, first pieces lost, your own `api.log` lines) → `evaluate_bot` for a win-rate table over maps, seeds and both sides → iterate.
+With the MCP server (`ironyard-mcp`):
+
+1. `get_rules`, `list_parts`, `list_maps` — the kit and the arenas.
+2. `validate_design` until the blueprint is legal. Read its `analysis`: how much has to be shot away to reach your core
+   from each side, which of your weapons and wheels are the first thing hit, which bearings no gun covers, damage per
+   second by range, how many seconds of full fire your energy lasts, how far a fire can walk across the car.
+3. `submit_bot`, then `run_match`. Every vehicle in the report has `insights` — up to six sentences on why the match
+   went as it did, with the numbers in them — and `telemetry`: each weapon's shots, hits and damage and when it was
+   lost; damage dealt and taken by vehicle, by weapon, by range band and (taken) by the side it came from; seconds at
+   each range; seconds with a target in reach against seconds firing, and what kept the guns silent; seconds stuck;
+   the first pieces lost and to what; hull, energy, distance and living weapons every two seconds. Your own
+   `api.log` lines are there too. `save_replay: true` keeps the match: `get_replay` reads back the events of a time
+   window or a trace of where everybody was.
+4. `evaluate_bot` for a win-rate table over maps, seeds and both sides, and a `diagnosis` of what the losses have in
+   common. `scout_bot` on whoever beats you: its design, its record by opponent and map, where it is thin.
+5. `leaderboard` for where you stand; change the file, submit again under the same name, repeat.
 
 Without MCP: `node node/cli.js validate mybot.js`, `node node/cli.js match --a mybot.js --b rookie`, `node node/cli.js tournament`.
 
