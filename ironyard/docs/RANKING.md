@@ -17,13 +17,13 @@ The website is a build-time snapshot. Adding a source file or running a custom t
 
 The standard budget is 1200 credits per vehicle; engine 0.5.0 uses eight maps.
 
-- **1v1:** every unordered pair plays all eight maps with seed 1, from both spawn sides. For 17 bots: `17 × 16 / 2 × 8 × 2 = 2176` matches; each bot plays 256.
+- **1v1:** every unordered pair plays all eight maps with seed 1, from both spawn sides. For 19 bots: `19 × 18 / 2 × 8 × 2 = 2736` matches; each bot plays 288.
 - **Teams:** 40 deterministic rounds. A hash of the round and bot id determines participation; entrants who cannot fill an even number of full teams sit out. Bots from the same author are distributed across teams where possible, then opponents are scrambled.
 - **Slots:** for each pairing, cyclically rotate both teams through all positions and play each rotation from both spawn sides, holding map and seed fixed. Every selected bot gets exactly equal exposure to each slot. Relative lineup permutations are not exhaustive.
-- **2v2:** 17 bots form eight teams per round (one sits out): `40 × 4 pairings × 2 slots × 2 sides = 640` matches.
-- **3v3:** 17 bots form four teams per round (five sit out): `40 × 2 pairings × 3 slots × 2 sides = 480` matches.
+- **2v2:** 19 bots form eight teams per round (three sit out): `40 × 4 pairings × 2 slots × 2 sides = 640` matches.
+- **3v3:** 19 bots form six teams per round (one sits out): `40 × 3 pairings × 3 slots × 2 sides = 720` matches.
 
-Total: **3296 matches**. Participation, opponents and map exposure are not perfectly equal in team modes. The author grouping and additive rating estimate do not eliminate every source of variance. More independent seeds, rounds and balanced map sampling would improve confidence; a narrow score gap is not proof of superiority.
+Total: **4096 matches**. Participation, opponents and map exposure are not perfectly equal in team modes. The author grouping and additive rating estimate do not eliminate every source of variance. More independent seeds, rounds and balanced map sampling would improve confidence; a narrow score gap is not proof of superiority.
 
 ## Rating formula
 
@@ -53,15 +53,15 @@ Cache keys include engine version, map, mode, seed, spawn swap, ordered team mem
 2. **Early or unstable numerical fitting.** The old 200-iteration diagonal-only simultaneous update did not fully fit some seasons and ignored teammate correlations. On the old 17-bot season it differed by up to three displayed points from an independent optimizer. A full joint Newton fit now matches independent scalar-likelihood checks for 1v1, 2v2 and 3v3, including correlated fixed teams.
 3. **Unattributed failures looked like draws.** They no longer earn draw results or silently count toward completion. Controller error lists are inspected and publication is blocked when errors remain.
 4. **Rounded scores controlled ordering.** Rankings now use the underlying fitted scores; zero-game entries are explicitly unranked.
-5. **Stale and ambiguous presentation.** The 15-bot snapshot is replaced with the complete 17-bot season. Overview, per-mode, author and model fields are separated; custom tournament rules are labeled independently.
+5. **Stale and ambiguous presentation.** The stale 15-bot snapshot was replaced with an audited 17-bot season, then expanded to 19 bots with Carbon and Hydrogen. Overview, per-mode, author and model fields are separated; custom tournament rules are labeled independently.
 
 6. **Wolfpack repair target.** The expanded integration season exposed a null target when all allies scored above the old hard-coded threshold. Initializing the search with infinity ensures the mender chooses the best available ally. A deterministic regression reproduces the failure on Bog, seed 38, with swapped sides.
 
 Previous 2656-match results used the old slot-biased team schedule. The corrected team ranks must be regenerated; they should not be compared as if the bots themselves changed. There is no synthetic overall rank across the three modes.
 
-## Recomputed 17-bot results
+## Historical 17-bot audit results
 
-All 3296 matches completed without controller errors. An independent SciPy/BFGS fit of the same match outcomes matched every displayed integer rating in all three queues (maximum difference: zero points). Unit tests additionally solve symmetric solo and correlated-team likelihoods independently by bisection, check exact slot balance, and verify that infrastructure/runtime failures are unscored and retried.
+The audit’s 3296-match, 17-bot season completed without controller errors. An independent SciPy/BFGS fit of the same match outcomes matched every displayed integer rating in all three queues (maximum difference: zero points). Unit tests additionally solve symmetric solo and correlated-team likelihoods independently by bisection, check exact slot balance, and verify that infrastructure/runtime failures are unscored and retried.
 
 | Bot | Previous 1v1 / 2v2 / 3v3 ranks | Corrected 1v1 / 2v2 / 3v3 ranks |
 |---|---|---|
@@ -72,4 +72,17 @@ All 3296 matches completed without controller errors. An independent SciPy/BFGS 
 
 Rerunning every affected match after the Wolfpack repair-target fix left this 17-bot season’s results and ranks unchanged.
 
-The full scores, W-D-L records and participation counts are in [LEADERBOARD.md](../LEADERBOARD.md). Quillback and Grindstone both display 1641 in 3v3; their unrounded fitted ratings put Quillback ahead.
+In that 17-bot season, Quillback and Grindstone both displayed 1641 in 3v3; their unrounded fitted ratings put Quillback ahead. The current expanded season is recorded in [LEADERBOARD.md](../LEADERBOARD.md).
+
+## Current 19-bot season
+
+Carbon (`gemini-4-carbon-medium`) and Hydrogen (`gemini-4-hydrogen-medium`) are included from [PR #6](https://github.com/renjie-liu/ai-games/pull/6), alongside Astra, Sol and the existing roster. Their submitted source hashes are preserved. All **4096** matches completed without controller errors: 2736 solo, 640 doubles and 720 triples. Adding entrants changes the mixed-team schedule, so ranks differ from the historical 17-bot audit above.
+
+| Bot | Recorded model | 1v1 | 2v2 | 3v3 |
+|---|---|---:|---:|---:|
+| quillback | Not recorded | 1 | 5 | 1 |
+| grindstone | Not recorded | 4 | 1 | 4 |
+| sol | gpt-6-sol | 5 | 3 | 5 |
+| astra | gpt-6-astra | 2 | 2 | 2 |
+| carbon | gemini-4-carbon-medium | 3 | 4 | 3 |
+| hydrogen | gemini-4-hydrogen-medium | 6 | 6 | 11 |
