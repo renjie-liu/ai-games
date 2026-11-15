@@ -25,7 +25,7 @@ const ABBR = { core: 'Co', plate: 'P1', plate2: 'P2', plate4: 'P4', brick: 'B1',
   battery: 'Bt', reactor: 'Rx', radar: 'Rd', shieldgen: 'Sh', repairer: 'Rp', tile: 'Ti', fin: 'Fn', pipe: 'Ex', lamp: 'Lt', flag: 'Fg' };
 const CAT_NAME = { structure: 'Structure / defence', mobility: 'Mobility / steering', weapon: 'Weapons', utility: 'Utility', decor: 'Decor (free)' };
 const ARROW = { N: '↑', E: '→', S: '↓', W: '←' };
-const REASON_TEXT = { elimination: 'enemy team eliminated', 'mutual destruction': 'mutual destruction', 'time: more vehicles alive': 'time up, more vehicles alive', 'time: more hull remaining': 'time up, more hull left',
+const REASON_TEXT = { elimination: 'enemy wiped out', 'mutual destruction': 'mutual destruction', 'time: more vehicles alive': 'time up, more vehicles alive', 'time: more hull remaining': 'time up, more hull left',
   'time: more damage dealt': 'time up, more damage dealt', 'time: exact tie': 'time up, exact tie', 'stopped early': 'stopped early' };
 const AI_TEMPLATES = {
   rookie: 'Mid-range gunner: closes to about 8 m and trades fire, backs off when crowded. Suits forward-facing guns.',
@@ -182,7 +182,7 @@ function buildRoster() {
     const rows = rp.vehicles.filter((v) => v.team === t).map((v) => {
       const hp = el('i'), en = el('i'), item = el('span', { class: 'num', style: 'text-align:center' });
       const row = el('button', { class: 'veh', type: 'button', 'aria-pressed': 'false', title: 'Follow this vehicle with the camera', onclick: () => setFollow(S.follow === v.id ? -1 : v.id) },
-        el('span', { class: 'nm' }, v.name, el('small', { text: `${v.bot} · ${v.designStats.cost}cr · ${v.designStats.mass}kg ${v.designStats.weightClass || ''}` })),
+        el('span', { class: 'nm' }, v.name, el('small', { text: `${v.bot} · ${v.designStats.cost}cr, ${v.designStats.mass}kg ${v.designStats.weightClass || ''}` })),
         el('span', { class: 'bars' }, el('span', {}, hp), el('span', { class: 'e' }, en)), item);
       rosterNodes[v.id] = { row, hp, en, item };
       return row;
@@ -253,7 +253,7 @@ function showBanner() {
   const title = r.winner === null ? 'Replay over' : r.winner < 0 ? 'Draw' : `${TEAM_NAME[r.winner]} wins`;
   b.replaceChildren(el('b', { class: r.winner >= 0 ? 't' + r.winner : '', text: title }), el('span', { text: `${REASON_TEXT[r.reason] || r.reason} · ${r.duration}s` }),
     el('div', { class: 'row', style: 'justify-content:center' },
-      el('button', { class: 'btn', type: 'button', text: 'Watch again', onclick: () => { S.time = 0; S.playing = true; b.hidden = true; $('play').textContent = '❚❚'; } }),
+      el('button', { class: 'btn', type: 'button', text: 'Replay', onclick: () => { S.time = 0; S.playing = true; b.hidden = true; $('play').textContent = '❚❚'; } }),
       el('button', { class: 'btn primary', type: 'button', text: 'Next seed', onclick: () => { $('seed').value = String(S.setup.seed + 1); runMatch(); } })));
   b.hidden = false;
   $('report-details').open = true;
@@ -613,7 +613,7 @@ function watch(a, b, maps) {
 
 // ── rules + MCP pages ───────────────────────────────────────────────────
 function renderRules() {
-  const LAYER_LABEL = { chassis: 'chassis', deck: 'deck', any: 'either layer' };
+  const LAYER_LABEL = { chassis: 'chassis', deck: 'deck', any: 'either' };
   const partRows = Object.values(IY.PARTS).map((p) => el('tr', {}, el('td', {}, thumbs[p.id] ? el('img', { class: 'thumb', src: thumbs[p.id], alt: '' }) : el('span', { class: 'cell on', 'data-cat': p.cat, 'data-type': p.id, style: 'display:inline-grid;width:26px;font-size:13px', text: ABBR[p.id] })),
     el('td', {}, el('b', { text: p.name }), el('div', { class: 'note', text: `${p.id} · ${p.size[0]}×${p.size[1]} · ${LAYER_LABEL[p.layer]}` })), el('td', { class: 'n', text: p.decor ? 'free' : p.cost }), el('td', { class: 'n', text: p.mass }), el('td', { class: 'n', text: p.hp }), el('td', { text: plain(p.desc) })));
   const itemRows = Object.values(IY.ITEMS).map((it) => el('tr', {}, el('td', { text: it.icon + ' ' + it.name }), el('td', { text: it.held ? 'Held; useItem fires it' : 'Works on pickup' }), el('td', { text: plain(it.desc) })));

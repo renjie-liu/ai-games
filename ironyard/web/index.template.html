@@ -107,7 +107,7 @@ pre { background: #08111b; border: 1px solid var(--line); border-radius: var(--r
 .feed { position: absolute; left: 10px; bottom: 8px; display: flex; flex-direction: column; gap: 2px; font-size: 12px; text-shadow: 0 1px 3px #000; }
 .feed div { background: rgba(8,16,26,.6); padding: 1px 7px; border-left: 2px solid var(--dim); width: fit-content; }
 .banner { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; background: rgba(8,16,26,.86); border: 1px solid var(--line); padding: 14px 22px; pointer-events: auto; min-width: 200px; }
-.banner b { display: block; font: 800 34px/1 var(--display); letter-spacing: .04em; }
+.banner b { display: block; font: 800 34px/1 var(--display); letter-spacing: .04em; white-space: nowrap; }
 .banner span { display: block; color: var(--dim); font-size: 13px; margin: 4px 0 10px; }
 .busy { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(8,16,26,.7); font-family: var(--mono); font-size: 13px; color: var(--dim); }
 .transport { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; background: var(--paper); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 var(--r) var(--r); }
@@ -120,7 +120,7 @@ pre { background: #08111b; border: 1px solid var(--line); border-radius: var(--r
 .veh:last-child { border-bottom: 0; }
 .veh[aria-pressed="true"] { background: var(--paper-2); }
 .veh .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.veh .nm small { display: block; color: var(--dim); font: 400 11px var(--mono); }
+.veh .nm small { display: block; color: var(--dim); font: 400 11px var(--mono); overflow: hidden; text-overflow: ellipsis; }
 .veh.dead .nm { text-decoration: line-through; color: var(--dim); }
 .bars { display: flex; flex-direction: column; gap: 3px; }
 .bars span { display: block; height: 6px; background: var(--ink); border-radius: 3px; overflow: hidden; }

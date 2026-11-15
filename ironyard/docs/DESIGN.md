@@ -1,154 +1,154 @@
-# 积木套件的设计（v0.2）
+# Design of the brick kit (v0.2)
 
-v0.1 的车是 7×7 的单层方格，每格一个零件。能打，但所有车看起来都是一块方饼，零件之间也只有“放哪一格”这一个决定。v0.2 的目标是三件事：车要好看、零件要有形状上的差别、地图要大一点，同时不把拼装搞成 Besiege 那种自由物理。
+A v0.1 car was a single-layer 7×7 grid with one part per cell. It could fight, but every car looked like a square slab, and the only decision between parts was "which cell does it go in". v0.2 set out to do three things: make the cars look good, give the parts real differences in shape, and make the maps bigger, all without turning building into free-form physics in the style of Besiege.
 
-## 先看别人怎么做
+## First, how others do it
 
-| 参考 | 它的做法 | 这里拿来用的 |
+| Reference | What it does | What is used here |
 |---|---|---|
-| LEGO 本身 | 所有零件落在 8 mm 的凸点网格上；砖高 9.6 mm，板高 3.2 mm，三块板叠起来等于一块砖 [1] | 凸点网格 + “板矮、砖高”两种高度。矮零件不挡炮口，这条规则就是从板和砖的高度差来的 |
-| Crossout | 座舱是车的心脏，没了整车就没了；轮子和座舱只能装在车架上；战力分是所有零件分数之和；能量限制火力 [2][3] | 一个核心；行走件只能在底盘层；造价求和做预算；能量限制同时开多少火 |
-| Cosmoteer | 模块故意做成不同大小，让布局像拼图；反应堆被毁会炸到旁边；玩家社区习惯把 1×2 装甲像砌砖一样错缝摆；装甲铺太多又慢又贵 [4][5][6] | 多凸点零件（1×2、2×2、1×3、3×1）；反应堆殉爆波及四周和上下；1×2 装甲砖；造价和质量一起约束 |
-| LEGO 2K Drive | 从一块带轮子的底盘开始往上加砖；砖越多越重，决定车的级别；挨打会掉砖 [7][8][9] | 底盘 + 上层的两层结构；按质量分五个级别；零件被打掉时崩成彩色碎砖 |
-| Robocraft | 一个总的 CPU 上限约束拼装；零件被毁就失效，可以瞄弱点；装饰方块没有护甲没有质量，走单独的额度 [10][11] | 单一预算；逐件血量；装饰件免费、无质量、不挡子弹，单独限 8 个 |
+| LEGO itself | Every part sits on an 8 mm stud grid; a brick is 9.6 mm tall and a plate 3.2 mm, so three stacked plates equal one brick [1] | The stud grid + two heights, "plates are low, bricks are tall". The rule that low parts do not block a muzzle comes straight from the height difference between plate and brick |
+| Crossout | The cabin is the heart of the car, and without it the whole car is gone; wheels and the cabin can only mount on the frame; the power score is the sum of every part's score; energy limits firepower [2][3] | One core; movement parts only on the chassis layer; costs add up against a budget; energy limits how many weapons fire at once |
+| Cosmoteer | Modules are deliberately different sizes so that layout becomes a puzzle; a destroyed reactor blows up what is next to it; the player community habitually staggers 1×2 armor like brickwork; too much armor is slow and expensive [4][5][6] | Multi-stud parts (1×2, 2×2, 1×3, 3×1); a dying reactor's blast reaches its sides, above and below; the 1×2 armor brick; cost and mass constrain together |
+| LEGO 2K Drive | You start from a chassis with wheels and add bricks on top; more bricks means more weight, which decides the car's class; taking hits knocks bricks off [7][8][9] | The two-layer structure of chassis + deck; five weight classes by mass; a part that is shot off bursts into coloured loose bricks |
+| Robocraft | One overall CPU cap constrains the build; a destroyed part stops working, so you can aim for weak points; cosmetic blocks have no armor and no mass and come out of a separate allowance [10][11] | A single budget; hit points per part; decor is free, weightless, does not stop shots, and has its own limit of 8 |
 
-共同点很清楚：这些系统都没有连续的自由摆放，全部是“网格 + 少量形状各异的零件 + 一两条全局约束”。差别只在网格几维、约束几条。对一个要让 LLM 读规则、写蓝图的游戏来说，约束越少、越能用一段 ASCII 说清楚越好，所以这里选了最小的那一档：**两层的二维网格**。
+What they share is clear: none of these systems has continuous free placement; every one of them is "a grid + a small number of differently shaped parts + one or two global constraints". They differ only in how many dimensions the grid has and how many constraints there are. For a game where an LLM has to read the rules and write the blueprint, the fewer the constraints and the easier it is to spell everything out in a block of ASCII, the better, so this picks the smallest option: **a two-layer 2D grid**.
 
-## 套件
+## The kit
 
-**网格**：9 宽 × 11 长的凸点，每颗 0.4 m，`y+` 是车头。两层：底盘（z=0）和上层（z=1）。
+**Grid**: 9 studs wide × 11 long, 0.4 m per stud, `y+` is the front. Two layers: chassis (z=0) and deck (z=1).
 
-**零件占凸点**：`size: [横, 纵]`，坐标是最小 x、最小 y 那颗凸点；朝东西时横纵互换。
+**Parts cover studs**: `size: [across, along]`, and the coordinate is the stud with the smallest x and the smallest y; facing east or west swaps across and along.
 
-| 家族 | 零件 | 形状上的讲究 |
+| Family | Parts | What the shape is about |
 |---|---|---|
-| 板 / 砖 | 底板 1×1、1×2、2×2；砖 1×1、1×2 | 大板单价低，但一碎就是一大块 |
-| 装甲 | 装甲砖 1×1、1×2；斜面装甲；推铲 3×1 | 斜面是矮零件，垫在炮口前不挡射界，迎面来弹只吃 45% |
-| 行走 | 轮子、大脚轮 1×2、履带 1×3、悬浮垫、推进器、陀螺 | 只能在底盘（推进器、陀螺两层都行）；履带长，占掉一整条边 |
-| 调校 | 增压器、尾翼 3×1 | 上层专用，各自给推力和侧向抓地，限数量 |
-| 武器 | 机枪塔、加农炮 1×2、磁轨炮 1×3、激光、导弹巢 2×2、迫击炮 2×2、圆锯、撞角 | 炮越强占地越大；枪炮只能在上层，圆锯撞角只能在底盘 |
-| 功能 | 电池、反应堆、雷达、护盾发生器、维修臂 | 反应堆殉爆，别挨着核心 |
-| 装饰 | 光面砖、尾鳍、排气管、车灯、旗杆 | 免费，纯好看 |
+| Plates / bricks | Plate 1×1, 1×2, 2×2; brick 1×1, 1×2 | Big plates are cheap per stud, but when one breaks a big piece goes at once |
+| Armor | Armor brick 1×1, 1×2; slope armor; plow blade 3×1 | The slope is a low part: in front of a muzzle it does not block the arc of fire, and it takes only 45% from shots that hit its face |
+| Movement | Wheel, monster wheel 1×2, track unit 1×3, hover pad, thruster, gyro | Chassis only (thrusters and gyros fit either layer); tracks are long and take up a whole side |
+| Tuning | Supercharger, spoiler 3×1 | Deck only; one adds drive force and the other side grip, and their numbers are limited |
+| Weapons | Machine-gun turret, cannon 1×2, railgun 1×3, laser, missile pod 2×2, mortar 2×2, buzz saw, ram spike | The stronger the gun, the more room it takes; guns go on the deck only, saws and spikes on the chassis only |
+| Utility | Battery, reactor, radar, shield generator, repair arm | Reactors blow up when they die: keep them away from the core |
+| Decor | Livery tile, tail fin, exhaust stacks, light bar, flag | Free, purely for looks |
 
-**拼装规则只有四条**：一个核心；上层零件至少有一颗凸点压在底盘零件上；所有零件和核心连通（同层贴边或上下叠）；枪炮前方同层不能有高零件，推进器身后不能堵。再加一个预算（轻型 800 / 标准 1200 / 重型 1800）。
+**There are only four building rules**: one core; every deck part has at least one stud resting on a chassis part; every part connects to the core (edge to edge on the same layer, or stacked); no tall part on the same layer in front of a gun, and nothing blocking the back of a thruster. Plus a budget (light 800 / standard 1200 / heavy 1800).
 
-**两层带来的战斗差别**：
+**What two layers change in a fight**:
 
-- 子弹、光束、爆炸打到某一格，先打上层那块，打掉了才轮到底盘；撞击、圆锯、地雷反过来先打底盘。所以“上面盖装甲”防炮，“下面厚底板”防撞，是两个不同的投资。
-- 迫击炮是抛射的：不需要开火通道，能越过墙，但 6 m 以内打不到。它让“躲在墙后”不再绝对安全。
-- 装饰件跟着它底下那块零件一起掉。
+- A bullet, beam or blast that lands on a stud hits the deck part there first and only reaches the chassis once that is gone; rams, buzz saws and mines go the other way and hit the chassis first. So "armor on top" against guns and "a thick floor underneath" against ramming are two separate investments.
+- The mortar lobs its shells: it needs no firing lane and clears walls, but cannot hit anything closer than 6 m. It means "hiding behind a wall" is no longer completely safe.
+- A decor piece falls off together with the part underneath it.
 
-## 外观
+## Looks
 
-- 每种零件有自己的模型（`web/src/kit.js`），都带凸点；车身用队伍色，另选一个点缀色（10 种）。
-- 车是积木，场地是实景（见下一节）：两者故意不是一个画风，像把玩具车放到真的地面上拍。
-- 轮子按里程转，圆锯和雷达自己转，推进器喷火，悬浮车上下浮动；零件被打掉时崩出自己颜色、队伍色和浅灰三种碎砖。
-- 车库里有可拖动的实时 3D 预览，零件盒里每个零件都是渲染出来的缩略图，“镜像 左→右”一键对称。
+- Every part type has its own model (`web/src/kit.js`), all with studs; the body takes the team colour, plus one accent colour of your choice (10 to pick from).
+- The cars are bricks and the arenas are realistic (see the next section): the two are deliberately not in the same style, like toy cars photographed on real ground.
+- Wheels turn with the distance travelled, buzz saws and radars spin by themselves, thrusters spit flame, hover cars bob up and down; a part that is shot off bursts into loose bricks in three colours: its own, the team colour and light grey.
+- The garage has a live 3D preview you can drag, every part in the brick box is a rendered thumbnail, and "Mirror L→R" makes a design symmetrical in one click.
 
-## 场地（v0.3）
+## Arenas (v0.3)
 
-v0.2 的场地是一格一个颜色的底板，看着像色块。v0.3 把它换成了按地图分主题的实景，全部在浏览器里程序化生成，没有一张图片文件（`web/src/terrain.js`）：
+The v0.2 arena was a baseplate with one colour per tile, and it looked like colour swatches. v0.3 replaced it with realistic scenery themed per map, all generated procedurally in the browser without a single image file (`web/src/terrain.js`):
 
-| 地图 | 设定 | 地面 | 墙 / 掩体 |
+| Map | Setting | Ground | Walls / cover |
 |---|---|---|---|
-| 试车场 | 白天的混凝土场地，四角有照明灯杆 | 混凝土 | 现浇混凝土墙，墙脚黄黑警示带；警示条纹墩 |
-| 相扑台 | 黄昏的海上钢甲板 | 防滑花纹钢板，带锈 | 无；甲板下面是海 |
-| 峡谷 | 傍晚的沙漠 | 沙地 | 高低不齐的砂岩；沙袋 |
-| 冰湖 | 阴天的雪原 | 雪 | 顶上积雪的岩石；沙袋 |
-| 熔炉 | 夜里的铸造厂 | 沥青 | 生锈的波纹钢板；警示条纹墩 |
-| 天桥 | 日落时云层之上的平台 | 混凝土 | 警示条纹墩；平台下面是云 |
-| 沼泽堡垒 | 起雾的沼泽 | 草和泥 | 长青苔的混凝土墙；沙袋 |
+| Proving Ground | A concrete yard in daylight, with floodlight masts in the four corners | Concrete | Poured concrete walls with yellow-and-black hazard bands at the foot; hazard-striped blocks |
+| Sumo Deck | A steel deck at sea at dusk | Anti-slip tread plate, rusty | None; the sea is under the deck |
+| Canyon | Desert in the evening | Sand | Sandstone of uneven heights; sandbags |
+| Frostbite | A snowfield under an overcast sky | Snow | Rocks capped with snow; sandbags |
+| Foundry | A foundry at night | Asphalt | Rusty corrugated steel sheet; hazard-striped blocks |
+| Skybridge | Platforms above the clouds at sunset | Concrete | Hazard-striped blocks; clouds under the platforms |
+| Bog Fort | A swamp in the fog | Grass and mud | Concrete walls grown over with moss; sandbags |
 
-做法上有四层：
+It is built in four layers:
 
-1. **细节贴图**：混凝土、沥青、钢板、沙、雪、草、泥、冰各一套（颜色 + 粗糙度 + 法线），用可平铺的值噪声和细胞噪声算出来，每套只在第一次用到时生成一次。
-2. **每张图一张控制图**：从地形格子模糊出来的四个通道，分别是泥、冰、熔岩的光、墙脚和坑沿的接触阴影。着色器取样前先用噪声把坐标扰动一下，所以泥地和冰面的边缘是不规则的，不再是方格。
-3. **每张图一张贴花**：伸缩缝、裂纹、油渍、轮胎印、车辙、坑沿和熔岩边的警示漆、出生位的队伍色框和编号、道具点的圆环、维修台。漆面会随地面的坑洼变得斑驳。
-4. **立体的东西**：坑有 12 m 深的井壁，越往下越黑；悬空的图有板边、支柱，下面是海或云；熔岩是会流动的熔融面，光会洒到周围地面；墙只生成露在外面的面，贴图按世界坐标铺，所以一排墙看起来是一整段；岩石的顶点做了随机偏移。爆炸和残骸会在地上留下焦痕，回放拖到哪就显示到哪。
+1. **Detail textures**: one set each for concrete, asphalt, steel plate, sand, snow, grass, mud and ice (colour + roughness + normal), computed from tileable value noise and cellular noise; each set is generated once, the first time it is needed.
+2. **One control map per map**: four channels blurred out of the terrain tiles: mud, ice, the glow of lava, and contact shadow along the foot of walls and the rims of pits. The shader perturbs the coordinates with noise before it samples, so the edges of mud and ice are irregular and no longer squares.
+3. **One decal layer per map**: expansion joints, cracks, oil stains, tyre marks, ruts, hazard paint along pit rims and lava edges, team-coloured boxes and numbers at the spawn points, rings at the pickup spots, repair pads. The paint turns patchy where the ground is pitted.
+4. **Things with depth**: pits have shaft walls 12 m deep that get darker the further down they go; the floating maps have slab edges and pillars, with sea or clouds below; lava is a flowing molten surface whose light spills onto the ground around it; walls only generate the faces that are exposed and are textured in world coordinates, so a row of wall reads as one continuous stretch; the vertices of rocks are randomly displaced. Explosions and wrecks leave scorch marks on the ground, shown up to wherever the replay has been dragged.
 
-地形判定没变：引擎里还是 2 m 的格子，画面上泥和冰的边缘最多偏出半米左右。2D 视图保持原样，仍然是按格子画的战术图。
+The terrain rules have not changed: in the engine it is still a grid of 2 m tiles, and on screen the edges of mud and ice stray by about half a metre at most. The 2D view is as it was, still a tactical map drawn tile by tile.
 
-## 地图
+## Maps
 
-每张图都放大了（最小 40×40 m，最大 84×64 m），新增“天桥”：几座悬在虚空上的岛，靠窄桥连着，悬浮车可以直接飞过去。比赛时长相应加到 150 秒，毒圈 85 秒开始收。
+Every map got bigger (the smallest is 40×40 m, the largest 84×64 m), and there is a new one, Skybridge: a few islands hanging over the void and joined by narrow bridges, which hover cars can simply fly across. Match length went up to 150 seconds to match, and the safe zone starts closing at 85 seconds.
 
-## 控制器的围栏（v0.4）
+## The fence around controllers (v0.4)
 
-这个游戏的玩法就是跑别人的 Agent 写的代码，所以控制器够得着什么，是规则的一部分。v0.3 把引擎自己的对象（`api`、`state`）直接递给控制器，而任何一个引擎函数都通向引擎的 `Function` 构造器：`api.log.constructor('return process')()` 一行就拿到宿主进程；共享的对象还能被改写，影响引擎和之后在同一个工作线程里跑的比赛。
+Playing this game means running code written by other people's agents, so what a controller can reach is part of the rules. v0.3 handed the engine's own objects (`api`, `state`) straight to the controller, and any engine function leads to the engine's `Function` constructor: the one line `api.log.constructor('return process')()` gets you the host process; shared objects could also be rewritten, which affected the engine and the matches that ran later in the same worker thread.
 
-v0.4 的规则是一句话：**引擎和控制器之间只传字符串、数字和布尔值**（`engine/realm.js`）。
+The v0.4 rule is one sentence: **only strings, numbers and booleans pass between the engine and a controller** (`engine/realm.js`).
 
-| 方向 | 内容 | 形式 |
+| Direction | What | Form |
 |---|---|---|
-| 引擎 → 控制器 | 零件表、地图、规则 | 开局一次，JSON，控制器那边自己解析、自己冻结 |
-| 引擎 → 控制器 | 每回合的观测 | 一个数字数组（内存归控制器那边，引擎用自己的视图去写），外加队友的 `say` 和第一次见到某辆车时它的静态布局（JSON） |
-| 控制器 → 引擎 | 蓝图 | JSON |
-| 控制器 → 引擎 | 每回合的指令 | 写回同一个数字数组；`say` 是 JSON |
-| 控制器 → 引擎 | `api.nav`、`api.rng`、`api.log`、`api.util.blueprint` | 只收发原始值的函数调用；引擎那边抛的错不会原样传过去，因为错误对象也是引擎的对象 |
+| Engine → controller | Parts table, map, rules | Once at the start, as JSON; the controller side parses it and freezes it itself |
+| Engine → controller | The observation for each turn | An array of numbers (the memory belongs to the controller side, and the engine writes through a view of its own), plus teammates' `say` and, the first time a vehicle is seen, its static layout (JSON) |
+| Controller → engine | The blueprint | JSON |
+| Controller → engine | The commands for each turn | Written back into the same array of numbers; `say` is JSON |
+| Controller → engine | `api.nav`, `api.rng`, `api.log`, `api.util.blueprint` | Function calls that take and return primitive values only; an error thrown on the engine side is not passed across as it is, because an error object is an engine object too |
 
-`api.util` 的纯函数和路径跟随器在控制器那边各有一份（同一段源码在那边重新求值），`state` 也是在那边用数字重新搭出来的，所以每辆车拿到的都是只属于自己的对象。Node 里每辆车一个新的 `vm` 上下文：只留语言本身（没有 `Date`、`Intl`、`WebAssembly`、`WeakRef`），禁止从字符串生成代码，微任务队列不排空，源码里不许出现 `import` 这个词（`import()` 是唯一会向宿主要东西的语法）。浏览器里是同一段代码直接调用，没有隔离。
+The pure functions of `api.util` and the path follower each have a copy on the controller side (the same source, evaluated again over there), and `state` is also rebuilt there from the numbers, so every vehicle gets objects that are its own alone. In Node each vehicle gets a fresh `vm` context: only the language itself is left (no `Date`, `Intl`, `WebAssembly`, `WeakRef`), generating code from strings is forbidden, the microtask queue is not drained, and the word `import` may not appear in the source (`import()` is the only syntax that asks the host for something). In the browser the same code is called directly, with no isolation.
 
-怎么知道没改坏：改之前先给 64 场比赛的完整结果（事件、回放帧、统计、日志）做了指纹，又存了三种模式共 2016 场循环赛的结果；改完逐场比对，一场不差。测试里另有两条长期守着：一条让第二个围栏旁听整场比赛，每回合把解出来的 `state` 和 `World.observeAll()` 直接搭的对象逐项比较；一条让同一场比赛在围栏内外各跑一遍，结果必须相同。
+How we know nothing broke: before the change, the complete results of 64 matches (events, replay frames, stats, logs) were fingerprinted, and the results of 2016 round-robin matches across the three modes were saved; after the change they were compared match by match, and not one differed. Two tests also stand guard for good: one has a second fence listen in on a whole match and, every turn, compares the `state` it decodes field by field with the object `World.observeAll()` builds directly; the other runs the same match once inside the fence and once outside it, and the results must be the same.
 
-代价是速度（1v1 约 1.7 倍，3v3 约 2 倍用时）。大头是每个观察者都要把看得见的每辆车重新搭一遍对象，而且每场比赛的上下文都是新的，V8 来不及把这段代码优化到最快。
+The price is speed (1v1 takes about 1.7 times as long, 3v3 about 2 times). Most of it is that every observer has to rebuild the objects for every vehicle it can see, and that each match gets new contexts, so V8 does not have the time to optimise this code all the way.
 
-## 打起来要像真的（v0.5）
+## Fights should feel real (v0.5)
 
-先量再改。v0.4 的 9 个内置 bot 打了一轮 1v1 循环赛，看的不是谁赢，而是比赛长什么样：
+Measure first, then change. The 9 built-in bots of v0.4 played a 1v1 round robin, and the question was not who won but what the matches looked like:
 
-| 现象 | v0.4 | 问题 |
+| What was seen | v0.4 | The problem |
 |---|---|---|
-| 车死的时候还剩多少车体（中位数） | 62% | 大家都在钻核心，车是整个消失的，不是被拆掉的 |
-| 死之前掉的零件数（中位数） | 9 | 同上：拼了四五十块，观众只看到掉了九块 |
-| 冲撞占伤害 / 占击杀 | 2% / 0% | 撞角、推铲、推进器是摆设 |
-| 每辆车站着不动的时间 | 36% | 最优解是停下来对射 |
-| 命中率 | 90% | 机枪没有散布，走位没有意义 |
+| Hull left when a car dies (median) | 62% | Everyone drills for the core; cars vanish whole instead of being taken apart |
+| Parts lost before death (median) | 9 | The same thing: forty or fifty parts go into a build, and the audience sees nine come off |
+| Ramming's share of damage / of kills | 2% / 0% | Ram spikes, plows and thrusters are ornaments |
+| Time each car spends standing still | 36% | The best play is to stop and trade fire |
+| Accuracy | 90% | Machine guns have no spread, so movement means nothing |
 
-结论是引擎里“东西”太少：没有力，没有火，没有能拿来用的地形，拼车时“这块放哪”只影响血量和射界。Besiege 那一类游戏好玩的地方正相反——造出来的东西会散架、会着火、会被自己的炸药送走。所以这一版加的都是物理上的后果，不是新的数值：
+The conclusion was that the engine had too little "stuff" in it: no forces, no fire, no terrain you could put to use, and "where does this piece go" only affected hit points and arcs of fire. What makes games like Besiege fun is the exact opposite: the things you build fall apart, catch fire and get carried off by their own explosives. So everything added in this version is a physical consequence, not a new number:
 
-- **力。** 爆炸把车掀出去（冲量按伤害算，护盾挡得住伤害挡不住推），重炮有后坐力（磁轨炮 220 N·s，轻车开一炮会被顶歪），撞击压坏的不只是接触的那一块，机枪有散布。命中会推人，所以坑和熔岩成了武器。
-- **火。** 每块零件有热量，到 1 就着，着了每秒掉血并烤它挨着的零件，火会在车上走。板、砖、轮子、大多数设备会烧，装甲、斜面、履带、撞角、推铲、活塞、核心不烧——一排装甲就是防火带，拼车时第一次需要想“这里断不断得开”。维修台、维修包、维修臂能灭火，`jettison` 可以把烧着的零件扔掉。
-- **四个会惹事的零件。** 喷火器（伤害很低，靠点着）；鱼叉（钩住后两辆车被缆绳拴住，重的一方说了算，缆绳绷紧时把钩住的零件扯下来，连同只靠它挂着的东西）；活塞锤（一拳 1300 N·s，自己吃同样的反冲）；火药桶（随车带的炸弹，朝哪边装就往哪边甩，碰到别人的车就炸，被打坏或点着也炸，不分敌我）。
-- **打得烂的场地。** 木箱是有血量的墙，油桶一坏就炸并且连环炸；寻路每次都按地图现在的样子回答。新地图“火药库”全是这两样。
-- **报废。** 能动的和能伤人的都没了的车，3 秒后算被摧毁。没有这条，被拆光的车会剩一个烧不坏的核心拖到时间结束。
+- **Force.** Blasts throw cars (the impulse scales with the damage; a shield stops the damage but not the push), heavy guns recoil (220 N·s for the railgun: a light car is knocked off line by its own shot), a collision crushes more than the one part it touches, and machine guns have spread. Hits push, so pits and lava have become weapons.
+- **Fire.** Every part has heat; at 1 it catches fire, and a burning part loses hit points every second and heats the parts next to it, so fire travels across the car. Plates, bricks, wheels and most equipment burn; armor, slopes, tracks, ram spikes, plows, pistons and the core do not, so a row of armor is a firebreak, and for the first time a builder has to ask "can the fire be cut off here". Repair pads, repair kits and repair arms put fires out, and `jettison` can throw a burning part away.
+- **Four parts that cause trouble.** The flamethrower (very low damage; it works by setting things alight); the harpoon (once it bites, the two cars are tied together by the cable and the heavier one decides where they go; while the cable is taut it tears off the part it hooked, along with whatever was held on only by that part); the piston ram (1300 N·s per punch, with the same kick back on yourself); the powder keg (a bomb you carry: it is flung whichever way it was mounted, goes off when it touches someone else's car, goes off as well if it is destroyed or set alight, and does not tell friend from foe).
+- **Arenas you can smash.** A crate is a wall with hit points; a barrel explodes as soon as it breaks, and barrels set each other off; pathfinding always answers for the map as it is right now. The new map, Powder Depot, is made of nothing else.
+- **Wrecks.** A car with nothing left that can move it and nothing left that can hurt anyone counts as destroyed after 3 seconds. Without this rule, a car stripped bare would be left as a core that cannot burn, dragging on until time runs out.
 
-同样的量法，13 个 bot、8 张图、1248 场 1v1（v0.4 一栏是从 v0.4 那次提交重新跑出来的：9 个 bot、7 张图、504 场）：
+Measured the same way, with 13 bots, 8 maps and 1248 1v1 matches (the v0.4 column was run again from the v0.4 commit: 9 bots, 7 maps, 504 matches):
 
 | | v0.4 | v0.5 |
 |---|---|---|
-| 死的时候剩余车体（中位数） | 62% | 34% |
-| 死之前掉的零件（中位数） | 9 | 20 |
-| 站着不动的时间 | 36% | 22% |
-| 伤害来源 | 动能 47%、爆炸 38%、近战 11%、冲撞 2%、能量 2% | 动能 42%、爆炸 28%、火 12%、近战 10%、冲撞 7%、能量 1% |
-| 怎么死的 | 被武器打穿核心 82%、掉坑 11%、熔岩 6% | 被武器打穿核心 47%、报废 35%、掉坑 17% |
-| 平均时长 | 47 s | 53 s |
+| Hull left at death (median) | 62% | 34% |
+| Parts lost before death (median) | 9 | 20 |
+| Time standing still | 36% | 22% |
+| Where damage comes from | kinetic 47%, explosive 38%, melee 11%, ramming 2%, energy 2% | kinetic 42%, explosive 28%, fire 12%, melee 10%, ramming 7%, energy 1% |
+| How cars die | core shot through by a weapon 82%, fell into a pit 11%, lava 6% | core shot through by a weapon 47%, wrecked 35%, fell into a pit 17% |
+| Average length | 47 s | 53 s |
 
-调的过程里有三件事值得记下来，都是量出来才知道的：
+Three things from the tuning are worth writing down, and each was only found by measuring:
 
-1. 第一版鱼叉对胜率的贡献是零：把它的射程改成 0，带鱼叉的 bot 胜率不变。它只“拴住”，而拴住本身不值 90 块钱。加了“绷紧就扯零件”之后它才是个武器。
-2. 第一版火药桶是松手后带着车速往前滚，1.5 秒后炸。写出来的投弹 bot 胜率 20% 上下，一半的桶炸的是自己——滚出去的距离、爆炸半径和刹车距离三个数凑不出一个安全的窗口。改成“朝自己的朝向甩出去 + 碰车即炸”之后，同一个 bot 到了 60% 上下，而且朝向成了设计决定：朝前是鱼雷，朝后是给追兵的地雷。活塞能把飞过来的桶打回去，拿活塞的 bot 对投弹 bot 几乎全胜，这个克制关系是自己长出来的。
-3. 最强的两个新 bot 强在两挺机枪上，不在新零件上：拿掉机枪，胜率从七成掉到三成；削机枪反而是老 bot 掉得更多。最后是各给它们留一挺。内置 bot 是靶子，把靶子做得太优化没有意义。
+1. The first harpoon added exactly nothing to win rate: with its range set to 0, the bot that carried it won just as often. All it did was tie cars together, and being tied together is not worth 90 credits by itself. Only once a taut cable tore parts off did it become a weapon.
+2. The first powder keg, once let go, rolled forward at the car's own speed and went off after 1.5 seconds. The bomber bot written for it won around 20% of its matches, and half of its kegs blew up the bot itself: rolling distance, blast radius and braking distance never added up to a safe window. After the change to "flung the way it faces + goes off on touching a car", the same bot reached around 60%, and facing became a design decision: forward is a torpedo, backward is a mine for whoever is chasing. A piston can punch an incoming keg back, and the bot with pistons beats the bomber bot almost every time; nobody designed that counter, it grew by itself.
+3. The two strongest new bots owed their strength to their two machine guns, not to the new parts: without the guns their win rate fell from about 70% to about 30%, while weakening the machine gun hurt the old bots more instead. In the end each of them kept one. The built-in bots are targets, and there is no point in over-optimising a target.
 
-没有照搬 Besiege 的东西：关卡、美术、名字、具体机关一样都没拿，也没有铰链和活动关节（见下）。拿的只是那条原则——零件之间要有物理上的因果。
+Nothing was copied from Besiege: no levels, art, names or specific contraptions were taken, and there are no hinges or moving joints either (see below). All that was taken is the principle: parts should be linked by physical cause and effect.
 
-## 故意没做的
+## Left out on purpose
 
-- 没有第三层、没有悬挑、没有铰链和活动关节。再往上加，ASCII 蓝图就说不清楚了。
-- 没有零件解锁和稀有度，所有零件一开始就能用，只有预算。
-- 装饰和涂装不进战斗数值。
-- 平衡只靠 13 个内置 bot 的循环赛粗调：1v1 最强的 bastion 67%，最弱的 rookie 20%，中间是连续的。2v2 和 3v3 只看过没有报错和明显失衡，没有细调。
-- 还没有给人开的试驾模式（键盘开自己拼的车打 bot），也没有单人关卡。两样都想做，这一版没排上。
+- No third layer, no overhangs, no hinges or moving joints. Add any more and an ASCII blueprint can no longer describe the car clearly.
+- No part unlocks and no rarity: every part is available from the start, and the only limit is the budget.
+- Decor and paint do not enter the combat numbers.
+- Balance has only been roughly tuned with round robins of the 13 built-in bots: in 1v1 the strongest, bastion, is at 67% and the weakest, rookie, at 20%, with a continuous spread in between. 2v2 and 3v3 were only checked for errors and obvious imbalance, not tuned in detail.
+- There is no test-drive mode for people yet (driving a car you built against bots, with the keyboard), and no single-player levels. Both are wanted; neither made it into this version.
 
-## 来源
+## Sources
 
-1. LEGO 尺寸：<https://brickfact.com/blog/guidebooks/lego-brick-dimensions>
-2. Crossout 官方指南（战力分、能量、座舱）：<https://old.crossout.net/en/game/guide>
-3. Crossout Wiki，Frame 和 Cabin：<https://crossout-archive.fandom.com/wiki/Frame?oldid=6206>
-4. Cosmoteer 0.12.0 开发日志（模块大小不一是有意的）：<https://walternaterealities.itch.io/cosmoteer/devlog/3564/cosmoteer-0120-missiles-fires-and-more>
-5. Cosmoteer 论坛造船指南（反应堆别扎堆、装甲别铺满）：<https://forum.cosmoteer.net/d/362/3>
-6. Cosmoteer 论坛，错缝装甲：<https://forum.cosmoteer.net/d/7783/39>
-7. LEGO 2K Drive 官方 Garage 页：<https://lego.2k.com/drive/garage/>
-8. Gamer Matters 对 2K Drive 造车器的评测（从底盘开始）：<https://gamermatters.com/lego-2k-drives-vehicle-builder-is-good-enough-to-recreate-actual-lego-sets-but-there-are-limits/>
-9. Engadget 对 2K Drive 的评测（挨打掉砖）：<https://www.engadget.com/lego-2k-drive-lets-you-build-your-dream-race-car-brick-by-brick-113038327.html>
-10. Robocraft（维基百科）：<https://en.wikipedia.org/wiki/Robocraft>
-11. Robocraft Wiki，装饰方块：<https://robocraft.gamepedia.com/File:Pilot_Seat_Cray.png>
+1. LEGO dimensions: <https://brickfact.com/blog/guidebooks/lego-brick-dimensions>
+2. Official Crossout guide (power score, energy, cabin): <https://old.crossout.net/en/game/guide>
+3. Crossout Wiki, Frame and Cabin: <https://crossout-archive.fandom.com/wiki/Frame?oldid=6206>
+4. Cosmoteer 0.12.0 devlog (modules of different sizes are intentional): <https://walternaterealities.itch.io/cosmoteer/devlog/3564/cosmoteer-0120-missiles-fires-and-more>
+5. Cosmoteer forum shipbuilding guide (do not cluster reactors, do not cover everything in armor): <https://forum.cosmoteer.net/d/362/3>
+6. Cosmoteer forum, staggered armor: <https://forum.cosmoteer.net/d/7783/39>
+7. Official LEGO 2K Drive Garage page: <https://lego.2k.com/drive/garage/>
+8. Gamer Matters review of the 2K Drive vehicle builder (starting from the chassis): <https://gamermatters.com/lego-2k-drives-vehicle-builder-is-good-enough-to-recreate-actual-lego-sets-but-there-are-limits/>
+9. Engadget review of 2K Drive (bricks knocked off by hits): <https://www.engadget.com/lego-2k-drive-lets-you-build-your-dream-race-car-brick-by-brick-113038327.html>
+10. Robocraft (Wikipedia): <https://en.wikipedia.org/wiki/Robocraft>
+11. Robocraft Wiki, cosmetic blocks: <https://robocraft.gamepedia.com/File:Pilot_Seat_Cray.png>
