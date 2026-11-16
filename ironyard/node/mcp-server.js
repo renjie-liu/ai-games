@@ -200,6 +200,25 @@ const TOOLS = [
     },
   },
   {
+    name: 'delete_bot',
+    title: 'Delete a saved bot',
+    description: 'Removes a bot saved with submit_bot. Built-in bots cannot be deleted. Use it to clear scratch variants when you are done with them: every saved bot is an entrant in `leaderboard`, and each one adds a full round of matches there for everybody.',
+    inputSchema: {
+      type: 'object',
+      properties: { name: { type: 'string', pattern: '^[a-z0-9][a-z0-9_-]{0,39}$', description: 'The saved bot to remove.' } },
+      required: ['name'], additionalProperties: false,
+    },
+    run: async (a) => {
+      const name = String(a.name), saved = () => listBots().filter((b) => b.kind === 'user').map((b) => b.id);
+      if (!BOT_NAME_RE.test(name)) throw new Error(`bad bot name "${name}" (lowercase letters, digits, - and _ only)`);
+      if (fs.existsSync(path.join(BUILTIN_DIR, name + '.js'))) throw new Error(`"${name}" is a built-in bot and cannot be deleted`);
+      const file = path.join(USER_DIR, name + '.js');
+      if (!fs.existsSync(file)) throw new Error(`no saved bot "${name}". Saved bots: ${saved().join(', ') || 'none'}`);
+      fs.unlinkSync(file);
+      return { deleted: name, savedBots: saved() };
+    },
+  },
+  {
     name: 'run_match',
     title: 'Run one match',
     description: 'Runs a full deterministic match and returns the battle report: winner and reason, the event timeline, runtime errors, api.log output, and per vehicle three things that say WHY it won or lost. `insights`: up to six plain-language findings with their numbers, most important first (how it ended, movers or weapons lost early and to what, an enemy inside gun range while the guns were silent and the reason, damage taken at a range or from a side it does not fight at, damage from lava / the zone / walls, fire, time stuck, low accuracy). `telemetry`: the numbers behind them — weapons[] (per weapon piece: shots, hits, damage, firingTime, lostAt), dealt and taken broken down by vehicle id, by weapon, by range band (metres between the two vehicles) and, for taken, by the side the hit came from (front / left / right / rear) and by piece type; range (seconds per distance band to the nearest enemy); fire (of the seconds an enemy was inside gun range: firing, no line of sight, out of arc, energy-starved); move (stuck, reversing, speeds, movers lost); losses (the first pieces lost: when, to what, by whom); timeline (hull %, energy %, distance to the nearest enemy and weapons left, every 2 s). `stats`: the plain totals. Read the insights first, then the telemetry they point at, then change the bot or the blueprint and run the same match again (same seed = same match). `brief: true` leaves out the design, the timeline and the losses list. To see where everybody was and when, set save_replay and read it with get_replay (views "trace", "events", "telemetry"). Team 0 = team_a.',
@@ -239,7 +258,7 @@ const TOOLS = [
   {
     name: 'evaluate_bot',
     title: 'Benchmark a bot',
-    description: 'Plays one bot against a field of opponents on several maps and seeds, both spawn sides, and returns its win rate overall, per opponent and per map, how its vehicles died, the worst losses to replay with run_match (each with `damageDealt` and `opponentDealt`: a loss with next to no damage dealt is a car that never got to fight — look there first), and a `diagnosis`: the telemetry of all its matches added up, apart for wins and for losses — mean hull left and duration, death causes, the share of damage taken by weapon and by side hit, mean range and share of time per range band, fire-discipline totals (seconds with an enemy in gun range: firing, no line of sight, out of arc, energy-starved), the pieces it loses first, and `commonInsights`: each kind of finding with the number of matches it came up in and one example. What differs between the losses and the wins is what to fix. Use this to decide whether a change actually helped, then run_match one of the worst losses to see that match\'s own insights and telemetry.',
+    description: 'Plays one bot against a field of opponents on several maps and seeds, both spawn sides, and returns its win rate overall, per opponent and per map, `lossesByOpponentAndMap` (how many matches it lost to each opponent on each map, so one call shows where the trouble is), how its vehicles died, the worst losses to replay with run_match (each with `damageDealt` and `opponentDealt`: a loss with next to no damage dealt is a car that never got to fight — look there first), and a `diagnosis`: the telemetry of all its matches added up, apart for wins and for losses — mean hull left and duration, death causes, the share of damage taken by weapon and by side hit, mean range and share of time per range band, fire-discipline totals (seconds with an enemy in gun range: firing, no line of sight, out of arc, energy-starved), the pieces it loses first, and `commonInsights`: each kind of finding with the number of matches it came up in and one example. What differs between the losses and the wins is what to fix. Use this to decide whether a change actually helped, then run_match one of the worst losses to see that match\'s own insights and telemetry.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -267,7 +286,7 @@ const TOOLS = [
       const entrants = [name, ...opp].map((id) => ({ id, bots: [id] }));
       const schedule = makeSchedule({ entrants, maps, seeds, focus: name });
       const sources = Object.fromEntries([name, ...opp].map((id) => [id, readBotSource(id)]));
-      const byMap = {}, deaths = {}, losses = [];
+      const byMap = {}, deaths = {}, losses = [], lostOn = {};
       let errors = 0;
       const results = await Promise.all(schedule.map(async (m) => {
         const mine = m.a === name ? 0 : 1;
@@ -280,6 +299,7 @@ const TOOLS = [
           if (scoredResult(r)) {
             const won = r.winner === mine, draw = r.winner < 0;
             for (const v of s.vehicles) if (v.team === mine && v.death) deaths[v.death.cause] = (deaths[v.death.cause] || 0) + 1;
+            if (!won && !draw) { const o = m.a === name ? m.b : m.a; (lostOn[o] ||= {})[m.map] = (lostOn[o][m.map] || 0) + 1; }
             if (!won && !draw) losses.push({ opponent: m.a === name ? m.b : m.a, map: m.map, seed: m.seed, swap: m.swap, reason: s.reason, duration: s.duration,
               hullLeft: [s.teams[mine].hull, s.teams[1 - mine].hull], damageDealt: s.teams[mine].damage, opponentDealt: s.teams[1 - mine].damage });
             r.digest = { outcome: won ? 'win' : draw ? 'draw' : 'loss', duration: s.duration, vehicles: s.vehicles.filter((v) => v.team === mine) };
@@ -338,6 +358,7 @@ const TOOLS = [
         bot: name, mode, seeds, ...tournamentStatus(results, schedule.length), matches: me.played, wins: me.w, draws: me.d, losses: me.l, winRate: me.winRate,
         vsOpponent: Object.fromEntries(Object.entries(me.vs).map(([k, v]) => [k, `${v.w}W ${v.d}D ${v.l}L`])),
         byMap: Object.fromEntries(Object.entries(byMap).map(([k, v]) => [k, `${v.w}W ${v.d}D ${v.l}L`])),
+        lossesByOpponentAndMap: lostOn,
         howMyVehiclesDied: deaths,
         ...(comparedWith ? { comparedWith } : {}),
         diagnosis: diagnose(results.filter((r) => r.digest).map((r) => r.digest)),

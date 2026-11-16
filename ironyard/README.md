@@ -43,6 +43,7 @@ Other clients use the generic config: `{"mcpServers": {"ironyard": {"command": "
 | `list_bots` / `get_bot` | The list of existing bots and their source |
 | `validate_design` | Checks a blueprint only: errors, warnings, derived stats, ASCII drawing |
 | `submit_bot` | Compile + smoke-test in all three modes; stored in `user_bots/` only if it passes |
+| `delete_bot` | Removes a bot saved with `submit_bot` (scratch variants otherwise stay on the leaderboard as entrants) |
 | `run_match` | Runs one match and returns the battle report; `save_replay: true` writes the replay to `replays/` |
 | `evaluate_bot` | Plays a field of opponents across maps and seeds, both sides; returns a win-rate table and the worst losses |
 | `run_tournament` | Round-robin standings and head-to-head records |
