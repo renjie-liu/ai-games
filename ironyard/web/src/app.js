@@ -6,6 +6,7 @@ import { Render3D, Preview3D } from './render3d.js';
 import { Kit } from './kit.js';
 import { Render2D } from './render2d.js';
 import { mdToHtml, esc } from './md.js';
+import { DriverInput } from './driver.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, attrs = {}, ...kids) => {
@@ -49,6 +50,7 @@ const S = {
   custom: {},     // id -> source
   setup: { mode: '2v2', map: 'foundry', seed: 1, swap: false, budget: 1200, teams: [['bastion', 'hornet'], ['thumper', 'bulldozer']] },
   replay: null, time: 0, playing: true, speed: 1, view: '3d', follow: -1,
+  live: null,
   garage: { parts: [], tool: 'plate', dir: 'N', erase: false, layer: 1, accent: 'white' },
   league: { bots: null, mode: '1v1', maps: null, seeds: 1, running: false },
 };
@@ -61,6 +63,7 @@ const botLabel = (id) => {
   return (m ? m[2] : id) + (builtin[id] ? '' : ' ★');
 };
 const host = new SimHost(IY, $('engine-src').textContent, $('runner-src').textContent);
+const liveHost = new SimHost(IY, $('engine-src').textContent, $('runner-src').textContent);
 const leagueHost = new SimHost(IY, $('engine-src').textContent, $('runner-src').textContent);
 const kit = typeof THREE !== 'undefined' ? new Kit(IY) : null;
 
@@ -88,6 +91,7 @@ async function copyText(text) { try { await navigator.clipboard.writeText(text);
 const TABS = ['arena', 'garage', 'lab', 'league', 'rules', 'mcp'];
 function showTab(name, push = true) {
   if (!TABS.includes(name)) name = 'arena';
+  if (name !== 'arena') pauseDriving();
   S.tab = name;
   for (const t of TABS) $('tab-' + t).hidden = t !== name;
   document.querySelectorAll('.tab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
@@ -159,19 +163,66 @@ function makeRenderer() {
 
 let matchRequest = 0;
 async function runMatch(extra = {}, sources = allSources()) {
+  stopDriving();
   const request = ++matchRequest;
   const st = S.setup;
   st.seed = Math.max(0, Math.floor(Number($('seed').value) || 0)); st.swap = $('swap').checked; st.budget = Number($('budget').value); st.map = $('map').value;
   persist();
   $('busy').hidden = false; $('banner').hidden = true; msg($('setup-msg'), '', '');
-  $('run').disabled = true;
+  $('run').disabled = $('drive-start').disabled = true;
   try {
     host.setBots(sources);
-    const res = await host.match({ map: st.map, mode: st.mode, seed: st.seed, swap: st.swap, budget: st.budget, teams: st.teams, ...extra });
-    if (request === matchRequest) loadReplay(res);
+    const spec = { map: st.map, mode: st.mode, seed: st.seed, swap: st.swap, budget: st.budget, teams: st.teams, ...extra };
+    const driving = $('control').value === 'drive';
+    if (driving) liveHost.setBots(sources);
+    const res = await (driving ? liveHost.startLive(spec) : host.match(spec));
+    if (request === matchRequest) {
+      if (driving) S.live = { request, res, pending: false, elapsed: 0 };
+      loadReplay(res);
+      if (driving) { setFollow(0); drivingUI(); $('viewport').scrollIntoView({ block: 'start', behavior: 'smooth' }); }
+    }
   } catch (e) {
     if (request === matchRequest) msg($('setup-msg'), 'bad', 'Could not start the match: ' + e.message);
-  } finally { if (request === matchRequest) { $('busy').hidden = true; $('run').disabled = false; } }
+  } finally { if (request === matchRequest) { $('busy').hidden = true; $('run').disabled = $('drive-start').disabled = false; } }
+}
+
+let driver;
+function drivingUI() {
+  const live = !!S.live;
+  $('driver-panel').hidden = !live;
+  $('drive-start').hidden = live;
+  $('speed').disabled = $('scrub').disabled = live;
+  $('replay-save').disabled = live;
+  $('report-sheet').hidden = live;
+  if (live) $('driver-status').textContent = !S.playing ? 'Paused — press Play to resume' : (rp?.vehicles[0].diedAt <= S.time ? 'Your car was destroyed — watching your team' : 'You drive Orange #1');
+}
+function pauseDriving() {
+  if (!S.live) return;
+  S.playing = false; driver?.clear(); $('play').textContent = '▶'; drivingUI();
+}
+function stopDriving() {
+  // Also cancel a start request that has not produced its first frame yet.
+  S.live = null; driver?.clear(); liveHost.dispose(); drivingUI();
+}
+async function advanceDriving(dt) {
+  const live = S.live;
+  if (!live || !S.playing || live.pending) return;
+  live.elapsed = Math.min(0.1, live.elapsed + dt);
+  const ticks = Math.floor(live.elapsed * 60);
+  if (ticks < 2) return;
+  live.elapsed -= ticks / 60; live.pending = true;
+  try {
+    const update = await liveHost.stepLive(ticks, driver.command());
+    if (S.live !== live) return;
+    live.res.frames.push(...update.frames); live.res.events.push(...update.events);
+    rp = prepReplay(live.res, IY, rp); S.time = rp.duration;
+    if (update.finished) {
+      S.live = null; driver.clear(); drivingUI();
+      loadReplay(update.result); S.time = rp.duration; S.playing = false; $('play').textContent = '▶'; showBanner();
+    } else drivingUI();
+  } catch (e) {
+    if (S.live === live) { stopDriving(); S.playing = false; msg($('setup-msg'), 'bad', 'Driving stopped: ' + e.message); }
+  } finally { live.pending = false; }
 }
 
 function loadReplay(res) {
@@ -203,7 +254,7 @@ function buildRoster() {
 function buildLabels() {
   labelNodes = rp.vehicles.map((v) => {
     const hp = el('i', { style: `background:${TEAM_COL[v.team]}` }), en = el('i');
-    const node = el('div', { class: 'vlabel' }, v.name, el('div', { class: 'bar' }, hp), el('div', { class: 'bar e' }, en));
+    const node = el('div', { class: 'vlabel' }, (S.live && v.id === 0 ? 'YOU · ' : '') + v.name, el('div', { class: 'bar' }, hp), el('div', { class: 'bar e' }, en));
     return { node, hp, en };
   });
   $('labels').replaceChildren(...labelNodes.map((l) => l.node));
@@ -227,7 +278,8 @@ function frame(ts) {
   const dt = Math.min(0.1, (ts - lastTs) / 1000 || 0); lastTs = ts;
   if (S.tab === 'garage' && preview) { preview.render(ts / 1000); return; }
   if (!rp || !renderer || S.tab !== 'arena') return;
-  if (S.playing) {
+  if (S.live) advanceDriving(dt);
+  else if (S.playing) {
     S.time += dt * S.speed;
     if (S.time >= rp.duration) { S.time = rp.duration; S.playing = false; $('play').textContent = '▶'; showBanner(); }
   }
@@ -254,7 +306,7 @@ function frame(ts) {
   const key = view.feed.map((f) => f.t).join(',');
   if (feed.dataset.k !== key) { feed.dataset.k = key; feed.replaceChildren(...view.feed.map((f) => el('div', { style: `border-color:${TEAM_COL[f.team]}`, text: f.text }))); }
   if (document.activeElement !== $('scrub')) $('scrub').value = String(Math.round(S.time * 30));
-  $('time').textContent = `${S.time.toFixed(1)} / ${rp.duration.toFixed(1)}s`;
+  $('time').textContent = S.live ? `LIVE · ${S.time.toFixed(1)}s` : `${S.time.toFixed(1)} / ${rp.duration.toFixed(1)}s`;
 }
 
 function showBanner() {
@@ -290,11 +342,30 @@ function renderReport() {
 }
 
 function bindArena() {
+  $('drive-start').addEventListener('click', () => { $('control').value = 'drive'; runMatch(); });
+  driver = new DriverInput($('driver-panel'), () => !!S.live && S.playing && S.tab === 'arena', pauseDriving);
+  $('driver-stop').addEventListener('click', async () => {
+    const live = S.live; if (!live) return;
+    pauseDriving();
+    try {
+      const res = await liveHost.endLive();
+      if (S.live !== live) return;
+      stopDriving(); loadReplay(res); S.time = rp.duration; S.playing = false; $('play').textContent = '▶'; showBanner();
+      msg($('setup-msg'), 'ok', 'Drive ended. Watch or save your replay, or start another match.');
+    } catch (e) { if (S.live === live) { stopDriving(); msg($('setup-msg'), 'bad', e.message); } }
+  });
+  $('replay-save').addEventListener('click', () => {
+    if (!S.replay || S.live) return;
+    const url = URL.createObjectURL(new Blob([JSON.stringify(S.replay)], { type: 'application/json' }));
+    const a = el('a', { href: url, download: `ironyard-${S.replay.map}-${S.replay.seed}.json` }); a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
   $('setup').addEventListener('submit', (e) => { e.preventDefault(); runMatch(); });
   $('reseed').addEventListener('click', () => { $('seed').value = String((Number($('seed').value) || 0) + 1); runMatch(); });
   $('map').addEventListener('change', () => { S.setup.map = $('map').value; renderSetup(); persist(); });
   $('play').addEventListener('click', () => {
     if (!rp) return;
+    if (S.live) { S.playing = !S.playing; driver.clear(); $('play').textContent = S.playing ? '❚❚' : '▶'; drivingUI(); return; }
     if (!S.playing && S.time >= rp.duration) S.time = 0;
     S.playing = !S.playing; $('play').textContent = S.playing ? '❚❚' : '▶'; $('banner').hidden = true;
   });
@@ -317,6 +388,7 @@ function bindArena() {
     try {
       const res = JSON.parse(await f.text());
       if (!res.frames || !res.vehicles || !IY.MAPS[res.map]) throw new Error('not an Ironyard replay file');
+      stopDriving(); ++matchRequest;
       loadReplay(res); msg($('setup-msg'), 'ok', `Replay loaded: ${f.name}`);
     } catch (err) { msg($('setup-msg'), 'bad', 'Could not read this file: ' + err.message); }
     e.target.value = '';
@@ -685,6 +757,7 @@ async function runLeague() {
   } finally { L.running = false; renderLeagueSetup(); }
 }
 function watch(match, mode, budget, sources) {
+  $('control').value = 'watch';
   Object.assign(S.setup, { mode, budget, map: match.map, seed: match.seed, swap: match.swap, teams: match.teams.map(t => [...t]) });
   renderSetup(); showTab('arena');
   runMatch({ mode, budget, map: match.map, seed: match.seed, swap: match.swap, teams: match.teams }, sources);

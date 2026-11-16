@@ -82,6 +82,9 @@ export class SimHost {
   }
 
   match(spec) { return this.call({ type: 'match', spec }, { timeout: 15000 }); }
+  startLive(spec) { return this.call({ type: 'live-start', spec }, { timeout: 15000 }); }
+  stepLive(ticks, input) { return this.call({ type: 'live-step', ticks, input }, { timeout: 8000 }); }
+  endLive() { return this.call({ type: 'live-stop' }); }
   describe(bot, budget) { return this.call({ type: 'describe', bot, budget }, { timeout: 8000 }); }
   tournament(schedule, mode, budget, onProgress) { return this.call({ type: 'tournament', schedule, mode, budget }, { onProgress, timeout: 25000 }); }
 

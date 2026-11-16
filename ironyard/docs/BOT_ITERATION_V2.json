@@ -1,0 +1,132 @@
+{
+  "engine": "0.6.0",
+  "baseline": "09f0b90",
+  "seed": 29,
+  "maps": [
+    "proving",
+    "sumo",
+    "canyon",
+    "frostbite",
+    "foundry",
+    "skybridge",
+    "bog",
+    "depot",
+    "cage",
+    "saltflat",
+    "causeway",
+    "labyrinth",
+    "fogbank",
+    "ringroad"
+  ],
+  "bothSides": true,
+  "fieldHashes": {
+    "astra": "54cb4e1701d7bd0d5adee5e5814cf8f77a8347ddc53985415d5211466653ae8d",
+    "sol": "be0e0dbf4fef06b2ca5049bed167d547487b746201ae07bb5a630322d037efd8",
+    "grindstone": "e172fae3e036fceb9293a1fe65b5babeca2aa4b7163954f107a68261bbd80861",
+    "quillback": "fed5350900110a7c6d5f3413602f162947baedc17a186ecee8d846bebb229576",
+    "carbon": "63bbaaa5c28d13897abe9dc04a4dc4ba8ccd1f5deb6901094089fa05a3d44c3b",
+    "tailwind": "64508535243e41c7dfe25aab5b6dd274c0f5d7f9a37ea80caee8962f288319c8",
+    "hydrogen": "fa06bab72619796ef4a450e2bde18a79876d50685fb6302cf6e2fb51eb99f546"
+  },
+  "purpose": "Paired old/new controller comparison against the fixed seven-model field from 09f0b90. Seed 29 was held out from tuning.",
+  "scoredMatches": 2016,
+  "errors": 0,
+  "rows": [
+    {
+      "id": "astra",
+      "version": "old",
+      "sha256": "54cb4e1701d7bd0d5adee5e5814cf8f77a8347ddc53985415d5211466653ae8d",
+      "played": 504,
+      "w": 290,
+      "byMode": {
+        "1v1": {
+          "played": 168,
+          "w": 88,
+          "d": 0
+        },
+        "2v2": {
+          "played": 168,
+          "w": 106,
+          "d": 0
+        },
+        "3v3": {
+          "played": 168,
+          "w": 96,
+          "d": 0
+        }
+      }
+    },
+    {
+      "id": "astra",
+      "version": "new",
+      "sha256": "5e26d76bfabe6cfcb80d08fd19ffb74a7551355cc59eee428f449d62e29da27b",
+      "played": 504,
+      "w": 294,
+      "byMode": {
+        "1v1": {
+          "played": 168,
+          "w": 88,
+          "d": 0
+        },
+        "2v2": {
+          "played": 168,
+          "w": 108,
+          "d": 0
+        },
+        "3v3": {
+          "played": 168,
+          "w": 98,
+          "d": 0
+        }
+      }
+    },
+    {
+      "id": "sol",
+      "version": "old",
+      "sha256": "be0e0dbf4fef06b2ca5049bed167d547487b746201ae07bb5a630322d037efd8",
+      "played": 504,
+      "w": 228,
+      "byMode": {
+        "1v1": {
+          "played": 168,
+          "w": 80,
+          "d": 0
+        },
+        "2v2": {
+          "played": 168,
+          "w": 73,
+          "d": 0
+        },
+        "3v3": {
+          "played": 168,
+          "w": 75,
+          "d": 0
+        }
+      }
+    },
+    {
+      "id": "sol",
+      "version": "new",
+      "sha256": "1688beec9619d2055459376afe800aea1e56843c35b753444488ffc4602241d7",
+      "played": 504,
+      "w": 279,
+      "byMode": {
+        "1v1": {
+          "played": 168,
+          "w": 102,
+          "d": 0
+        },
+        "2v2": {
+          "played": 168,
+          "w": 87,
+          "d": 0
+        },
+        "3v3": {
+          "played": 168,
+          "w": 90,
+          "d": 0
+        }
+      }
+    }
+  ]
+}

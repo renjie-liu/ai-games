@@ -149,7 +149,7 @@ No other entry's source changed. The entries written against 0.5.0 are playing o
 
 Two things the tuning asked of the tools were added afterwards. `validate_design` and `scout_bot` now list `weakLanes`: the lanes of studs on which the least has to be shot away before a mover, or two guns, fall off without being hit, checked in the tests against what the engine drops when that lane is shot out. `evaluate_bot` takes the seeds themselves as well as a count, gives the comparison with a baseline as numbers as well as text, and says for each of the worst losses how much damage went each way.
 
-## Current 20-bot season (engine 0.6.0, fourteen maps)
+## Initial 20-bot season (engine 0.6.0, fourteen maps)
 
 All **6916** matches — 5320 solo, 840 doubles, 756 triples — were played on engine 0.6.0 with no controller errors. Three things changed at once, so this season is not comparable match for match with the one above:
 
@@ -171,7 +171,32 @@ The entries' `author` labels are now their recorded model names, at the reposito
 
 In 1v1 the order of the seven is what it was on 0.5.4: `grindstone` first with 494 wins of 532, then `quillback` (463), `carbon` (434) and `astra` (429). On mixed teams `quillback` and `astra` lead and `grindstone` is 3rd and 6th. In 2v2, places 3 to 6 are 15 rating points apart (1677 to 1662), and in 3v3 places 4 and 5 are three apart, so their order there carries little weight.
 
-Two cautions about reading this table. No entry was re-tuned for 0.6.0: all seven are playing on numbers and maps none of them was written for, and `grindstone` remains the only one tuned on a recent engine. And the bench shows the entries share a blind spot that the ladder cannot: none of them carries a long gun, and on the bench a plain four-cannon car still wins about 70% of its matches against them. A field in which somebody builds one would rank differently.
+Two cautions about reading this historical table. At that point no entry had been re-tuned for 0.6.0: all seven are playing on numbers and maps none of them was written for, and `grindstone` remains the only one tuned on a recent engine. And the bench shows the entries share a blind spot that the ladder cannot: none of them carries a long gun, and on the bench a plain four-cannon car still wins about 70% of its matches against them. A field in which somebody builds one would rank differently.
 
 Of the house reference bots only `wasp` was changed: it carried a single missile pod, which the missile changes left worthless (2% on the bench), and now carries two.
 
+
+
+## Current season: Astra and Sol v2
+
+The physics remains engine 0.6.0. Astra now uses an aft cockpit and pursuit-aware spacing on compact arenas; Sol moves armor into the incoming-fire chassis lane, splits its centre floor supports, and keeps more distance from lasers. Original generation-model metadata is retained; the v2 files additionally record `editor: Codex`. These are controller revisions, not new independent model submissions.
+
+The saved [leaderboard](../LEADERBOARD.md) covers all **6916** fixtures with **zero errors**. Updating the two source hashes required **1758** fresh matches; **5158** unchanged-source results from the fully verified previous season were reused.
+
+| Entry | 1v1 | 2v2 | 3v3 |
+|---|---:|---:|---:|
+| Opus | 1 | 5 | 6 |
+| Fable | 2 | 1 | 2 |
+| Carbon | 3 | 3 | 5 |
+| Astra | 4 | 2 | 1 |
+| Sol | 5 | 4 | 3 |
+| Muse | 6 | 6 | 4 |
+| Hydrogen | 7 | 9 | 8 |
+
+A separate paired comparison held the six opposing model bots at `09f0b90`, across all 14 maps, all three modes, both spawn sides and held-out seed 29 (504 fixtures per revision). Astra moved from **290 to 294 wins**: 1v1 unchanged, two extra wins in each team mode. Sol moved from **228 to 279 wins**: 22 extra solo wins, 14 doubles and 15 triples. These observations describe this fixed field; Astra's improvement is small. The recorded hashes and per-mode results are in [BOT_ITERATION_V2.json](BOT_ITERATION_V2.json). Reproduce against the current source files with:
+
+```bash
+node tools/compare-bot-revisions.mjs --baseline 09f0b90 --seed 29 --out /tmp/bot-comparison.json
+```
+
+Human driving uses the same engine in a separate browser worker and never contributes results to this AI ladder.
