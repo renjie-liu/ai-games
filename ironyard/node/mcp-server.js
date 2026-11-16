@@ -649,6 +649,9 @@ function serveStdio() {
   log(`stdio ready — ${TOOLS.length} tools, bots in ${USER_DIR}`);
 }
 
+/** How long a call may run before an HTTP client that accepts an event stream is answered with one (see serveHttp). */
+const SSE_AFTER_MS = Number(process.env.IRONYARD_SSE_AFTER_MS) > 0 ? Number(process.env.IRONYARD_SSE_AFTER_MS) : 5000;
+
 function serveHttp(port, host) {
   const localOrigin = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
   // IRONYARD_TOKEN: when set, every call to /mcp must carry `Authorization: Bearer <token>`
@@ -676,7 +679,23 @@ function serveHttp(port, host) {
         res.writeHead(400, { 'content-type': 'application/json', ...cors }).end(JSON.stringify(rpcError(null, -32700, 'Parse error'))); return;
       }
       if (overfull(msg)) { res.writeHead(400, { 'content-type': 'application/json', ...cors }).end(JSON.stringify(rpcError(null, -32600, BATCH_MSG))); return; }
-      const out = Array.isArray(msg) ? (await Promise.all(msg.map(handle))).filter(Boolean) : await handle(msg);
+      const work = Array.isArray(msg) ? Promise.all(msg.map(handle)).then((a) => a.filter(Boolean)) : handle(msg);
+      // A call that takes minutes (evaluate_bot over a field, the ladder) must not leave the client waiting for headers:
+      // most HTTP clients give up on those after five minutes. A client that accepts an event stream gets one once the
+      // call has run for SSE_AFTER_MS — headers at once, a comment line every 15 s, then the answer as the one event.
+      let out;
+      if (/text\/event-stream/.test(String(req.headers.accept || ''))) {
+        const quick = await Promise.race([work.then((v) => ({ v })), new Promise((r) => setTimeout(r, SSE_AFTER_MS, null))]);
+        if (quick) out = quick.v;
+        else {
+          res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', ...cors });
+          res.write(': working\n\n');
+          const beat = setInterval(() => res.write(': working\n\n'), 15_000);
+          try { out = await work; } finally { clearInterval(beat); }
+          for (const m of Array.isArray(out) ? out : out ? [out] : []) res.write(`event: message\ndata: ${JSON.stringify(m)}\n\n`);
+          res.end(); return;
+        }
+      } else out = await work;
       if (!out || (Array.isArray(out) && !out.length)) { res.writeHead(202, cors).end(); return; }
       res.writeHead(200, { 'content-type': 'application/json', ...cors }).end(JSON.stringify(out));
     });
@@ -692,7 +711,7 @@ function serveHttp(port, host) {
 const argv = process.argv.slice(2);
 const hi = argv.indexOf('--http');
 if (argv.includes('--help')) {
-  console.log('ironyard-mcp            stdio transport\nironyard-mcp --http 8787 [--host 127.0.0.1]   Streamable HTTP at /mcp\n\nenvironment: IRONYARD_BOTS_DIR, IRONYARD_REPLAY_DIR, IRONYARD_MATCH_TIMEOUT_MS,\n  IRONYARD_TOKEN (HTTP: require `Authorization: Bearer <token>`), IRONYARD_ALLOW_ORIGIN (HTTP: a browser origin to accept, or *)');
+  console.log('ironyard-mcp            stdio transport\nironyard-mcp --http 8787 [--host 127.0.0.1]   Streamable HTTP at /mcp\n\nenvironment: IRONYARD_BOTS_DIR, IRONYARD_REPLAY_DIR, IRONYARD_SSE_AFTER_MS, IRONYARD_MATCH_TIMEOUT_MS,\n  IRONYARD_TOKEN (HTTP: require `Authorization: Bearer <token>`), IRONYARD_ALLOW_ORIGIN (HTTP: a browser origin to accept, or *)');
 } else if (hi >= 0) {
   const hostI = argv.indexOf('--host');
   serveHttp(Number(argv[hi + 1] || 8787), hostI >= 0 ? argv[hostI + 1] : '127.0.0.1');

@@ -56,27 +56,27 @@ test('the vehicle a bot fields, as the engine validates it', async () => {
 
 test('the record is the ladder file read the way the ladder reads it', async () => {
   const board = await ladder(decided, { queues: ['1v1'] });
-  const q = board.queues['1v1'], n = listBots().length - 1;
+  const q = board.queues['1v1'], n = listBots().length - 1, per = MAP_IDS.length * 2;   // matches against one opponent: every map from both sides
   assert.ok(board.complete && q.onFile === q.matches);
   const r = await scoutBot('rookie');
   const rec = r.record, row = q.standings.find((x) => x.id === 'rookie');
-  assert.equal(rec.scheduled, n * 16); assert.equal(rec.onFile, rec.scheduled); assert.equal(rec.note, undefined); assert.equal(rec.savedTable, undefined);
+  assert.equal(rec.scheduled, n * per); assert.equal(rec.onFile, rec.scheduled); assert.equal(rec.note, undefined); assert.equal(rec.savedTable, undefined);
   // the same totals as the ladder's own table: the keys are the ladder's keys
   assert.deepEqual([rec.w, rec.l, rec.standing.rank, rec.standing.rating, rec.standing.of], [row.w, row.l, row.rank, row.rating, n + 1]);
-  assert.equal(rec.l, 2 * n + 14, 'two a head on sumo, and bastion on the seven other maps');
+  assert.equal(rec.l, 2 * n + per - 2, 'two a head on sumo, and bastion on every other map');
   assert.equal(rec.winRate, Math.round((rec.w / rec.onFile) * 100) / 100);
-  assert.deepEqual(rec.byOpponent[0], { vs: 'bastion', w: 0, l: 16 }, 'worst first');
-  assert.ok(rec.byOpponent.slice(1).every((o) => o.w === 14 && o.l === 2));
+  assert.deepEqual(rec.byOpponent[0], { vs: 'bastion', w: 0, l: per }, 'worst first');
+  assert.ok(rec.byOpponent.slice(1).every((o) => o.w === per - 2 && o.l === 2));
   assert.equal(rec.byOpponent.length, Math.min(n, 12));
   assert.deepEqual(rec.byMap[0], { map: 'sumo', w: 0, l: 2 * n });
   assert.ok(rec.byMap.slice(1).every((m) => m.w === 2 * n - 2 && m.l === 2) && rec.byMap.length === MAP_IDS.length);
-  assert.match(r.hints[0], /^Loses 16 of 16 to bastion: bastion is a long-range gun car \(.*cannon.*\)\.$/);
+  assert.match(r.hints[0], new RegExp(`^Loses ${per} of ${per} to bastion: bastion is a long-range gun car \\(.*cannon.*\\)\\.$`));
   assert.match(r.hints[1], new RegExp(`^Weakest on sumo \\(wins 0 of ${2 * n}\\); \\d+% overall\\.$`));
   assert.ok(r.hints.length === 4 && r.hints.slice(2).every((h) => /^(Its|It|Nothing|All|\d+%)/.test(h)), r.hints.join(' | '));
   assert.deepEqual(ladderRecord('rookie'), rec, 'the record alone, without loading a controller');
   // two that beat it: both are named, with what they are
   const other = await scoutBot('bastion');
-  assert.match(other.hints[0], /^Loses 16 of 16 to angler and 16 of 16 to astra: (both are [a-z -]+s \(.+ \/ .+\)|angler is a [a-z -]+ \(.+\) and astra is a [a-z -]+ \(.+\))\.$/);
+  assert.match(other.hints[0], new RegExp(`^Loses ${per} of ${per} to angler and ${per} of ${per} to astra: (both are [a-z -]+s \\(.+ \\/ .+\\)|angler is a [a-z -]+ \\(.+\\) and astra is a [a-z -]+ \\(.+\\))\\.$`));
   assert.equal(styleOf({ weapons: {}, kegs: 0, ramParts: 2 }, { weapons: [] }), 'rammer');
   assert.equal(styleOf({ weapons: { mortar: 1, mg: 1 }, kegs: 0 }, { weapons: [{ range: 24 }, { range: 13 }] }), 'artillery car');
 });
@@ -94,7 +94,7 @@ test('a file that does not cover the bot is called that', async () => {
     assert.equal((await scoutBot('rookie')).hints[0], 'No ladder record on file for its current source: what follows comes from its design alone.');
     // ...while a bot whose results are all there is none the worse for it, except against rookie
     rec = ladderRecord('bastion');
-    assert.equal(rec.onFile, rec.scheduled - 16);
+    assert.equal(rec.onFile, rec.scheduled - MAP_IDS.length * 2);
     assert.match(rec.note, /^Results against rookie are on file for an older version of that opponent and are not counted\./);
     assert.match(rec.standing.provisional, /^only \d+ of the season's \d+ matches are on file$/);
 

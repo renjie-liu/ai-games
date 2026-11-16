@@ -167,6 +167,19 @@ export class Render3D {
       new THREE.MeshBasicMaterial({ map: this.tex.scorch, transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), Math.max(1, burns.length));
     burns.forEach((b, i) => { this.dummy.position.set(b.x, 0.02, -b.y); this.dummy.rotation.set(0, hash01(i + 3) * 6.283, 0); this.dummy.scale.set(b.r, 1, b.r); this.dummy.updateMatrix(); w.burns.setMatrixAt(i, this.dummy.matrix); });
     w.burns.count = 0; w.burns.frustumCulled = false; root.add(w.burns);
+    // smoke banks: two soft puffs over every smoke tile, thin enough to see the cars inside
+    const smoky = [];
+    for (let ty = 0; ty < rp.map.h; ty++) for (let tx = 0; tx < rp.map.w; tx++) if (rp.map.tiles[ty * rp.map.w + tx] === C.smoke) smoky.push([tx, ty]);
+    if (smoky.length) {
+      const T = this.IY.TILE, puffs = new THREE.InstancedMesh(this.g('puff', () => new THREE.IcosahedronGeometry(1, 2)),
+        new THREE.MeshLambertMaterial({ color: L(0xc3ccd6), transparent: true, opacity: 0.17, depthWrite: false }), smoky.length * 2);
+      smoky.forEach(([tx, ty], i) => { for (let k = 0; k < 2; k++) {
+        const j = i * 2 + k, a = hash01(j * 7 + 1), b = hash01(j * 13 + 5), c = hash01(j * 3 + 9);
+        this.dummy.position.set((tx + 0.5) * T + (a - 0.5) * 1.2, 0.9 + k * 0.9 + c * 0.4, -((ty + 0.5) * T + (b - 0.5) * 1.2));
+        this.dummy.rotation.set(0, a * 6.283, 0); this.dummy.scale.set(1.5 + b * 0.5, 0.8 + c * 0.4, 1.5 + a * 0.5); this.dummy.updateMatrix(); puffs.setMatrixAt(j, this.dummy.matrix);
+      } });
+      puffs.frustumCulled = false; puffs.renderOrder = 3; root.add(puffs);
+    }
     this.scene.add(root);
     this.applyTheme(w.arena.theme, w.arena.sunDir, rp.map);
     this.fit();

@@ -41,7 +41,7 @@ function look(res, id) {
 /**
  * The findings for one vehicle as [{ kind, text }], at most six, most important first. `kind` is a
  * stable key (outcome, terrain, immobile, weapons_lost, silent_guns, energy_starved, too_close, wrong_range,
- * flanked, stuck, fire, low_accuracy, damage_source) for counting across matches.
+ * flanked, stuck, parked, fire, low_accuracy, damage_source) for counting across matches.
  * Takes a match result (runMatch) or its summary (summarize): both give the same findings.
  */
 export function insightList(res, id) {
@@ -148,6 +148,9 @@ export function insightList(res, id) {
   // (not the seconds spent shoving an enemy: for a rammer that is the job — and not the seconds after its last mover went)
   const jammed = t.move.timeStuck - (t.move.timeStuckOnEnemy || 0) - (im !== null ? Math.max(0, life - im) : 0);
   if (jammed >= 5) say('stuck', `spent ${f1(jammed)} s of its ${f1(life)} s stuck with no enemy touching it: throttle above half, speed under 0.3 m/s`);
+  // standing still by its own command with nobody in reach
+  const parked = t.move.timeParked || 0;
+  if (parked >= 6) say('parked', `stood still for ${f1(parked)} s of its ${f1(life)} s with the nearest enemy about ${Math.round(t.move.parkedAt)} m away, beyond every gun it had: its own command asked for no movement. Look for what zeroes the throttle there (a hazard guard, a route with no next step)`);
 
   // on fire
   const burning = st.timeBurning || 0, burnt = t.lossesByCause.fire || 0;
@@ -205,6 +208,7 @@ const LEGEND = 'damage in hp, times in seconds, distances in metres between vehi
   + 'weapons[]: shots and hits are seconds for lasers and flamers, punches for pistons; firingTime counts the wait between shots while the trigger is held. '
   + 'dealt counts enemies only; taken counts everything. bySide: where the hit came from relative to your heading at that moment (fire, lava and zone have no side and no range). '
   + 'range.timeIn: seconds with the nearest living enemy in each band. fire.*: only the seconds a living enemy was inside the range of your longest living gun (harpoons aside; a mortar from its minimum range out). '
+  + 'move.timeParked: speed under 0.3 m/s with throttle at half or less while a living enemy was beyond the reach of every gun (parkedAt: how far, on average); '
   + 'move.timeStuck: throttle above half, speed under 0.3 m/s (timeStuckOnEnemy: the part of it spent against an enemy). losses: your first 12 pieces lost. timeline: one sample every `step` s while alive (hull %, energy %, metres to the nearest enemy, weapons left).';
 
 /** A saved match as telemetry: per vehicle (or for the one with id `vehicle`) its end, the rounded telemetry and its insights. */

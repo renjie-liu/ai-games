@@ -734,7 +734,11 @@ export class World {
       for (const ls of this.lastSeen[team]) {
         const e = vs[ls.id];
         if (!e.alive) { ls.alive = false; continue; }
-        if (this.visibleTo(team, e)) { ls.x = r2(e.x); ls.y = r2(e.y); ls.t = r2(this.t); }
+        if (this.visibleTo(team, e)) { ls.x = r2(e.x); ls.y = r2(e.y); ls.t = r2(this.t); ls.stale = false; }
+        // the team can see the spot where it last saw this enemy, and the enemy is not there: the note is worth nothing now,
+        // and is kept from the controllers until the enemy is seen again (else two cars that passed each other unseen
+        // each sit on the other's old position for the rest of the match)
+        else if (!ls.stale && this.visibleTo(team, { x: ls.x, y: ls.y, radius: 0, revealT: -1 })) ls.stale = true;
       }
     }
 
@@ -776,7 +780,7 @@ export class World {
       if (mud) { trW = 0.4; trT = 0.85; st.timeOn.mud += dt; }
       else if (tile === T.ice) { trW = 0.35; trT = 0.6; grW = 0.08; grT = 0.25; st.timeOn.ice += dt; }
     }
-    const boost = (v.nitro > 0 ? ITEMS.nitro.mult : 1) * v.driveBoost;
+    const boost = (v.nitro > 0 ? ITEMS.nitro.mult : 1) * v.driveBoost * (tile === T.turbo ? TILES.turbo.drive : 1);
     const nitro = v.nitro > 0 ? ITEMS.nitro.mult : 1;
     const fx = v.fx, fy = v.fy;
 
@@ -1312,7 +1316,7 @@ export class World {
       p.ttl -= dt;
       if (p.turn && p.target >= 0) {
         const e = this.vehicles[p.target];
-        if (e.alive) {
+        if (e.alive && this.visibleTo(p.team, e)) {   // out of sight (smoke, or beyond every sensor) it flies on straight
           const cur = Math.atan2(p.vy, p.vx);
           const na = cur + clamp(angDiff(Math.atan2(e.y - p.y, e.x - p.x), cur), -p.turn * dt, p.turn * dt);
           p.vx = Math.cos(na) * p.speed; p.vy = Math.sin(na) * p.speed;
@@ -1432,9 +1436,10 @@ export class World {
   // ── vision & observations ─────────────────────────────────────────────
   visibleTo(team, e) {
     if (e.revealT > this.t) return true; // muzzle flash
+    const hidden = tileCodeAt(this.map, e.x, e.y) === T.smoke;   // in smoke: seen only from close by
     for (const a of this.teams[team]) {
       if (!a.alive) continue;
-      const r = a.sensor + e.radius;
+      const r = (hidden ? Math.min(a.sensor, TILES.smoke.sight) : a.sensor) + e.radius;
       if ((a.x - e.x) ** 2 + (a.y - e.y) ** 2 <= r * r) return true;
     }
     return false;
@@ -1587,7 +1592,7 @@ export class World {
         allies: mates.filter((a) => a !== v).map((a) => snaps[a.id]),
         enemies,
         enemiesAlive: foes.reduce((n, e) => n + (e.alive ? 1 : 0), 0),
-        lastSeen: this.lastSeen[v.team].map((l) => ({ ...l })),
+        lastSeen: this.lastSeen[v.team].filter((l) => !l.stale).map(({ stale, ...l }) => l),
         projectiles: this.sensedProjectiles(v), mines: this.sensedMines(v, radar), items, pads, zone, messages,
         bombs: this.sensedBombs(v), barrels: this.sensedBarrels(v), tethers: this.sensedTethers(v.team, seen),
       });
@@ -1650,7 +1655,7 @@ export class World {
       if (!v.alive) { out.push(null); continue; }
       const W = sinks[v.id], mates = this.teams[v.team], vis = seen[v.team];
       if (!vis.length) v.stats.timeNoEnemyVisible += stepDt;
-      const shots = this.sensedProjectiles(v), mines = this.sensedMines(v, radar[v.team]), last = this.lastSeen[v.team];
+      const shots = this.sensedProjectiles(v), mines = this.sensedMines(v, radar[v.team]), last = this.lastSeen[v.team].filter((l) => !l.stale);
       const bombs = this.sensedBombs(v), barrels = this.sensedBarrels(v), cables = this.sensedTethers(v.team, vis);
       if (mines.length > 64) mines.length = 64;
       if (bombs.length > 24) bombs.length = 24;

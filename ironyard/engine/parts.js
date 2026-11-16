@@ -329,6 +329,10 @@ export const TILES = {
     desc: 'A wall you can break: 150 hp. Shots, blasts, fire, pistons and driving into it at speed all count. Gone, it is floor.' },
   barrel:  { ch: '!', name: 'Powder barrel', solid: true, blocksShots: true, hp: 40, blast: { dmg: 70, r: 3, max: 8 },
     desc: 'Blocks the way until something touches it off: 40 hp, then a blast that hits everything within 3 m, shoves it and sets it alight. Barrels set each other off.' },
+  smoke:   { ch: 's', name: 'Smoke', sight: 7,
+    desc: 'A vehicle whose centre is in smoke is seen only from within 7 m, whatever the sensors — until it fires, which gives it away for 1.5 s as anywhere. Missiles lose their lock on it. Smoke stops no shot and slows nobody.' },
+  turbo:   { ch: '=', name: 'Speed strip', drive: 1.5,
+    desc: 'Wheels, tracks and hover pads push 50% harder while the vehicle is on it. A fast lane for a flank or a getaway.' },
 };
 export const TILE_IDS = Object.keys(TILES);
 

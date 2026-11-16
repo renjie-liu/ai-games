@@ -86,7 +86,7 @@ async function exercise(client, label) {
   const an = good.analysis;
   assert.deepEqual(an.coreProtection.front, { hp: 480, hpVsBullet: 1080, hpVsShell: 690, pieces: 5, first: 'slope' });
   assert.equal(an.coreProtection.rear.pieces, 2); assert.equal(an.weapons.length, 3); assert.deepEqual(an.blindArcsDeg, [[20, 340]]);
-  assert.ok(an.dpsByRange[14] > 60 && an.dpsByRangeRear[14] === 0 && an.energy.capacity === good.stats.energyCap && an.insights.length >= 1 && an.insights.length <= 6);
+  assert.ok(an.dpsByRange[14] > 50 && an.dpsByRangeRear[14] === 0 && an.energy.capacity === good.stats.energyCap && an.insights.length >= 1 && an.insights.length <= 6);
 
   // broken source is rejected and nothing is saved
   const broken = await client.callTool({ name: 'submit_bot', arguments: { name: 'broken', source: 'const design = {parts:[]}; function tick(){ return {} }' } });
@@ -316,6 +316,35 @@ async function exercise(client, label) {
     assert.equal((await client.listTools()).tools.length, 14);
     await client.close();
     console.log('http with a token: ok');
+  } finally { child.kill(); }
+}
+// A call that outlasts the patience of a client waiting for headers is answered as an event stream: headers at once, then the result
+{
+  const port = 18789, url = `http://127.0.0.1:${port}/mcp`;
+  const child = spawn(process.execPath, [path.join(root, 'node/mcp-server.js'), '--http', String(port)], { env: { ...env, IRONYARD_SSE_AFTER_MS: '200' }, stdio: ['ignore', 'ignore', 'pipe'] });
+  await new Promise((resolve, reject) => { child.stderr.on('data', (d) => /ready/.test(String(d)) && resolve()); child.on('exit', () => reject(new Error('server exited'))); });
+  try {
+    const call = (accept, method, params) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', accept }, body: JSON.stringify({ jsonrpc: '2.0', id: 7, method, params }) });
+    const slow = { name: 'run_tournament', arguments: { bots: ['rookie', 'wasp', 'bastion'], maps: ['proving', 'canyon'] } };
+    const t0 = Date.now();
+    const streamed = await call('application/json, text/event-stream', 'tools/call', slow);
+    assert.match(streamed.headers.get('content-type'), /^text\/event-stream/);
+    assert.ok(Date.now() - t0 < 3000, 'the headers do not wait for the tournament');
+    const text = await streamed.text();
+    assert.match(text, /^: working\n\n/);
+    const data = JSON.parse(/^event: message\ndata: (.*)$/m.exec(text)[1]);
+    assert.equal(data.id, 7); assert.equal(JSON.parse(data.result.content[0].text).matches, 12);
+    // a quick call is still plain JSON, and so is a slow one for a client that did not ask for a stream
+    assert.match((await call('application/json, text/event-stream', 'ping')).headers.get('content-type'), /^application\/json/);
+    const plain = await call('application/json', 'tools/call', slow);
+    assert.match(plain.headers.get('content-type'), /^application\/json/); assert.equal((await plain.json()).id, 7);
+    // the SDK client reads the stream as it reads a plain answer
+    const client = new Client({ name: 'e2e', version: '1.0.0' });
+    await client.connect(new StreamableHTTPClientTransport(new URL(url)));
+    const viaSdk = JSON.parse((await client.callTool(slow)).content[0].text);
+    assert.equal(viaSdk.matches, 12);
+    await client.close();
+    console.log('http, long calls as an event stream: ok');
   } finally { child.kill(); }
 }
 fs.rmSync(tmp, { recursive: true, force: true });

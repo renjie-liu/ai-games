@@ -251,7 +251,9 @@ export const THEMES = {
     rut: 'rgba(52,40,26,0.45)', patch: ['rgba(40,34,22,0.2)', 'rgba(130,140,70,0.10)'],
     sky: [0x76909a, 0xc6d2c8, 0x55603f], sun: [0xfff2d2, 1.3, 0.9, 0.7], hemi: [0xcfe0d6, 0x3f4a30, 0.4], fog: [90, 460], tint: [0.9, 0.9, 0.9], apron: [0.82, 0.84, 0.8], exposure: 0.95 },
 };
-export const themeOf = (map) => THEMES[map.id] || THEMES.proving;
+// the newer arenas borrow the look of an older one
+const THEME_OF = { cage: 'depot', saltflat: 'canyon', causeway: 'proving', labyrinth: 'proving', fogbank: 'bog', ringroad: 'foundry' };
+export const themeOf = (map) => THEMES[map.id] || THEMES[THEME_OF[map.id]] || THEMES.proving;
 
 // ── per-map control map: R mud, G ice, B lava light, A contact shadow ────
 function blur(a, w, h, r, passes) {
@@ -287,7 +289,7 @@ function paintDecals(IY, map, th) {
   const R = rng32(hashStr(map.id || 'map') + 7), rr = (a, b) => a + (b - a) * R(), TAU = Math.PI * 2;
   const code = (tx, ty) => (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h ? -1 : map.tiles[ty * map.w + tx]);
   const at = (x, y) => code(Math.floor(x / T), Math.floor(y / T));
-  const open = (c) => c === C.floor || c === C.pad || c === C.mud || c === C.ice;
+  const open = (c) => c === C.floor || c === C.pad || c === C.mud || c === C.ice || c === C.smoke || c === C.turbo;
   const built = th.marks !== 'dirt', area = W * H;
   const label = (text, color, size = 90) => { g.save(); g.scale(0.01, -0.01); g.font = `900 ${size}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = color; g.fillText(text, 0, 0); g.restore(); };
   g.lineCap = 'round'; g.lineJoin = 'round';
@@ -360,6 +362,17 @@ function paintDecals(IY, map, th) {
     if (edge(code(tx, ty + 1))) strip(x0, y1 - SW, x1, y1);
   }
 
+  // speed strips: a dark lane with bright chevrons pointing along it
+  for (let ty = 0; ty < map.h; ty++) for (let tx = 0; tx < map.w; tx++) {
+    if (code(tx, ty) !== C.turbo) continue;
+    const along = code(tx - 1, ty) === C.turbo || code(tx + 1, ty) === C.turbo;   // lies east-west, else north-south
+    g.save(); g.translate((tx + 0.5) * T, (ty + 0.5) * T); if (!along) g.rotate(Math.PI / 2);
+    g.fillStyle = 'rgba(18,20,24,0.78)'; g.fillRect(-T / 2, -T * 0.42, T, T * 0.84);
+    g.strokeStyle = 'rgba(255,214,64,0.95)'; g.lineWidth = 0.16; g.lineCap = 'butt'; g.lineJoin = 'miter';
+    for (const o of [-0.5, 0.5]) { g.beginPath(); g.moveTo(o - 0.28, -0.55); g.lineTo(o + 0.28, 0); g.lineTo(o - 0.28, 0.55); g.stroke(); }
+    g.fillStyle = 'rgba(255,214,64,0.6)'; g.fillRect(-T / 2, -T * 0.42, T, 0.07); g.fillRect(-T / 2, T * 0.42 - 0.07, T, 0.07);
+    g.restore(); g.lineCap = 'round'; g.lineJoin = 'round';
+  }
   // repair pads: a steel plate with a green border and a white cross
   for (const p of map.pads) {
     const x0 = p.tx * T, y0 = p.ty * T;
