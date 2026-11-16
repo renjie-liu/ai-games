@@ -267,7 +267,7 @@ export class World {
     if (p === v.core) { this.kill(v, src, cause); return; }
     if (cause !== 'jettisoned') {
       if (p.def.volatile) this.pendingBlasts.push({ v, p, src });
-      if (p.def.blast) this.pendingBlasts.push({ x: p.wx, y: p.wy, blast: p.def.blast, src });   // a keg goes off wherever it dies
+      if (p.def.blast) this.pendingBlasts.push({ x: p.wx, y: p.wy, blast: p.def.blast, src, inside: v });   // a keg goes off wherever it dies
     }
     v.dirty = true;
   }
@@ -307,8 +307,8 @@ export class World {
       let busy = false;
       while (this.pendingBlasts.length) {
         busy = true;
-        const { v, p, src, blast, x, y, barrel } = this.pendingBlasts.shift();
-        if (blast) { this.blast(x, y, blast, src, barrel); continue; }
+        const { v, p, src, blast, x, y, barrel, inside } = this.pendingBlasts.shift();
+        if (blast) { this.blast(x, y, blast, src, barrel, inside); continue; }
         if (!v.alive) continue;
         this.event({ k: 'boom', x: r2(p.wx), y: r2(p.wy), r: 0.9 });
         for (const i of this.touching(v, p)) this.damage(v, v.parts[i], p.def.volatile, 'explosive', src, undefined, undefined, SRC.reactor);
@@ -333,7 +333,7 @@ export class World {
           v.stats.partsLost++;
           noteDetached(this, v, q);
           this.event({ k: 'part', v: v.id, i: q.i, c: 'detached' });
-          if (q.def.blast) this.pendingBlasts.push({ x: q.wx, y: q.wy, blast: q.def.blast, src: null });   // a keg that falls off goes off
+          if (q.def.blast) this.pendingBlasts.push({ x: q.wx, y: q.wy, blast: q.def.blast, src: null, inside: v });   // a keg that falls off goes off
         }
         this.refresh(v);
         this.updateCells(v);
@@ -359,7 +359,7 @@ export class World {
 
   /**
    * A blast at (x, y). `team` is the side it spares (-1: nobody — kegs and barrels).
-   * opts: { skip: piece, ground: chassis-first, shieldable: shields soak it first, heat: heat given to each piece hit }
+   * opts: { skip: piece, ground: chassis-first, shieldable: shields soak it first (but not the shield of `inside`), heat: heat given to each piece hit }
    */
   explode(x, y, r, dmg, fmin, team, src, maxParts, opts = {}) {
     this.event({ k: 'boom', x: r2(x), y: r2(y), r });
@@ -374,7 +374,7 @@ export class World {
       if (!v.alive || v.team === team) continue;
       if (Math.hypot(v.x - x, v.y - y) > r + v.radius) continue;
       let scale = 1;
-      if (opts.shieldable) {
+      if (opts.shieldable && v !== opts.inside) {
         const pool = v.shield + v.overshield;
         if (pool > 0) { const used = Math.min(pool, dmg); this.drainShield(v, used); scale = (dmg - used) / dmg; if (scale <= 0.01) scale = 0; }
       }
@@ -411,9 +411,12 @@ export class World {
     if (struck && opts.count && via.tw) via.tw.hits++;   // a mortar shell that hurt somebody was a hit
   }
 
-  /** A keg or a barrel going off: spares nobody, throws things, sets them alight. */
-  blast(x, y, b, src, barrel) {
-    this.explode(x, y, b.r, b.dmg, 0.35, -1, src, b.max, { heat: 3, label: barrel ? SRC.barrel : SRC.keg });   // enough to light anything that burns, out to the edge
+  /**
+   * A keg or a barrel going off: spares no side, throws things, sets them alight. A shield soaks it like any other blast —
+   * except the shield of the vehicle the keg was still bolted to (`inside`): that one went off under the bubble.
+   */
+  blast(x, y, b, src, barrel, inside = null) {
+    this.explode(x, y, b.r, b.dmg, 0.35, -1, src, b.max, { heat: 3, label: barrel ? SRC.barrel : SRC.keg, shieldable: true, inside });   // enough to light anything that burns, out to the edge
   }
 
   // ── fire ──────────────────────────────────────────────────────────────
@@ -1377,7 +1380,7 @@ export class World {
       }
       if (trig) {
         this.event({ k: 'mineboom', id: m.id });
-        this.explode(m.x, m.y, M.radius, m.dmg, 0.4, m.team, this.vehicles[m.owner], 6, { ground: true, label: SRC.mine });
+        this.explode(m.x, m.y, M.radius, m.dmg, 0.4, m.team, this.vehicles[m.owner], 6, { ground: true, label: SRC.mine, shieldable: true });
       } else keep.push(m);
     }
     this.mines = keep;

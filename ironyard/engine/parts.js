@@ -219,7 +219,7 @@ export const PARTS = {
   shieldgen: {
     name: 'Shield generator', cat: 'utility', glyph: 'G', layer: 'deck', max: 1,
     cost: 130, mass: 12, hp: 70, burn: 0.6, shield: 120, shieldRegen: 10, shieldDelay: 3, energyUse: 2.5,
-    desc: 'Bubble that absorbs 120 damage from shots, beams, flame and the bursts of shells, missiles and mortar rounds, recharging after 3 s without a hit. Rams, saws, pistons, fire already burning, and the blasts of powder kegs, barrels and mines go straight through.',
+    desc: 'Bubble that absorbs 120 damage from shots, beams, flame and every blast from outside it — shells, missiles, mortar rounds, powder kegs, barrels, mines — recharging after 3 s without a hit. A blast it soaks still shoves you. Rams, saws, pistons, fire already burning, and a keg that goes off while still bolted to you go straight through.',
   },
   repairer: {
     name: 'Repair arm', cat: 'utility', glyph: '+', layer: 'deck', max: 2,

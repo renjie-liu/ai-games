@@ -475,15 +475,15 @@ test('nobody ends a tick inside a wall, however hard they are thrown at it', () 
 test('a shield that soaks a whole burst still lets the shove through, and soaks the splash of a shell beside it', () => {
   const shielded = car([{ type: 'shieldgen', x: 1, y: -1, z: 1 }]);
   const { w, p, q } = duel(car(), shielded, { gap: 8 });
-  const hp = q.hp;
   w.explode(q.x - 1.4, q.y, 2, 46, 0.35, 0, p, 7, { shieldable: true });   // a mortar shell: all of it fits in a full bubble
-  assert.equal(q.hp, hp, 'nothing gets through');
+  assert.equal(q.stats.damageTaken, 0, 'nothing gets through');
+  assert.ok(q.shield < 120, 'the bubble paid');
   assert.ok(q.vx > 1.5, `and it is thrown all the same (${q.vx.toFixed(2)} m/s)`);
   // a cannon shell going off on the wall beside a shielded car: its splash is a burst like any other
   const wall = duel(car([{ type: 'cannon', x: 0, y: 1, z: 1, dir: 'N' }]), shielded, { gap: 8 });
-  const s0 = wall.q.shield, h0 = wall.q.hp;
+  const s0 = wall.q.shield;
   wall.w.explode(wall.q.x - wall.q.radius - 0.2, wall.q.y, 1.1, 30, 0.4, 0, wall.p, 5, { shieldable: true });
-  assert.ok(wall.q.shield < s0 && wall.q.hp === h0, 'the bubble pays for it, the hull does not');
+  assert.ok(wall.q.shield < s0 && wall.q.stats.damageTaken === 0, 'the bubble pays for it, the hull does not');
 });
 
 test('a harpoon whose cable is out is not ready, and a mortar cannot be aimed at nowhere', () => {
@@ -522,4 +522,32 @@ test('nobody leaves the map, and a fork-shaped car is not stopped by a wall it d
   let top = 0;
   for (let i = 0; i < 90; i++) { f.w.setCommand(f.p, { throttle: 1 }); f.w.step(); top = Math.max(top, f.p.y); }
   assert.ok(top > 34.3, `its centre goes in between the prongs until the cross-bar meets the wall (got to y = ${top.toFixed(2)})`);
+});
+
+test('a shield soaks a keg, a barrel or a mine going off outside it, but not a keg still bolted under it', () => {
+  const shielded = car([{ type: 'shieldgen', x: 1, y: -1, z: 1 }]);
+  const K = PARTS.keg.blast;
+  // a keg rolled up to the bubble
+  const out = duel(car(), shielded, { gap: 12 });
+  const s0 = out.q.shield;
+  out.w.blast(out.q.x - out.q.radius - 0.3, out.q.y, K, out.p, false);
+  assert.equal(out.q.stats.damageTaken, 0, 'none of it reaches the hull');
+  assert.ok(Math.abs((s0 - out.q.shield) - K.dmg) < 1e-6, `the bubble pays one blast's worth (${(s0 - out.q.shield).toFixed(1)} of ${K.dmg})`);
+  assert.ok(Math.hypot(out.q.vx, out.q.vy) > 1, 'and the car is thrown all the same');
+  assert.equal(out.q.burning, 0, 'nothing is set alight');
+  // the same blast on the same car without a generator
+  const bare = duel(car(), car(), { gap: 12 });
+  bare.w.blast(bare.q.x - bare.q.radius - 0.3, bare.q.y, K, bare.p, false);
+  assert.ok(bare.q.stats.damageTaken > 100, `unshielded, it tears the car up (${Math.round(bare.q.stats.damageTaken)} hp)`);
+  // a mine under a shielded car
+  const mine = duel(car(), shielded, { gap: 12 });
+  mine.w.explode(mine.q.x, mine.q.y, 1.8, 60, 0.4, 0, mine.p, 6, { ground: true, shieldable: true });
+  assert.equal(mine.q.stats.damageTaken, 0);
+  // its own keg, shot off while still on the car: that one is inside the bubble
+  const carrier = duel(car(), car([{ type: 'shieldgen', x: 1, y: -1, z: 1 }, { type: 'keg', x: 0, y: 2, z: 1, dir: 'N' }]), { gap: 12 });
+  const keg = piece(carrier.q, 'keg');
+  carrier.w.damage(carrier.q, keg, 999, 'kinetic', carrier.p);
+  carrier.w.settle();
+  assert.ok(carrier.q.stats.damageTaken > keg.maxHp + 100, `its own keg goes off under the shield (${Math.round(carrier.q.stats.damageTaken)} hp gone)`);
+  assert.equal(carrier.q.shield, 120, 'which is not touched');
 });
