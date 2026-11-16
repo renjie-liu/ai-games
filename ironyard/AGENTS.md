@@ -135,7 +135,7 @@ What happens under fire:
 | `cannon` | C | 1x2 | 110 | 13 | 170 | deck, dir, clear lane | 30 dmg / 1.6s (19 dps), range 19 m, arc ±20°, traverse 2.2 rad/s, shot speed 24 m/s, 9 energy/shot, splash 0.75 m x0.3, recoil 100 N·s, kinetic, burns slowly | Slow heavy shell with small splash. Narrow arc: point the car. |
 | `railgun` | R | 1x3 | 170 | 16 | 160 | deck, dir, clear lane | 90 dmg / 4s (23 dps), range 24 m, arc ±8°, traverse 1.2 rad/s, instant hit, 30 energy/shot, goes through 3 pieces, slopes do not turn it, recoil 220 N·s, kinetic, burns slowly | Instant-hit sniper, three studs long. Punches through 3 pieces (each takes half of the one before) and a slope does not turn its slug. Nearly fixed mount, hungry for energy. |
 | `laser` | L | 1x1 | 120 | 8 | 90 | deck, dir, clear lane | 22 dps beam, range 10 m, arc ±35°, traverse 4 rad/s, instant hit, 11 energy/s, energy, burns slowly | Continuous beam that ignores armor and slopes. Short range and drains energy fast. |
-| `missile` | M | 2x2 | 170 | 15 | 200 | deck, dir, clear lane | 28 dmg x2 / 3.8s (15 dps), range 32 m, arc ±60°, traverse 6 rad/s, shot speed 13 m/s, 16 energy/shot, splash 1 m x0.5, recoil 40 N·s, explosive, burns slowly | Fires two homing missiles with splash. Slow enough to dodge behind walls. |
+| `missile` | M | 2x2 | 170 | 15 | 200 | deck, dir, clear lane | 28 dmg x2 / 3.8s (15 dps), range 32 m, arc ±60°, traverse 6 rad/s, shot speed 13 m/s, 16 energy/shot, splash 1 m x0.5, recoil 40 N·s, explosive, burns slowly | Fires two homing missiles with splash. A missile steers for its target only while your team can see it (in sensor range, or in the 1.5 s after it fires): out of sight it flies on straight, so a radar is what makes the full range usable. Slow enough to dodge behind walls. |
 | `mortar` | N | 2x2 | 150 | 18 | 160 | deck, dir | 46 dmg / 4s (12 dps), range 6-24 m, arc 360°, traverse 2.5 rad/s, shot speed 15 m/s, 14 energy/shot, blast 2 m, up to 7 pieces, recoil 150 N·s, explosive, burns slowly | Lobs a shell OVER walls to the point you aim at (give `aim` as {x, y}). 2 m blast. Cannot hit closer than 6 m; needs no clear lane. |
 | `saw` | S | 1x1 | 60 | 10 | 120 | chassis, dir, clear lane | 60 dps on contact, 4 energy/s while cutting, burns slowly | Grinds any enemy piece it touches for 60 dps. Ignores armor and shields, eats the chassis first. |
 | `spike` | V | 1x1 | 28 | 7 | 160 | chassis, dir, clear lane | ram dealt x3, taken x0.25, fireproof | Collisions through this stud deal x3 damage and you take only 25% back. |
@@ -226,7 +226,7 @@ One map tile is 2 m.
 | `pad` | `+` | Park on it (speed < 2 m/s) to heal 25 hp/s from a 150 hp pool that refills at 6 hp/s. Puts out fires. |
 | `crate` | `x` | A wall you can break: 150 hp. Shots, blasts, fire, pistons and driving into it at speed all count. Gone, it is floor. |
 | `barrel` | `!` | Blocks the way until something touches it off: 40 hp, then a blast that hits everything within 3 m, shoves it and sets it alight. Barrels set each other off. |
-| `smoke` | `s` | A vehicle whose centre is in smoke is seen only from within 7 m, whatever the sensors — until it fires, which gives it away for 1.5 s as anywhere. Missiles lose their lock on it. Smoke stops no shot and slows nobody. |
+| `smoke` | `s` | A vehicle whose centre is in smoke is seen only from within 7 m, whatever the sensors — until it fires, which gives it away for 1.5 s as anywhere. A missile stops steering for a target it cannot see. Smoke stops no shot, slows nobody, and hides nothing that lies on the ground (mines, kegs, barrels). |
 | `turbo` | `=` | Wheels, tracks and hover pads push 50% harder while the vehicle is on it. A fast lane for a flank or a getaway. |
 
 Off the edge of the map counts as a pit.
@@ -234,7 +234,7 @@ Off the edge of the map counts as a pit.
 * **Safe zone:** from t=85s to t=138s a circle centred on the map shrinks to 7 m radius (some maps differ: read `state.zone`).
   Outside it every piece takes 10 hp/s.
 * **Vision:** you see an enemy if it is within the sensor range of any living teammate (core 22 m, radar +16 m),
-  or for 1.5s after it fires a gun. Walls do not block vision. Smoke does: a vehicle whose centre is on a smoke tile is seen only from within 7 m, until it fires. `state.lastSeen` remembers where each enemy was — until your team has that spot in view and the enemy is not there: then the entry is dropped until the enemy is seen again.
+  or for 1.5s after it fires a gun. Walls do not block vision. Smoke does: a vehicle whose centre is on a smoke tile is seen only from within 7 m, until it fires. `state.lastSeen` remembers where each enemy was — until one of your team is within 7 m of that spot and the enemy is not to be seen: it has gone, and the entry is dropped until it is seen again. An enemy that dies is always listed, with `alive: false`.
 * **Friendly fire is off** for guns, flamethrowers, saws, pistons and hooks: shots and their splash pass through
   teammates. You can still bump into them. **Powder kegs and barrels are the exception**: their blasts hit everyone in
   reach, a teammate sets off a rolling keg by touching it, and nothing done to your own side counts as damage dealt.
@@ -574,14 +574,14 @@ Wide open and almost bare: two low barriers, one pillar, a mud wallow in the mid
 #.==......---..................---......==.#
 #.==....................................==.#
 #.==.................##.................==.#
-#.==.....*..............................==.#
+#.==.*................................*.==.#
 #.==....................................==.#
+#.==.........*.....mmmmmm...............==.#
 #.==...............mmmmmm...............==.#
-#.==.*.............mmmmmm.............*.==.#
-#.==.*.............mmmmmm.............*.==.#
 #.==...............mmmmmm...............==.#
+#.==...............mmmmmm.....*.........==.#
 #.==....................................==.#
-#.==..............................*.....==.#
+#.==.*................................*.==.#
 #.==.................##.................==.#
 #.==....................................==.#
 #.==......---..................---......==.#
@@ -754,7 +754,7 @@ state = {
   enemies: [ same shape — ONLY enemies your team can currently see; parts[] shows their layout (with z) and damage: every piece
              they started with stays in the list, the ones shot off with alive: false ],
   enemiesAlive,                      // how many are left, seen or not
-  lastSeen: [{ id, x, y, t, alive }],   // where each enemy was last seen; an entry your team can see is empty is left out
+  lastSeen: [{ id, x, y, t, alive }],   // where each enemy was last seen; left out once your team has been to the spot and found it empty
   projectiles: [{ kind: 'bullet' | 'shell' | 'missile' | 'mortar' | 'hook', x, y, vx, vy, landsAt?, landsIn? }],  // enemy shots in sensor range, nearest first (max 24)
   mines: [{ x, y }],                 // enemy mines within 5 m (anywhere in sensor range with a radar)
   items: [{ id, type, x, y }],       // every pick-up currently on the map

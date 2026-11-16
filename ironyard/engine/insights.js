@@ -208,7 +208,7 @@ const LEGEND = 'damage in hp, times in seconds, distances in metres between vehi
   + 'weapons[]: shots and hits are seconds for lasers and flamers, punches for pistons; firingTime counts the wait between shots while the trigger is held. '
   + 'dealt counts enemies only; taken counts everything. bySide: where the hit came from relative to your heading at that moment (fire, lava and zone have no side and no range). '
   + 'range.timeIn: seconds with the nearest living enemy in each band. fire.*: only the seconds a living enemy was inside the range of your longest living gun (harpoons aside; a mortar from its minimum range out). '
-  + 'move.timeParked: speed under 0.3 m/s with throttle at half or less while a living enemy was beyond the reach of every gun (parkedAt: how far, on average); '
+  + 'move.timeParked: speed under 0.3 m/s with the throttle command at 0.15 or less while every living enemy was beyond the range of every gun (parkedAt: how far the nearest was, on average); '
   + 'move.timeStuck: throttle above half, speed under 0.3 m/s (timeStuckOnEnemy: the part of it spent against an enemy). losses: your first 12 pieces lost. timeline: one sample every `step` s while alive (hull %, energy %, metres to the nearest enemy, weapons left).';
 
 /** A saved match as telemetry: per vehicle (or for the one with id `vehicle`) its end, the rounded telemetry and its insights. */

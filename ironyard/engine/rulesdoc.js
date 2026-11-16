@@ -222,7 +222,7 @@ Off the edge of the map counts as a pit.
 * **Safe zone:** from t=${R.zoneStart}s to t=${R.zoneEnd}s a circle centred on the map shrinks to ${R.zoneMinRadius} m radius (some maps differ: read \`state.zone\`).
   Outside it every piece takes ${R.zoneDps} hp/s.
 * **Vision:** you see an enemy if it is within the sensor range of any living teammate (core ${PARTS.core.sensor} m, radar +${PARTS.radar.sensor} m),
-  or for ${R.revealTime}s after it fires a gun. Walls do not block vision. Smoke does: a vehicle whose centre is on a smoke tile is seen only from within ${TILES.smoke.sight} m, until it fires. \`state.lastSeen\` remembers where each enemy was — until your team has that spot in view and the enemy is not there: then the entry is dropped until the enemy is seen again.
+  or for ${R.revealTime}s after it fires a gun. Walls do not block vision. Smoke does: a vehicle whose centre is on a smoke tile is seen only from within ${TILES.smoke.sight} m, until it fires. \`state.lastSeen\` remembers where each enemy was — until one of your team is within ${TILES.smoke.sight} m of that spot and the enemy is not to be seen: it has gone, and the entry is dropped until it is seen again. An enemy that dies is always listed, with \`alive: false\`.
 * **Friendly fire is off** for guns, flamethrowers, saws, pistons and hooks: shots and their splash pass through
   teammates. You can still bump into them. **Powder kegs and barrels are the exception**: their blasts hit everyone in
   reach, a teammate sets off a rolling keg by touching it, and nothing done to your own side counts as damage dealt.
@@ -269,7 +269,7 @@ state = {
   enemies: [ same shape — ONLY enemies your team can currently see; parts[] shows their layout (with z) and damage: every piece
              they started with stays in the list, the ones shot off with alive: false ],
   enemiesAlive,                      // how many are left, seen or not
-  lastSeen: [{ id, x, y, t, alive }],   // where each enemy was last seen; an entry your team can see is empty is left out
+  lastSeen: [{ id, x, y, t, alive }],   // where each enemy was last seen; left out once your team has been to the spot and found it empty
   projectiles: [{ kind: 'bullet' | 'shell' | 'missile' | 'mortar' | 'hook', x, y, vx, vy, landsAt?, landsIn? }],  // enemy shots in sensor range, nearest first (max 24)
   mines: [{ x, y }],                 // enemy mines within 5 m (anywhere in sensor range with a radar)
   items: [{ id, type, x, y }],       // every pick-up currently on the map

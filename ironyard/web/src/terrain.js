@@ -77,73 +77,6 @@ const fields = (N, M = N) => ({ C: new Uint8Array(N * M * 3), R: new Float32Arra
 
 // ── detail textures (each tiles; ground ones cover 4 m, mud 3 m, ice 5 m) ──
 const BUILD = {
-  concrete() {
-    const N = 512, { C, R, H } = fields(N), blot = fbm(N, 3, 4, 11), mid = fbm(N, 12, 3, 13), grain = fbm(N, 64, 2, 12), w = worley(N, 60, 14);
-    for (let i = 0; i < N * N; i++) {
-      const pore = sm(0.14, 0.03, w.f1[i]) * sm(0.4, 0.6, mid[i]);
-      const l = 0.78 + 0.26 * blot[i] + 0.16 * (grain[i] - 0.5) + 0.12 * (mid[i] - 0.5) - 0.4 * pore;
-      put(C, i, 156 * l + 8 * (blot[i] - 0.5), 155 * l, 150 * l - 6 * (blot[i] - 0.5));
-      H[i] = 0.5 + 0.3 * (grain[i] - 0.5) + 0.35 * (mid[i] - 0.5) - 0.5 * pore; R[i] = 0.88 - 0.1 * grain[i] + 0.04 * pore;
-    }
-    return finish(N, N, C, R, H, null, 5);
-  },
-  asphalt() {
-    const N = 512, { C, R, H } = fields(N), w = worley(N, 120, 21), grain = fbm(N, 64, 2, 23), blot = fbm(N, 3, 4, 24), tone = valueNoise(N, 120, 25);
-    for (let i = 0; i < N * N; i++) {
-      const stone = sm(0.42, 0.18, w.f1[i]), l = 0.72 + 0.4 * blot[i], s = stone * (26 + 70 * tone[i]);
-      put(C, i, 44 * l + s, 46 * l + s, 50 * l + s * 0.96);
-      H[i] = stone * 0.7 + grain[i] * 0.3; R[i] = 0.93 - 0.18 * stone;
-    }
-    return finish(N, N, C, R, H, null, 4);
-  },
-  steel() { // tread plate: raised diamond lugs, worn bright on top, rust in patches
-    const N = 512, { C, R, H } = fields(N), grain = fbm(N, 64, 2, 31), blot = fbm(N, 3, 4, 32), rustN = fbm(N, 6, 4, 33), s = N / 25;
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      const i = y * N + x, ci = Math.floor(x / s), cj = Math.floor(y / s), lx = x / s - ci - 0.5, ly = y / s - cj - 0.5, dg = (ci + cj) & 1 ? 1 : -1;
-      const a = (lx + dg * ly) * 0.7071, b = (lx - dg * ly) * 0.7071, lug = sm(1, 0.55, (a / 0.36) ** 2 + (b / 0.1) ** 2);
-      const rust = sm(0.66, 0.84, rustN[i]) * (1 - 0.5 * lug) * 0.34, l = 0.82 + 0.28 * blot[i] + 0.1 * (grain[i] - 0.5), q = 0.8 + 0.3 * grain[i];
-      put(C, i, mix(104 * l + lug * 26, 116 * q, rust), mix(110 * l + lug * 26, 70 * q, rust), mix(118 * l + lug * 26, 42 * q, rust));
-      H[i] = lug * 0.75 + grain[i] * 0.12; R[i] = 0.38 + 0.4 * rust - 0.1 * lug + 0.1 * grain[i];
-    }
-    return finish(N, N, C, R, H, null, 4);
-  },
-  sand(tr = 196, tg = 160, tb = 114) {
-    const N = 512, { C, R, H } = fields(N), blot = fbm(N, 3, 5, 41), grain = fbm(N, 96, 2, 42), warp = fbm(N, 4, 3, 43), w = worley(N, 34, 44), tone = valueNoise(N, 34, 45), TAU = Math.PI * 2;
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      const i = y * N + x, rip = (0.5 + 0.5 * Math.sin((y / N) * TAU * 16 + (warp[i] - 0.5) * 16 + (x / N) * TAU * 3)) * sm(0.4, 0.62, blot[i]);
-      const stone = sm(0.11, 0.06, w.f1[i]), l = 0.82 + 0.28 * blot[i] + 0.14 * (grain[i] - 0.5), st = 0.7 + 0.5 * tone[i];
-      put(C, i, mix(tr * l, 112 * st, stone), mix(tg * l, 96 * st, stone), mix(tb * l, 84 * st, stone));
-      H[i] = 0.1 * rip + 0.22 * grain[i] + 0.7 * stone + 0.25 * blot[i]; R[i] = 0.94;
-    }
-    return finish(N, N, C, R, H, null, 5);
-  },
-  snow() {
-    const N = 512, { C, R, H } = fields(N), soft = fbm(N, 5, 5, 51), fine = fbm(N, 90, 2, 52), drift = fbm(N, 2, 3, 53);
-    for (let i = 0; i < N * N; i++) {
-      const t = sm(0.3, 0.7, soft[i]), sp = fine[i] > 0.7 ? 6 : 0;
-      put(C, i, mix(196, 246, t) + sp, mix(212, 248, t) + sp, mix(236, 252, t) + sp);
-      H[i] = soft[i] * 0.8 + drift[i] * 0.5 + fine[i] * 0.05; R[i] = 0.62 + 0.25 * fine[i];
-    }
-    return finish(N, N, C, R, H, null, 14);
-  },
-  grass() {
-    const N = 512, { C, R, H } = fields(N), blot = fbm(N, 4, 5, 61), fine = fbm(N, 110, 2, 62), mid = fbm(N, 24, 3, 63), dirtN = fbm(N, 6, 4, 64);
-    for (let i = 0; i < N * N; i++) {
-      const dirt = sm(0.52, 0.4, dirtN[i]), t = fine[i] * 0.6 + mid[i] * 0.4, l = 0.7 + 0.5 * blot[i], q = 0.78 + 0.34 * fine[i];
-      put(C, i, mix(mix(50, 92, t) * l, 84 * q, dirt), mix(mix(58, 96, t) * l, 68 * q, dirt), mix(mix(30, 46, t) * l, 46 * q, dirt)); // tired olive, not lawn green
-      H[i] = fine[i] * 0.5 + mid[i] * 0.4 - dirt * 0.2; R[i] = 0.93;
-    }
-    return finish(N, N, C, R, H, null, 5);
-  },
-  mud() { // churned wet earth: broad ridges and ruts, darker and glossier in the hollows
-    const N = 512, { C, R, H } = fields(N), h = fbm(N, 4, 6, 71), w = worley(N, 9, 72), fine = fbm(N, 56, 2, 73), blot = fbm(N, 2, 3, 74);
-    for (let i = 0; i < N * N; i++) {
-      const hh = 0.62 * h[i] + 0.16 * (1 - sm(0, 0.7, w.f1[i])) + 0.12 * fine[i] + 0.1 * blot[i], wet = sm(0.52, 0.36, hh), l = 0.86 + 0.28 * fine[i];
-      put(C, i, mix(124, 74, wet) * l, mix(95, 55, wet) * l, mix(66, 38, wet) * l);
-      H[i] = hh; R[i] = mix(0.8, 0.42, wet);
-    }
-    return finish(N, N, C, R, H, null, 7);
-  },
   ice() { // only the normal/mask texture is used: cracks in the alpha channel
     const N = 512, { C, R, H, K } = fields(N), w = worley(N, 6, 81), w2 = worley(N, 13, 82), wav = fbm(N, 4, 4, 83);
     for (let i = 0; i < N * N; i++) { K[i] = Math.max(sm(0.04, 0, w.edge[i]), sm(0.03, 0, w2.edge[i]) * 0.45); H[i] = wav[i] * 0.6 - K[i] * 0.5; R[i] = 0.1; }
@@ -163,66 +96,6 @@ const BUILD = {
     const N = 256, ch = [fbm(N, 4, 5, 91), fbm(N, 4, 5, 92), fbm(N, 6, 4, 93), fbm(N, 8, 4, 94)], d = new Uint8Array(N * N * 4);
     for (let i = 0; i < N * N; i++) for (let c = 0; c < 4; c++) { const v = (ch[c][i] - 0.5) * 2.4 + 0.5; d[i * 4 + c] = v <= 0 ? 0 : v >= 1 ? 255 : v * 255; }
     return dataTex(N, N, d);
-  },
-  // walls: 4 m x 4 m, v runs up from the ground
-  wallConcrete(band = '', moss = 0) {
-    const N = 512, { C, R, H } = fields(N), blot = fbm(N, 3, 4, 111), mid = fbm(N, 12, 3, 113), grain = fbm(N, 64, 2, 112), streak = valueNoise(N, 40, 114), mossN = fbm(N, 10, 4, 115);
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      const i = y * N + x, xm = x % 256, joint = Math.max(sm(3, 0, Math.min(xm, 256 - xm)), sm(3, 0, Math.abs(y - 154)), sm(3, 0, Math.abs(y - 307)));
-      const hx = ((x + 64) % 128) - 64, hole = Math.max(sm(6, 3, Math.hypot(hx, y - 77)), sm(6, 3, Math.hypot(hx, y - 230)));
-      const t = Math.min(1, Math.max(0, (307 - y) / 307)), stain = y <= 307 ? sm(0.5, 0.8, streak[x] * 0.7 + blot[i] * 0.5) * (1 - t) ** 1.5 * 0.5 : 0, grime = y < 45 ? (1 - y / 45) * 0.35 : 0;
-      let l = 0.76 + 0.24 * blot[i] + 0.16 * (grain[i] - 0.5) + 0.1 * (mid[i] - 0.5) - 0.35 * joint - 0.5 * hole - stain - grime;
-      let r = 150 * l, g = 149 * l, b = 144 * l, rough = 0.86;
-      if (moss) { const m = sm(0.45, 0.62, mossN[i]) * Math.max(0, 1 - y / 150) * moss; r = mix(r, 62 * (0.7 + 0.6 * grain[i]), m); g = mix(g, 84 * (0.7 + 0.6 * grain[i]), m); b = mix(b, 44 * (0.7 + 0.6 * grain[i]), m); }
-      if (band && y >= 6 && y <= 44 && grain[i] > 0.36) { // worn painted band along the foot of the wall
-        const on = band === 'hazard' ? Math.floor((x + y) / 32) % 2 === 0 : true, pc = band === 'hazard' ? (on ? [226, 180, 36] : [30, 30, 32]) : band === 'red' ? [168, 44, 34] : [226, 180, 36], k = 0.9 * (1 - grime);
-        r = mix(r, pc[0] * (0.8 + 0.3 * grain[i]), k); g = mix(g, pc[1] * (0.8 + 0.3 * grain[i]), k); b = mix(b, pc[2] * (0.8 + 0.3 * grain[i]), k); rough = 0.7;
-      }
-      put(C, i, r, g, b); H[i] = 0.5 + 0.25 * (grain[i] - 0.5) + 0.3 * (mid[i] - 0.5) - 0.6 * joint - 0.8 * hole; R[i] = rough;
-    }
-    return finish(N, N, C, R, H, null, 5);
-  },
-  wallRock(tr = 178, tg = 124, tb = 84) {
-    const N = 512, { C, R, H } = fields(N), warp = fbm(N, 3, 4, 121), grain = fbm(N, 64, 2, 122), w = worley(N, 8, 123);
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      const i = y * N + x, s = (y / N) * 12 + (warp[i] - 0.5) * 4.5, li = Math.floor(s), ht = hash2(((li % 12) + 12) % 12, 3, 7), groove = sm(0.1, 0, s - li), crack = sm(0.045, 0, w.edge[i]);
-      const l = 0.72 + 0.36 * ht + 0.2 * (grain[i] - 0.5) - 0.35 * groove - 0.4 * crack;
-      put(C, i, tr * l + 14 * (ht - 0.5), tg * l, tb * l - 8 * (ht - 0.5));
-      H[i] = 0.5 + 0.25 * (ht - 0.5) + 0.3 * (grain[i] - 0.5) - 0.5 * groove - 0.6 * crack; R[i] = 0.9;
-    }
-    return finish(N, N, C, R, H, null, 6);
-  },
-  wallCorrugated(pr = 44, pg = 78, pb = 86) {
-    const N = 512, { C, R, H } = fields(N), grain = fbm(N, 64, 2, 131), rustN = fbm(N, 7, 4, 132), streak = valueNoise(N, 64, 133), TAU = Math.PI * 2;
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      const i = y * N + x, corr = 0.5 + 0.5 * Math.sin((x / N) * TAU * 20), seam = sm(3, 0, Math.min(x % 256, 256 - (x % 256))), rail = sm(6, 3, Math.abs(y - 160));
-      const rust = sm(0.5, 0.72, rustN[i] * 0.7 + streak[x] * 0.3 + (y < 50 ? (50 - y) / 120 : 0) + (y > 270 ? (y - 270) / 250 : 0)) * 0.8;
-      const sh = (0.72 + 0.34 * corr) * (0.9 + 0.2 * grain[i]) * (1 - 0.5 * seam) * (y < 26 ? 0.6 + 0.4 * (y / 26) : 1), q = 0.7 + 0.5 * grain[i];
-      put(C, i, mix(pr * sh + rail * 30, 112 * q, rust), mix(pg * sh + rail * 30, 64 * q, rust), mix(pb * sh + rail * 30, 38 * q, rust));
-      H[i] = corr * 0.8 + rail; R[i] = mix(0.5, 0.85, rust);
-    }
-    return finish(N, N, C, R, H, null, 3);
-  },
-  // barrier sides: 2 m x 1 m
-  barrierHazard() {
-    const N = 256, { C, R, H } = fields(N), blot = fbm(N, 3, 4, 141), grain = fbm(N, 48, 2, 142), chip = fbm(N, 14, 3, 143);
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      const i = y * N + x, l = 0.78 + 0.24 * blot[i] + 0.16 * (grain[i] - 0.5), on = Math.floor((x + y * 0.5) / 32) % 2 === 0, paint = sm(0.34, 0.42, chip[i]) * 0.94, q = 0.82 + 0.3 * grain[i];
-      const pc = on ? [228, 182, 38] : [30, 30, 32];
-      put(C, i, mix(152 * l, pc[0] * q, paint), mix(151 * l, pc[1] * q, paint), mix(146 * l, pc[2] * q, paint));
-      H[i] = 0.5 + 0.3 * (grain[i] - 0.5) + paint * 0.06; R[i] = mix(0.88, 0.62, paint);
-    }
-    return finish(N, N, C, R, H, null, 4);
-  },
-  sandbag(tr = 156, tg = 136, tb = 98) {
-    const N = 256, { C, R, H } = fields(N), grain = fbm(N, 64, 2, 151), rh = N / 5;
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      const i = y * N + x, row = Math.floor(y / rh), bx = (x + (row & 1) * 32) % 64, lu = bx / 64, lv = (y - row * rh) / rh;
-      const bulge = (1 - Math.abs(2 * lu - 1) ** 4) * (1 - Math.abs(2 * lv - 1) ** 3), tone = hash2(row, Math.floor((x + (row & 1) * 32) / 64) % 4, 5), weave = ((x >> 1) + (y >> 1)) & 1 ? 1 : 0.88;
-      const l = (0.7 + 0.3 * tone) * (0.5 + 0.55 * bulge) * weave * (0.9 + 0.2 * grain[i]);
-      put(C, i, tr * l, tg * l, tb * l); H[i] = bulge; R[i] = 0.95;
-    }
-    return finish(N, N, C, R, H, null, 5);
   },
   // a wall of toy bricks, 4 m x 4 m: courses 0.4 m high, laid half a brick over the one below, in two colours.
   // mode: 'band' a dark plinth course and the top course of a six-course wall in the second colour; 'checker' every other
@@ -255,26 +128,16 @@ const detail = (kind, ...args) => (CACHE[kind + ':' + args.join(',')] ||= BUILD[
 
 // ── themes ──────────────────────────────────────────────────────────────
 // sun: [colour, intensity, azimuth, elevation]; hemi: [sky, ground, intensity]; fog: [near, far]
+// Sky, sun and haze of each setting (what the arena is built of is in BRICKS below).
 export const THEMES = {
-  proving: { base: ['concrete'], wall: ['wallConcrete', 'hazard'], wallTop: ['concrete'], wallH: 2.4, barrier: ['barrierHazard'], marks: 'yard', props: true,
-    sky: [0x4a78b8, 0xc4d6e6, 0x8a8f90], sun: [0xfff0d8, 1.6, 0.75, 0.8], hemi: [0xcfe0ff, 0x4a463e, 0.34], fog: [170, 560], tint: [0.8, 0.8, 0.8], apron: [0.62, 0.61, 0.6], exposure: 0.92 },
-  sumo: { base: ['steel'], metal: 0.7, wall: ['wallCorrugated'], wallTop: ['concrete'], wallH: 2.4, barrier: ['barrierHazard'], marks: 'deck', void: true, below: 'sea', slab: ['wallCorrugated', 62, 68, 76],
-    sky: [0x1d2d52, 0xe39a62, 0x24344c], sun: [0xffc48a, 1.7, -0.9, 0.42], hemi: [0x9fb4e0, 0x3a3440, 0.38], fog: [170, 560], tint: [1, 1, 1], exposure: 0.95 },
-  canyon: { base: ['sand', 188, 138, 92], wall: ['wallRock', 182, 122, 80], wallTop: ['wallRock', 182, 122, 80], rock: true, barrier: ['sandbag'], marks: 'dirt',
-    rut: 'rgba(104,70,42,0.34)', patch: ['rgba(120,82,48,0.13)', 'rgba(232,200,150,0.10)'],
-    sky: [0x3d7fc4, 0xf0d2a4, 0xb48a5c], sun: [0xffe2b8, 1.7, 1.1, 0.66], hemi: [0xcfe0ff, 0x8a6844, 0.32], fog: [170, 560], tint: [0.86, 0.86, 0.86], apron: [0.8, 0.78, 0.76], exposure: 0.92 },
-  frostbite: { base: ['snow'], wall: ['wallRock', 128, 138, 152], wallTop: ['snow'], rock: true, barrier: ['sandbag', 150, 156, 164], marks: 'dirt',
-    rut: 'rgba(120,140,178,0.5)', patch: ['rgba(140,162,200,0.2)', 'rgba(255,255,255,0.2)'],
-    sky: [0x8fa6bf, 0xd6e0ea, 0xcfd8e2], sun: [0xfff1e0, 1.45, 0.5, 0.46], hemi: [0xc4d6f4, 0x7388a8, 0.36], fog: [150, 560], tint: [0.74, 0.76, 0.8], apron: [0.86, 0.87, 0.9], exposure: 0.9 },
-  foundry: { base: ['asphalt'], wall: ['wallCorrugated', 70, 118, 128], wallTop: ['concrete'], wallH: 2.6, wallMetal: 0.35, barrier: ['barrierHazard'], marks: 'yard', props: true,
-    sky: [0x10141c, 0x4a2c20, 0x1a1614], sun: [0xe6ecff, 1.25, 0.6, 0.95], hemi: [0x9aa8c0, 0x4a3024, 0.42], fog: [110, 480], tint: [1.25, 1.22, 1.18], apron: [0.6, 0.6, 0.6], lava: 2.6, exposure: 1.0 },
-  skybridge: { base: ['concrete'], wall: ['wallConcrete', 'hazard'], wallTop: ['concrete'], wallH: 2.4, barrier: ['barrierHazard'], marks: 'yard', void: true, below: 'clouds', slab: ['wallConcrete'],
-    sky: [0x27407a, 0xf6b48a, 0x8a6f86], sun: [0xffc79a, 1.7, -0.6, 0.4], hemi: [0xb4c6f0, 0x5a4a5c, 0.36], fog: [170, 560], tint: [0.86, 0.84, 0.82], exposure: 0.95 },
-  depot: { base: ['asphalt'], wall: ['wallCorrugated', 96, 84, 70], wallTop: ['concrete'], wallH: 2.6, wallMetal: 0.3, barrier: ['barrierHazard'], marks: 'yard', props: true,
-    sky: [0x6a7f96, 0xe8c9a0, 0x7a6a58], sun: [0xffe6c0, 1.55, -0.8, 0.6], hemi: [0xd6e0f0, 0x5a4c3e, 0.38], fog: [150, 540], tint: [1.05, 1.02, 0.98], apron: [0.66, 0.64, 0.6], exposure: 0.95 },
-  bog: { base: ['grass'], wall: ['wallConcrete', '', 1], wallTop: ['concrete'], wallH: 2.4, barrier: ['sandbag', 118, 116, 84], marks: 'dirt',
-    rut: 'rgba(52,40,26,0.45)', patch: ['rgba(40,34,22,0.2)', 'rgba(130,140,70,0.10)'],
-    sky: [0x76909a, 0xc6d2c8, 0x55603f], sun: [0xfff2d2, 1.3, 0.9, 0.7], hemi: [0xcfe0d6, 0x3f4a30, 0.4], fog: [90, 460], tint: [0.9, 0.9, 0.9], apron: [0.82, 0.84, 0.8], exposure: 0.95 },
+  proving: { sky: [0x4a78b8, 0xc4d6e6, 0x8a8f90], sun: [0xfff0d8, 1.6, 0.75, 0.8], hemi: [0xcfe0ff, 0x4a463e, 0.34], fog: [170, 560], exposure: 0.92 },
+  sumo: { void: true, below: 'sea', sky: [0x1d2d52, 0xe39a62, 0x24344c], sun: [0xffc48a, 1.7, -0.9, 0.42], hemi: [0x9fb4e0, 0x3a3440, 0.38], fog: [170, 560], exposure: 0.95 },
+  canyon: { sky: [0x3d7fc4, 0xf0d2a4, 0xb48a5c], sun: [0xffe2b8, 1.7, 1.1, 0.66], hemi: [0xcfe0ff, 0x8a6844, 0.32], fog: [170, 560], exposure: 0.92 },
+  frostbite: { sky: [0x8fa6bf, 0xd6e0ea, 0xcfd8e2], sun: [0xfff1e0, 1.45, 0.5, 0.46], hemi: [0xc4d6f4, 0x7388a8, 0.36], fog: [150, 560], exposure: 0.9 },
+  foundry: { sky: [0x10141c, 0x4a2c20, 0x1a1614], sun: [0xe6ecff, 1.25, 0.6, 0.95], hemi: [0x9aa8c0, 0x4a3024, 0.42], fog: [110, 480], lava: 2.6, exposure: 1.0 },
+  skybridge: { void: true, below: 'clouds', sky: [0x27407a, 0xf6b48a, 0x8a6f86], sun: [0xffc79a, 1.7, -0.6, 0.4], hemi: [0xb4c6f0, 0x5a4a5c, 0.36], fog: [170, 560], exposure: 0.95 },
+  depot: { sky: [0x6a7f96, 0xe8c9a0, 0x7a6a58], sun: [0xffe6c0, 1.55, -0.8, 0.6], hemi: [0xd6e0f0, 0x5a4c3e, 0.38], fog: [150, 540], exposure: 0.95 },
+  bog: { sky: [0x76909a, 0xc6d2c8, 0x55603f], sun: [0xfff2d2, 1.3, 0.9, 0.7], hemi: [0xcfe0d6, 0x3f4a30, 0.4], fog: [90, 460], exposure: 0.95 },
 };
 // the newer arenas borrow the sky and light of an older one
 const THEME_OF = { cage: 'depot', saltflat: 'canyon', causeway: 'proving', labyrinth: 'proving', fogbank: 'bog', ringroad: 'foundry' };
@@ -301,7 +164,7 @@ const rgb = (h, k = 1) => [((h >> 16) & 255) * k, ((h >> 8) & 255) * k, (h & 255
 export const STUD = 0.4, COURSE = 0.4;
 export const themeOf = (map) => {
   const base = THEMES[map.id] || THEMES[THEME_OF[map.id]] || THEMES.proving, b = BRICKS[map.id] || BRICKS.proving;
-  return { ...base, bricks: b, rock: false, wallH: 6 * COURSE, wallMetal: 0, marks: 'yard', props: false,
+  return { ...base, bricks: b, wallH: 6 * COURSE,
     wall: ['brick', ...rgb(b.wall), ...rgb(b.accent), b.lay], wallTop: ['plain', ...rgb(b.wall)],
     barrier: ['brick', ...rgb(b.low), ...rgb(b.low2), 'checker'], slab: ['brick', ...rgb(b.plate, 0.72), ...rgb(b.plate, 0.6), 'stripe'] };
 };
@@ -337,15 +200,14 @@ function paintDecals(IY, map, th) {
   const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
   const g = cv.getContext('2d');
   g.setTransform(cw / W, 0, 0, -ch / H, 0, ch); // draw in metres, y north
-  const R = rng32(hashStr(map.id || 'map') + 7), rr = (a, b) => a + (b - a) * R(), TAU = Math.PI * 2;
+  const TAU = Math.PI * 2;
   const code = (tx, ty) => (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h ? -1 : map.tiles[ty * map.w + tx]);
   const at = (x, y) => code(Math.floor(x / T), Math.floor(y / T));
   const open = (c) => c === C.floor || c === C.pad || c === C.mud || c === C.ice || c === C.smoke || c === C.turbo;
-  const built = th.marks !== 'dirt', area = W * H;
   const label = (text, color, size = 90) => { g.save(); g.scale(0.01, -0.01); g.font = `900 ${size}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = color; g.fillText(text, 0, 0); g.restore(); };
   g.lineCap = 'round'; g.lineJoin = 'round';
 
-  if (th.bricks) {
+  {
     // a baseplate is clean plastic, printed like the board of a game: each team's end in its colour, a halfway line,
     // and a kerb line along the foot of everything that stands on it. The studs are drawn by the ground shader.
     const pr = th.bricks.print, line = `rgba(${(pr >> 16) & 255},${(pr >> 8) & 255},${pr & 255},0.82)`;
@@ -374,65 +236,17 @@ function paintDecals(IY, map, th) {
       }
     }
     g.lineCap = 'round'; g.lineJoin = 'round';
-  } else if (built) {
-    // slabs: a patchwork of pours with expansion joints (deck plates on steel)
-    const step = th.marks === 'deck' ? 2 : 4;
-    for (let y = 0; y < H; y += step) for (let x = 0; x < W; x += step) { const r = R(); if (r < 0.3) { g.fillStyle = `rgba(0,0,0,${rr(0.03, 0.09)})`; g.fillRect(x, y, step, step); } else if (r > 0.88) { g.fillStyle = `rgba(255,255,255,${rr(0.015, 0.035)})`; g.fillRect(x, y, step, step); } }
-    g.strokeStyle = 'rgba(14,14,16,0.5)'; g.lineWidth = 0.05; g.beginPath();
-    for (let x = step; x < W; x += step) { g.moveTo(x, 0); g.lineTo(x, H); }
-    for (let y = step; y < H; y += step) { g.moveTo(0, y); g.lineTo(W, y); }
-    g.stroke();
-    if (th.marks === 'deck') { // weld highlight and bolts along every seam
-      g.strokeStyle = 'rgba(210,220,230,0.14)'; g.lineWidth = 0.03; g.beginPath();
-      for (let x = step; x < W; x += step) { g.moveTo(x + 0.05, 0); g.lineTo(x + 0.05, H); }
-      for (let y = step; y < H; y += step) { g.moveTo(0, y + 0.05); g.lineTo(W, y + 0.05); }
-      g.stroke();
-      g.fillStyle = 'rgba(20,22,26,0.7)';
-      for (let y = step; y < H; y += step) for (let x = 0.5; x < W; x += 1) { g.fillRect(x - 0.04, y - 0.16, 0.08, 0.08); g.fillRect(y - 0.16, x - 0.04, 0.08, 0.08); }
-      g.strokeStyle = 'rgba(214,220,228,0.16)'; g.lineWidth = 0.025; // scuffs
-      for (let i = 0; i < area / 9; i++) { const x = rr(0, W), y = rr(0, H), a = rr(0, TAU), l = rr(0.3, 1.6); g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke(); }
-    } else {
-      g.strokeStyle = 'rgba(12,12,12,0.5)'; g.lineWidth = 0.03; // cracks
-      for (let i = 0; i < area / 70; i++) {
-        let x = rr(0, W), y = rr(0, H), a = rr(0, TAU); g.beginPath(); g.moveTo(x, y);
-        for (let k = 0, n = 5 + R() * 10; k < n; k++) { a += rr(-0.7, 0.7); const l = rr(0.25, 0.9); x += Math.cos(a) * l; y += Math.sin(a) * l; g.lineTo(x, y); if (R() < 0.12) { g.lineTo(x + Math.cos(a + 1.2) * 0.6, y + Math.sin(a + 1.2) * 0.6); g.moveTo(x, y); } }
-        g.stroke();
-      }
-    }
-    for (let i = 0; i < area / 45; i++) { // oil and coolant stains
-      const x = rr(0, W), y = rr(0, H), r = rr(0.4, 1.9), gr = g.createRadialGradient(x, y, 0, x, y, r), a = rr(0.18, 0.42);
-      gr.addColorStop(0, `rgba(10,10,12,${a})`); gr.addColorStop(0.6, `rgba(10,10,12,${a * 0.55})`); gr.addColorStop(1, 'rgba(10,10,12,0)');
-      g.fillStyle = gr; g.beginPath(); g.ellipse(x, y, r, r * rr(0.6, 1), rr(0, 3), 0, TAU); g.fill();
-    }
-    g.strokeStyle = 'rgba(8,8,8,0.24)'; g.lineWidth = 0.2; // tyre marks: twin arcs
-    for (let i = 0; i < area / 150; i++) { const x = rr(0, W), y = rr(0, H), r = rr(3, 10), a0 = rr(0, TAU), a1 = a0 + rr(0.4, 1.5); g.beginPath(); g.arc(x, y, r, a0, a1); g.stroke(); g.beginPath(); g.arc(x, y, r + 1.25, a0, a1); g.stroke(); }
-  } else {
-    for (let i = 0; i < area / 30; i++) { // soft large patches: damp, bleached, drifted
-      const x = rr(0, W), y = rr(0, H), r = rr(1.5, 6), gr = g.createRadialGradient(x, y, 0, x, y, r), col = th.patch[R() < 0.6 ? 0 : 1];
-      gr.addColorStop(0, col); gr.addColorStop(1, col.replace(/,[\d.]+\)$/, ',0)'));
-      g.fillStyle = gr; g.beginPath(); g.ellipse(x, y, r, r * rr(0.5, 1), rr(0, 3), 0, TAU); g.fill();
-    }
-    g.strokeStyle = th.rut; g.lineWidth = 0.3; // vehicle tracks: wandering twin ruts
-    for (let i = 0; i < Math.max(4, area / 500); i++) {
-      let x = rr(0, W), y = rr(0, H), a = rr(0, TAU); const L = [], Rr = [];
-      for (let k = 0, n = 50 + R() * 70; k < n; k++) { a += rr(-0.16, 0.16); x += Math.cos(a) * 1.1; y += Math.sin(a) * 1.1; L.push([x - Math.sin(a) * 0.7, y + Math.cos(a) * 0.7]); Rr.push([x + Math.sin(a) * 0.7, y - Math.cos(a) * 0.7]); }
-      for (const pts of [L, Rr]) { g.beginPath(); pts.forEach((p, k) => (k ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]))); g.stroke(); }
-    }
-    g.fillStyle = 'rgba(70,66,62,0.75)'; // loose stones
-    for (let i = 0; i < area / 5; i++) { const x = rr(0, W), y = rr(0, H), r = rr(0.04, 0.13); g.beginPath(); g.ellipse(x, y, r, r * rr(0.6, 1), rr(0, 3), 0, TAU); g.fill(); }
   }
 
-  // edges of holes and lava: hazard paint on built ground, crumbling dark soil elsewhere
+  // edges of holes and lava: hazard stripes printed on the plate
   const strip = (x0, y0, x1, y1) => {
-    if (built) {
-      g.save(); g.beginPath(); g.rect(x0, y0, x1 - x0, y1 - y0); g.clip();
-      g.fillStyle = 'rgba(232,186,40,0.92)'; g.fillRect(x0, y0, x1 - x0, y1 - y0);
-      g.strokeStyle = 'rgba(24,24,26,0.95)'; g.lineWidth = 0.17; g.lineCap = 'butt'; g.beginPath();
-      for (let c = Math.floor((x0 - y1) / 0.5) * 0.5; c <= x1 - y0 + 0.5; c += 0.5) { g.moveTo(x0 - 0.3, x0 - 0.3 - c); g.lineTo(x1 + 0.3, x1 + 0.3 - c); }
-      g.stroke(); g.restore(); g.lineCap = 'round';
-    } else { g.fillStyle = 'rgba(30,24,18,0.42)'; g.fillRect(x0, y0, x1 - x0, y1 - y0); }
+    g.save(); g.beginPath(); g.rect(x0, y0, x1 - x0, y1 - y0); g.clip();
+    g.fillStyle = 'rgba(232,186,40,0.92)'; g.fillRect(x0, y0, x1 - x0, y1 - y0);
+    g.strokeStyle = 'rgba(24,24,26,0.95)'; g.lineWidth = 0.17; g.lineCap = 'butt'; g.beginPath();
+    for (let c = Math.floor((x0 - y1) / 0.5) * 0.5; c <= x1 - y0 + 0.5; c += 0.5) { g.moveTo(x0 - 0.3, x0 - 0.3 - c); g.lineTo(x1 + 0.3, x1 + 0.3 - c); }
+    g.stroke(); g.restore(); g.lineCap = 'round';
   };
-  const SW = built ? 0.34 : 0.5;
+  const SW = 0.34;
   for (let ty = 0; ty < map.h; ty++) for (let tx = 0; tx < map.w; tx++) {
     if (!open(code(tx, ty))) continue;
     const x0 = tx * T, y0 = ty * T, x1 = x0 + T, y1 = y0 + T, edge = (c) => c === C.pit || c === C.lava;
@@ -461,7 +275,7 @@ function paintDecals(IY, map, th) {
     g.fillStyle = 'rgba(236,240,238,0.92)'; g.fillRect(p.x - 0.16, p.y - 0.55, 0.32, 1.1); g.fillRect(p.x - 0.55, p.y - 0.16, 1.1, 0.32);
   }
   // item points: a stencilled ring with four ticks
-  const ink = th.bricks ? `rgba(${(th.bricks.print >> 16) & 255},${(th.bricks.print >> 8) & 255},${th.bricks.print & 255},0.8)` : th.base[0] === 'snow' ? 'rgba(40,70,120,0.6)' : 'rgba(240,240,236,0.62)';
+  const ink = `rgba(${(th.bricks.print >> 16) & 255},${(th.bricks.print >> 8) & 255},${th.bricks.print & 255},0.8)`;
   for (const s of map.itemSpawns) {
     g.strokeStyle = ink; g.lineWidth = 0.09; g.beginPath(); g.arc(s.x, s.y, 0.95, 0, TAU); g.stroke();
     g.beginPath(); for (let k = 0; k < 4; k++) { const a = k * (TAU / 4) + TAU / 8; g.moveTo(s.x + Math.cos(a) * 1.1, s.y + Math.sin(a) * 1.1); g.lineTo(s.x + Math.cos(a) * 1.5, s.y + Math.sin(a) * 1.5); } g.stroke();
@@ -490,10 +304,9 @@ function paintDecals(IY, map, th) {
 
 // ── materials ───────────────────────────────────────────────────────────
 const G_HEAD = `
-uniform sampler2D tCtl; uniform sampler2D tDecal; uniform sampler2D tBaseA; uniform sampler2D tBaseN;
-uniform sampler2D tMudA; uniform sampler2D tMudN; uniform sampler2D tIceN; uniform sampler2D tNoise;
-uniform vec2 uMapSize; uniform vec3 uScale; uniform float uTime; uniform float uBaseMetal;
-uniform vec3 uLavaCol; uniform vec3 uIceDeep; uniform vec3 uIceFrost; uniform vec3 uTint; uniform vec3 uApron; uniform vec3 uPlate; uniform vec3 uPlateMud;
+uniform sampler2D tCtl; uniform sampler2D tDecal; uniform sampler2D tIceN; uniform sampler2D tNoise;
+uniform vec2 uMapSize; uniform float uTime;
+uniform vec3 uLavaCol; uniform vec3 uIceDeep; uniform vec3 uIceFrost; uniform vec3 uPlate; uniform vec3 uPlateMud;
 varying vec3 vGWorld;
 vec3 gLin(vec3 c) { return pow(c, vec3(2.2)); }
 `;
@@ -507,32 +320,12 @@ vec4 ctl = texture2D(tCtl, (gp + (nzB.rg - 0.5) * 0.9) / uMapSize);
 vec4 ctl0 = texture2D(tCtl, guv);
 float mud = smoothstep(0.36, 0.64, ctl.r + (nzB.b - 0.5) * 0.3) * gin;
 float ice = smoothstep(0.42, 0.58, ctl.g + (nzB.a - 0.5) * 0.16) * gin;
-// base ground: two differently placed copies of the texture, swapped by a slow mask, so the tiling never lines up
-vec2 buv = gp * uScale.x;
-vec2 buv2 = buv * 0.77 + vec2(0.37, 0.61);
-float bmix = smoothstep(0.3, 0.7, nzB.a);
-vec4 bA = mix(texture2D(tBaseA, buv), texture2D(tBaseA, buv2), bmix);
-vec4 bN = mix(texture2D(tBaseN, buv), texture2D(tBaseN, buv2), bmix);
-vec4 nzC = texture2D(tNoise, gp * 0.0057 + vec2(0.11, 0.53));
-vec3 alb = gLin(bA.rgb) * (0.78 + 0.3 * nzA.r + 0.26 * nzC.g) * mix(uApron, uTint, gin);
-float rgh = bA.a;
-vec2 nxy = bN.xy * 2.0 - 1.0;
-float metal = uBaseMetal;
-// mud: dark and lumpy, with standing water in the hollows
-vec2 muv = gp * uScale.y;
-vec4 mA = texture2D(tMudA, muv);
-vec4 mN = texture2D(tMudN, muv);
-float puddle = smoothstep(0.50, 0.60, nzB.r * 0.55 + nzA.g * 0.55) * mud;
-alb = mix(alb, gLin(mA.rgb), mud); rgh = mix(rgh, mA.a, mud); nxy = mix(nxy, mN.xy * 2.0 - 1.0, mud);
-alb = mix(alb, alb * 0.5, puddle); rgh = mix(rgh, 0.2, puddle); nxy *= (1.0 - puddle);
 // ice: clear dark patches, frosted patches, white cracks
-vec4 iN = texture2D(tIceN, gp * uScale.z);
+vec4 iN = texture2D(tIceN, gp / 5.0);
 vec3 iceC = mix(uIceDeep, uIceFrost, smoothstep(0.35, 0.75, nzA.b * 0.5 + nzB.g * 0.5));
 iceC = mix(iceC, vec3(0.86, 0.93, 0.97), iN.a * 0.75);
-alb = mix(alb, iceC, ice); rgh = mix(rgh, mix(0.1, 0.38, iN.a), ice); nxy = mix(nxy, (iN.xy * 2.0 - 1.0) * 0.6, ice);
-metal *= (1.0 - mud) * (1.0 - ice);
-// built of bricks: a baseplate of flat plastic with a stud every 0.4 m, laid as plates one map tile across with a hairline
-// between them. Mud is a patch of brown plates; ice is smooth clear tile with no studs on it, which is why it is slippery
+// Built of bricks: a baseplate of flat plastic with a stud every 0.4 m, in two tones of plate laid as a 4 m chequer, with a
+// hairline between map tiles. Mud is a patch of brown plates; ice is smooth clear tile with no studs, which is why it is slippery
 vec2 sc = fract(gp / 0.4) - 0.5;
 float sr = length(sc);
 vec2 sdir = sc / max(sr, 0.0001);
@@ -547,16 +340,13 @@ plastic = mix(plastic, iceC, ice);
 float studded = (1.0 - ice) * (1.0 - smoothstep(0.22, 0.55, max(fwidth(gp.x), fwidth(gp.y)) / 0.4));
 float sTop = (1.0 - smoothstep(0.26, 0.31, sr)) * studded;
 float sRing = smoothstep(0.19, 0.29, sr) * (1.0 - smoothstep(0.29, 0.37, sr)) * studded;
-alb = plastic * (1.0 + 0.06 * sTop + 0.34 * sRing * dot(sdir, vec2(-0.6, 0.8))) * (1.0 - 0.3 * seam * studded);
-rgh = mix(mix(0.42, 0.55, mud), 0.12, ice);
-nxy = mix(sdir * sRing * 0.7, nxy * 0.5, ice);
-metal = 0.0;
+vec3 alb = plastic * (1.0 + 0.06 * sTop + 0.34 * sRing * dot(sdir, vec2(-0.6, 0.8))) * (1.0 - 0.3 * seam * studded);
+float rgh = mix(mix(0.42, 0.55, mud), mix(0.1, 0.38, iN.a), ice);
+vec2 nxy = mix(sdir * sRing * 0.7, (iN.xy * 2.0 - 1.0) * 0.3, ice);
 // printed markings
 vec4 dc = texture2D(tDecal, guv) * gin;
-float wear = 1.0;
-float da = dc.a * wear * (1.0 - 0.75 * ice) * (1.0 - 0.85 * mud);
+float da = dc.a * (1.0 - 0.75 * ice) * (1.0 - 0.85 * mud);
 alb = mix(alb, gLin(dc.rgb / max(dc.a, 0.004)), da);
-metal *= (1.0 - da);
 // contact shadow at the foot of walls and lips of holes; light spilling from lava
 alb *= mix(1.0, ctl0.a, gin);
 float glow = ctl0.b * gin;
@@ -566,12 +356,10 @@ float gRough = clamp(rgh, 0.04, 1.0);
 vec3 gNrm = normalize(vec3(nxy.x, sqrt(max(0.0, 1.0 - dot(nxy, nxy))), -nxy.y));
 `;
 function groundMaterial(IY, map, th, env, U) {
-  const base = detail(...th.base), mud = detail('mud'), ice = detail('ice');
   Object.assign(U, {
-    tCtl: { value: controlMap(IY, map) }, tDecal: { value: paintDecals(IY, map, th) }, tBaseA: { value: base.a }, tBaseN: { value: base.n },
-    tMudA: { value: mud.a }, tMudN: { value: mud.n }, tIceN: { value: ice.n }, tNoise: { value: detail('noise') },
-    uMapSize: { value: new THREE.Vector2(map.width, map.height) }, uScale: { value: new THREE.Vector3(1 / 4, 1 / 3, 1 / 5) }, uTime: { value: 0 }, uBaseMetal: { value: th.metal || 0 },
-    uPlate: { value: lin(th.bricks.plate) }, uPlateMud: { value: lin(th.bricks.mud) }, uLavaCol: { value: new THREE.Color(1, 0.3, 0.05).multiplyScalar(th.lava || 2) }, uIceDeep: { value: lin(0x4f86ac) }, uIceFrost: { value: lin(0xb4d2e4) }, uTint: { value: new THREE.Vector3(...th.tint) }, uApron: { value: new THREE.Vector3(...(th.apron || th.tint)) },
+    tCtl: { value: controlMap(IY, map) }, tDecal: { value: paintDecals(IY, map, th) }, tIceN: { value: detail('ice').n }, tNoise: { value: detail('noise') },
+    uMapSize: { value: new THREE.Vector2(map.width, map.height) }, uTime: { value: 0 },
+    uPlate: { value: lin(th.bricks.plate) }, uPlateMud: { value: lin(th.bricks.mud) }, uLavaCol: { value: new THREE.Color(1, 0.3, 0.05).multiplyScalar(th.lava || 2) }, uIceDeep: { value: lin(0x4f86ac) }, uIceFrost: { value: lin(0xb4d2e4) },
   });
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, metalness: 0, envMap: env, envMapIntensity: 0.34 });
   m.onBeforeCompile = (sh) => {
@@ -580,7 +368,7 @@ function groundMaterial(IY, map, th, env, U) {
     sh.fragmentShader = G_HEAD + sh.fragmentShader
       .replace('#include <map_fragment>', G_MAP)
       .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = gRough;')
-      .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = metal;')
+      .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = 0.0;')
       .replace('#include <normal_fragment_maps>', 'normal = normalize((viewMatrix * vec4(gNrm, 0.0)).xyz);')
       .replace('#include <emissivemap_fragment>', 'totalEmissiveRadiance += gEmis;');
   };
@@ -716,20 +504,15 @@ export function buildArena(IY, map, env) {
 
   // walls: only exposed faces, textured in world space so runs of tiles read as one structure
   {
-    const side = new Mesher(), top = new Mesher(), rock = !!th.rock;
-    const hgt = (cx, cy) => (rock ? 1.9 + 1.1 * hash2(Math.floor(cx / 3), Math.floor(cy / 3), 1) + 0.7 * hash2(cx, cy, 2) : th.wallH);
-    const AMP = [0.1, 0.3, 0.22];
-    const pt = (cx, cy, lvl) => (rock ? [cx * T + (hash2(cx, cy, 10 + lvl) - 0.5) * 2 * AMP[lvl], cy * T + (hash2(cx, cy, 20 + lvl) - 0.5) * 2 * AMP[lvl]] : [cx * T, cy * T]);
+    const side = new Mesher(), top = new Mesher(), HW = th.wallH;
     for (let ty = 0; ty < map.h; ty++) for (let tx = 0; tx < map.w; tx++) {
       if (code(tx, ty) !== C.wall) continue;
-      const q = [[tx, ty], [tx + 1, ty], [tx + 1, ty + 1], [tx, ty + 1]].map(([cx, cy]) => { const p = pt(cx, cy, 2), h = hgt(cx, cy); return { p: [p[0], h, -p[1]], uv: [(cx * T) / 4, (cy * T) / 4] }; });
+      const q = [[tx, ty], [tx + 1, ty], [tx + 1, ty + 1], [tx, ty + 1]].map(([cx, cy]) => ({ p: [cx * T, HW, -cy * T], uv: [(cx * T) / 4, (cy * T) / 4] }));
       top.quad(q[0].p, q[1].p, q[2].p, q[3].p, q[0].uv, q[1].uv, q[2].uv, q[3].uv, 1);
       for (const [dx, dy, ax, ay, bx, by] of SIDES) {
         if (code(tx + dx, ty + dy) === C.wall) continue;
-        const ca = [tx + ax, ty + ay], cb = [tx + bx, ty + by], ha = hgt(...ca), hb = hgt(...cb), ua = (dx ? ca[1] : ca[0]) * T, ub = (dx ? cb[1] : cb[0]) * T;
-        const ring = (lvl, f) => { const a = pt(...ca, lvl), b = pt(...cb, lvl); return [[a[0], ha * f, -a[1]], [b[0], hb * f, -b[1]], [ua / 4, (ha * f) / 4], [ub / 4, (hb * f) / 4]]; };
-        const lv = rock ? [ring(0, 0), ring(1, 0.5), ring(2, 1)] : [ring(0, 0), ring(2, 1)], sh = rock ? [0.5, 0.86, 1] : [0.55, 1];
-        for (let k = 0; k + 1 < lv.length; k++) side.quad(lv[k][0], lv[k][1], lv[k + 1][1], lv[k + 1][0], lv[k][2], lv[k][3], lv[k + 1][3], lv[k + 1][2], sh[k], sh[k], sh[k + 1], sh[k + 1]);
+        const A = [(tx + ax) * T, (ty + ay) * T], B = [(tx + bx) * T, (ty + by) * T], ua = (dx ? A[1] : A[0]) / 4, ub = (dx ? B[1] : B[0]) / 4;
+        side.quad([A[0], 0, -A[1]], [B[0], 0, -B[1]], [B[0], HW, -B[1]], [A[0], HW, -A[1]], [ua, 0], [ub, 0], [ub, HW / 4], [ua, HW / 4], 0.55, 0.55, 1, 1);   // darker at the foot
       }
     }
     if (!side.empty) {
@@ -754,9 +537,8 @@ export function buildArena(IY, map, env) {
       });
     }
     if (!side.empty) {
-      const bag = th.barrier[0] === 'sandbag';
       add(side.build(), std(detail(...th.barrier), { roughness: 0.45 }), { cast: true });
-      add(top.build(), std(bag ? detail(...th.barrier) : detail('plain', ...rgb(th.bricks.low)), { roughness: 0.45 }), { cast: true });
+      add(top.build(), std(detail('plain', ...rgb(th.bricks.low)), { roughness: 0.45 }), { cast: true });
     }
   }
 
@@ -843,21 +625,6 @@ export function buildArena(IY, map, env) {
       const a = new THREE.Mesh(post, pm), b = new THREE.Mesh(lamp, lm);
       a.position.set(p.x + sx * 0.86, 0.225, -(p.y + sy * 0.86)); b.position.set(p.x + sx * 0.86, 0.48, -(p.y + sy * 0.86)); a.castShadow = true;
       group.add(a, b);
-    }
-  }
-
-  // floodlight masts outside the corners of a walled yard
-  const glows = [];
-  if (th.props && !th.void) {
-    const pole = new THREE.BoxGeometry(0.4, 15, 0.4), head = new THREE.BoxGeometry(3.2, 1.2, 0.5), face = new THREE.PlaneGeometry(2.9, 0.95), gt = glowTexture();
-    const dark = new THREE.MeshStandardMaterial({ color: lin(0x30363d), roughness: 0.7 }), lit = new THREE.MeshBasicMaterial({ color: lin(0xfff3d6), toneMapped: false });
-    const gm = new THREE.SpriteMaterial({ map: gt, color: lin(0xffe6b0), transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false });
-    owned.push(pole, head, face, dark, lit, gm, gt);
-    for (const [x, y] of [[-5, -5], [W + 5, -5], [-5, H + 5], [W + 5, H + 5]]) {
-      const g2 = new THREE.Group(), a = new THREE.Mesh(pole, dark), b = new THREE.Mesh(head, dark), c = new THREE.Mesh(face, lit), s = new THREE.Sprite(gm);
-      a.position.y = 7.5; b.position.y = 15.4; c.position.set(0, 15.4, 0.26); s.position.set(0, 15.4, 0.6); s.scale.set(9, 9, 1);
-      g2.add(a, b, c, s); g2.position.set(x, 0, -y); g2.lookAt(W / 2, 0, -H / 2);
-      group.add(g2);
     }
   }
 

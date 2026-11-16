@@ -189,7 +189,8 @@ export function sampleTelemetry(w) {
       // standing by choice while there is an enemy to go for and none within reach of a gun: the command asked for no
       // movement, so nothing above counts it, and yet nothing is going to happen (a guard that zeroes the throttle,
       // a route with no next step). Not on a repair pad, where standing still is the point; not with nothing left to drive on.
-      else if (v.stun <= 0 && !inReach && near < Infinity && (reach > 0 || lob > 0) && T.immobileAt === null && tileCodeAt(w.map, v.x, v.y) !== TILE_CODE.pad) { T.parked += h; T.parkedDist += near * h; }
+      // (`under`: an enemy inside a mortar's minimum range is too near, not out of reach, and has its own counter)
+      else if (v.stun <= 0 && !inReach && !under && near < Infinity && (reach > 0 || lob > 0) && Math.abs(v.cmd.throttle) <= 0.15 && T.immobileAt === null && tileCodeAt(w.map, v.x, v.y) !== TILE_CODE.pad) { T.parked += h; T.parkedDist += near * h; }
     }
     else if (v.vx * v.fx + v.vy * v.fy < -0.3) T.reversing += h;
     if (line) timelinePoint(w, v, near);

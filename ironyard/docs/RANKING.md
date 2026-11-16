@@ -155,7 +155,7 @@ All **6916** matches — 5320 solo, 840 doubles, 756 triples — were played on 
 
 - **The kit was rebalanced against a weapon bench** (one hull, one plain controller, different loadouts at the same price: `node tools/weapon-bench.mjs`). Missiles, flamethrowers and fire were weakened, the railgun and the shield generator strengthened, cannon and mortar retimed. The figures and the reasoning are in [DESIGN.md](DESIGN.md).
 - **Six maps were added** (Scrap Cage, Salt Flat, Causeway, Rat Run, Fogbank, Ring Road) with two new tiles, smoke and speed strips. The team queues now play 42 rounds, three times round the maps.
-- **Two engine fixes** change how every car behaves: a last-seen note the team can see is wrong is dropped (two cars that passed each other unseen used to park on each other's old position until the zone closed), and a missile no longer homes on a target its team cannot see.
+- **Two engine fixes** change how every car behaves: a last-seen note is dropped once one of the team has been to the spot and found nobody there (two cars that passed each other unseen used to park on each other's old position until the zone closed), and a missile no longer homes on a target its team cannot see.
 
 The entries' `author` labels are now their recorded model names, at the repository owner's request; that edit changes each file's hash but not a line of its design or controller.
 

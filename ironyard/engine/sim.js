@@ -733,12 +733,14 @@ export class World {
     for (const team of [0, 1]) {
       for (const ls of this.lastSeen[team]) {
         const e = vs[ls.id];
-        if (!e.alive) { ls.alive = false; continue; }
+        if (!e.alive) { ls.alive = false; ls.stale = false; continue; }   // a death is always told, wherever the note had got to
         if (this.visibleTo(team, e)) { ls.x = r2(e.x); ls.y = r2(e.y); ls.t = r2(this.t); ls.stale = false; }
-        // the team can see the spot where it last saw this enemy, and the enemy is not there: the note is worth nothing now,
-        // and is kept from the controllers until the enemy is seen again (else two cars that passed each other unseen
-        // each sit on the other's old position for the rest of the match)
-        else if (!ls.stale && this.visibleTo(team, { x: ls.x, y: ls.y, radius: 0, revealT: -1 })) ls.stale = true;
+        // Somebody of the team is standing on the spot where this enemy was last seen, and it is not to be seen: the note
+        // is worth nothing now, and is kept from the controllers until the enemy is seen again (else two cars that passed
+        // each other unseen each sit on the other's old position for the rest of the match). "On the spot" is within
+        // smoke's own sight: from there not even smoke could hide a car that was still at the place or beside it — seeing
+        // the spot from across the map proves nothing, the enemy may have stepped into a bank of smoke next to it.
+        else if (!ls.stale && this.teams[team].some((a) => a.alive && (a.x - ls.x) ** 2 + (a.y - ls.y) ** 2 <= TILES.smoke.sight ** 2)) ls.stale = true;
       }
     }
 
@@ -1434,6 +1436,12 @@ export class World {
   }
 
   // ── vision & observations ─────────────────────────────────────────────
+  /** Is the point within the sensor range of a living vehicle of the team? (Range alone: smoke hides vehicles, see visibleTo.) */
+  inSensorRange(team, x, y) {
+    for (const a of this.teams[team]) if (a.alive && (a.x - x) ** 2 + (a.y - y) ** 2 <= a.sensor * a.sensor) return true;
+    return false;
+  }
+
   visibleTo(team, e) {
     if (e.revealT > this.t) return true; // muzzle flash
     const hidden = tileCodeAt(this.map, e.x, e.y) === T.smoke;   // in smoke: seen only from close by
@@ -1544,7 +1552,7 @@ export class World {
     for (const m of this.mines) {
       if (m.team === v.team) continue;
       const d = Math.hypot(m.x - v.x, m.y - v.y);
-      if (d < 5 || (radar && this.visibleTo(v.team, { x: m.x, y: m.y, radius: 0, revealT: -1 }))) mines.push({ x: r2(m.x), y: r2(m.y) });
+      if (d < 5 || (radar && this.inSensorRange(v.team, m.x, m.y))) mines.push({ x: r2(m.x), y: r2(m.y) });
     }
     return mines;
   }

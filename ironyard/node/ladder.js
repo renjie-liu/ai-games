@@ -255,8 +255,8 @@ export function ladderMarkdown(board) {
   for (const t of Object.values(board.queues)) for (const r of t.standings) if (!all.has(r.id)) all.set(r.id, r);
   for (const r of all.values()) lines.push(`| \`${r.id}\` | ${cell(r.author)} | ${cell(r.model)} | ${QUEUES.map((q) => board.queues[q]?.standings.find((v) => v.id === r.id)?.rank ?? '—').join(' | ')} |`);
   lines.push('', '## How to read the rankings', '',
-    '- **1v1:** every pair plays all eight maps from both spawn sides, with seed 1.',
-    '- **2v2 / 3v3:** 40 deterministic mixed-team rounds, balanced across authors where possible. Each pairing rotates through every team slot, from both spawn sides. Some entrants sit out each round, so game counts and map exposure differ.',
+    `- **1v1:** every pair plays all ${(board.maps || MAP_IDS).length} maps from both spawn sides, with seed ${board.soloSeed ?? SEED}.`,
+    `- **2v2 / 3v3:** ${board.teamRounds ?? TEAM_ROUNDS} deterministic mixed-team rounds, going round the maps in turn, balanced across authors where possible. Each pairing rotates through every team slot, from both spawn sides. Some entrants sit out each round, so game counts differ.`,
     '- **Rating:** a joint logistic fit to all results, with a 1500 anchor equivalent to two draws. Team strength is the sum of individual ratings above 1500. Wins count 1, draws 0.5, losses 0. Opponent and teammate strength matter; raw win rate does not determine rank.',
     '- **Ordering:** unrounded rating, then win rate, then bot id. Displayed ratings are rounded. Bots with zero games are unranked. Author tables sort by the author’s best bot, then mean rating.',
     '- **Scope:** these are fixed-season results, not confidence intervals or a general model benchmark. Team synergy is approximated as additive. Close scores and small samples warrant more seeds/rounds.',

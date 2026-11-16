@@ -154,7 +154,7 @@ export const PARTS = {
     cost: 170, mass: 15, hp: 200, burn: 0.8,
     dmg: 28, salvo: 2, cooldown: 3.8, projSpeed: 13, turn: 2.6, ttl: 4.5, range: 32, recoil: 40, splash: { r: 1, f: 0.5, max: 4 },
     arc: deg(60), traverse: 6, energyShot: 16, dtype: 'explosive',
-    desc: 'Fires two homing missiles with splash. Slow enough to dodge behind walls.',
+    desc: 'Fires two homing missiles with splash. A missile steers for its target only while your team can see it (in sensor range, or in the 1.5 s after it fires): out of sight it flies on straight, so a radar is what makes the full range usable. Slow enough to dodge behind walls.',
   },
   mortar: {
     name: 'Mortar 2x2', cat: 'weapon', glyph: 'N', layer: 'deck', size: [2, 2], directional: true, weapon: 'lob',
@@ -330,7 +330,7 @@ export const TILES = {
   barrel:  { ch: '!', name: 'Powder barrel', solid: true, blocksShots: true, hp: 40, blast: { dmg: 70, r: 3, max: 8 },
     desc: 'Blocks the way until something touches it off: 40 hp, then a blast that hits everything within 3 m, shoves it and sets it alight. Barrels set each other off.' },
   smoke:   { ch: 's', name: 'Smoke', sight: 7,
-    desc: 'A vehicle whose centre is in smoke is seen only from within 7 m, whatever the sensors — until it fires, which gives it away for 1.5 s as anywhere. Missiles lose their lock on it. Smoke stops no shot and slows nobody.' },
+    desc: 'A vehicle whose centre is in smoke is seen only from within 7 m, whatever the sensors — until it fires, which gives it away for 1.5 s as anywhere. A missile stops steering for a target it cannot see. Smoke stops no shot, slows nobody, and hides nothing that lies on the ground (mines, kegs, barrels).' },
   turbo:   { ch: '=', name: 'Speed strip', drive: 1.5,
     desc: 'Wheels, tracks and hover pads push 50% harder while the vehicle is on it. A fast lane for a flank or a getaway.' },
 };

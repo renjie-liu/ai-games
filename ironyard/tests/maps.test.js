@@ -30,6 +30,8 @@ test('every map: spawns, item spots and repair pads are joined by ground a wheel
     for (const s of m.spawns.flat()) { const c = nav.clearance(s.x, s.y); assert.ok(c.wall > 1.9 && c.pit > 2.5, `${id}: a spawn with ${c.wall} m to a wall and ${c.pit} m to a hole`); }
     // point symmetry: what one side has, the other has
     for (let i = 0; i < m.tiles.length; i++) assert.equal(m.tiles[i], m.tiles[m.tiles.length - 1 - i], `${id}: tile ${i} has no twin`);
+    // no two pick-ups within reach of one car at once (an item spot on the map's middle rows would be mirrored on to its neighbour)
+    for (const a2 of m.itemSpawns) for (const b2 of m.itemSpawns) if (a2 !== b2) assert.ok(Math.hypot(a2.x - b2.x, a2.y - b2.y) >= 6, `${id}: item spots ${a2.id} and ${b2.id} are ${Math.hypot(a2.x - b2.x, a2.y - b2.y)} m apart`);
   }
 });
 
@@ -119,3 +121,53 @@ test('last seen: a note the team can see is wrong is dropped, and comes back whe
   assert.equal(seenBy(p).length, 1);
   assert.ok(Math.abs(seenBy(p)[0].x - q.x) < 0.1 && seenBy(p)[0].stale === undefined);
 });
+
+test('last seen and smoke: stepping into smoke beside the spot does not erase the note; a death is told even after the note went stale', () => {
+  const map = MAPS.fogbank;
+  // a smoke tile on the western edge of the eastern bank, with plain floor to the west of it
+  let edge = null;
+  for (let n = 0; n < 400 && !edge; n++) { const t = tileOf(map, 'smoke', n); if (!t) break; const west = TILE_NAME[map.tiles[Math.floor(t.y / TILE) * map.w + Math.floor(t.x / TILE) - 1]]; if (t.x > 40 && west === 'floor') edge = t; }
+  assert.ok(edge);
+  const { w, p, q, run } = world(map);
+  put(w, q, edge.x - 1.6, edge.y, Math.PI);                 // on the floor, just outside the smoke
+  put(w, p, edge.x - 16.6, edge.y);                         // 15 m west of it, well inside sensor range
+  run(0.1);
+  const view = () => w.observeAll()[p.id];
+  assert.equal(view().enemies.length, 1);
+  put(w, q, edge.x, edge.y, Math.PI);                       // one step east, into the smoke
+  run(0.1);
+  assert.equal(view().enemies.length, 0, 'it is hidden now');
+  assert.equal(view().lastSeen.length, 1, 'but where it was last seen is still known: that is where to go and look');
+  assert.ok(Math.abs(view().lastSeen[0].x - (edge.x - 1.6)) < 0.1);
+  // go there: from the spot itself the car one step into the smoke is in plain sight again
+  put(w, p, edge.x - 5, edge.y);
+  run(0.1);
+  assert.equal(view().enemies.length, 1, 'within smoke sight of where it stands');
+
+  // a note that went stale, and then the enemy dies unseen: its death is still reported
+  const far = world(MAPS.saltflat);
+  put(far.w, far.p, 10, 10); put(far.w, far.q, 70, 54);
+  far.run(0.1);
+  const note = far.w.observeAll()[far.p.id].lastSeen[0];
+  put(far.w, far.p, note.x - 3, note.y);
+  far.run(0.1);
+  assert.deepEqual(far.w.observeAll()[far.p.id].lastSeen, [], 'stale: dropped');
+  far.w.kill(far.q, null, 'zone');
+  far.run(0.1);
+  const after = far.w.observeAll()[far.p.id].lastSeen;
+  assert.equal(after.length, 1); assert.deepEqual([after[0].id, after[0].alive], [far.q.id, false]);
+});
+
+test('smoke hides vehicles, not what lies on the ground: a radar still shows a mine under it', () => {
+  const map = MAPS.fogbank;
+  let s = null;
+  for (let n = 0; n < 400 && !s; n++) { const t = tileOf(map, 'smoke', n); if (!t) break; if (t.x > 46 && t.x < 52) s = t; }
+  const scout = car([{ type: 'radar', x: 1, y: 0, z: 1 }]);
+  const { w, p, q, run } = world(map, scout, car());
+  put(w, p, s.x - 16, s.y); put(w, q, 6, 50);
+  w.mines.push({ x: s.x, y: s.y, team: q.team, owner: q.id, armed: 0 });
+  run(0.1);
+  assert.equal(w.observeAll()[p.id].self.tile !== 'smoke', true);
+  assert.deepEqual(w.observeAll()[p.id].mines, [{ x: Math.round(s.x * 100) / 100, y: Math.round(s.y * 100) / 100 }], 'the mine in the smoke, 16 m off, is on the radar');
+});
+

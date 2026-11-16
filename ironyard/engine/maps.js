@@ -97,7 +97,7 @@ const RAW = {
     desc: 'Wide open and almost bare: two low barriers, one pillar, a mud wallow in the middle and a speed strip down each flank. Whoever sees further and shoots further has the first word; speed has the last.',
     items: ['repair', 'shield', 'overdrive', 'nitro', 'mine', 'emp'],
     ops: [['-', 10, 9, 3, 1], ['-', 31, 9, 3, 1], ['#', 21, 11, 2, 1], ['=', 2, 4, 2, 12], ['=', 40, 4, 2, 12], ['m', 19, 14, 6, 2]],
-    spawns: [[21, 2], [11, 3], [32, 3]], itemSpots: [[5, 15], [38, 15], [21, 7], [9, 12]],
+    spawns: [[21, 2], [11, 3], [32, 3]], itemSpots: [[5, 12], [38, 12], [21, 7], [13, 14]],
   },
   causeway: {
     name: 'Causeway', w: 36, h: 28, border: '#',

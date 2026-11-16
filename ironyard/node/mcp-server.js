@@ -685,7 +685,9 @@ function serveHttp(port, host) {
       // call has run for SSE_AFTER_MS — headers at once, a comment line every 15 s, then the answer as the one event.
       let out;
       if (/text\/event-stream/.test(String(req.headers.accept || ''))) {
-        const quick = await Promise.race([work.then((v) => ({ v })), new Promise((r) => setTimeout(r, SSE_AFTER_MS, null))]);
+        let patience;
+        const quick = await Promise.race([work.then((v) => ({ v })), new Promise((r) => { patience = setTimeout(r, SSE_AFTER_MS, null); })]);
+        clearTimeout(patience);   // a call that answered first must not leave its timer running behind it
         if (quick) out = quick.v;
         else {
           res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', ...cors });

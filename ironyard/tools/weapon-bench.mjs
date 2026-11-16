@@ -114,6 +114,8 @@ const refs = flag('refs', '').split(',').filter(Boolean);
 const all = [...ids, ...refs];
 if (flag('dump')) { fs.mkdirSync(flag('dump'), { recursive: true }); for (const id of ids) fs.writeFileSync(path.join(flag('dump'), `${id}.js`), over[id]); }
 const maps = flag('maps', MAP_IDS.join(',')).split(','), seeds = flag('seeds', '1').split(',').map(Number);
+const unknown = maps.filter((m) => !MAP_IDS.includes(m));
+if (unknown.length || seeds.some((x) => !Number.isInteger(x) || x < 1)) { console.error(unknown.length ? `unknown map ${unknown.join(', ')}: the maps are ${MAP_IDS.join(', ')}` : '--seeds takes whole numbers from 1, e.g. 1,2'); process.exit(2); }
 const pool = new MatchPool({});
 const jobs = [];
 for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
@@ -124,13 +126,17 @@ const t0 = Date.now();
 const out = await Promise.all(jobs.map((j) => pool.run({ map: j.map, mode: '1v1', seed: j.seed, swap: j.swap, teams: withSources([[j.a], [j.b]], over), want: 'score' }).then((s) => ({ j, w: s.winner, err: s.errors && s.errors.length ? s.errors[0] : null })).catch((e) => ({ j, w: -2, err: e.message }))));
 await pool.close();
 const W = Object.fromEntries(all.map((a) => [a, { w: 0, l: 0, d: 0, vs: {} }]));
-for (const { j, w } of out) {
+// a match that could not be played, or in which a controller threw, tells nothing about the parts: it is left out of
+// every count and reported, and the run ends with an error — a table built on half the matches is not the table asked for
+const failed = out.filter((x) => x.err);
+for (const { j, w, err } of out) {
+  if (err) continue;
   const A = W[j.a], B = W[j.b];
   (A.vs[j.b] ||= [0, 0]); (B.vs[j.a] ||= [0, 0]);
   if (w === 0) { A.w++; B.l++; A.vs[j.b][0]++; B.vs[j.a][1]++; } else if (w === 1) { B.w++; A.l++; B.vs[j.a][0]++; A.vs[j.b][1]++; } else { A.d++; B.d++; }
 }
-const errs = out.filter((x) => x.err);
-console.log(`\n${jobs.length} matches in ${Math.round((Date.now() - t0) / 1000)} s${errs.length ? `, ${errs.length} with errors: ${errs[0].err.slice(0, 160)}` : ''}`);
+console.log(`\n${jobs.length} matches in ${Math.round((Date.now() - t0) / 1000)} s${failed.length ? `; ${failed.length} FAILED and are not counted — first: ${failed[0].j.a} v ${failed[0].j.b} on ${failed[0].j.map}: ${String(failed[0].err).slice(0, 160)}` : ''}`);
+if (failed.length) process.exitCode = 1;
 const short = (id) => id.replace('b-', '').slice(0, 7);
 console.log('\n' + 'vs'.padEnd(11) + all.map((a) => short(a).padStart(8)).join('') + '   | win%');
 for (const a of [...all].sort((x, y) => W[y].w / (W[y].w + W[y].l + W[y].d || 1) - W[x].w / (W[x].w + W[x].l + W[x].d || 1))) {

@@ -280,6 +280,17 @@ test('insights: the findings a situation should give, by kind and in words', () 
   close.run(8);
   assert.equal(close.w.telemetry(close.p).move.timeParked, 0);
   assert.equal(wall.w.telemetry(wall.q).move.timeParked, 0, 'no guns: nothing it is failing to bring to bear');
+  // an enemy inside a mortar's minimum range is too near, not out of reach: that has its own counter
+  const lobber = car([{ type: 'mortar', x: -1, y: 1, z: 1, dir: 'N' }]);
+  const under = duel(lobber, car(), { gap: 4 });
+  under.run(8);
+  assert.equal(under.w.telemetry(under.p).move.timeParked, 0);
+  assert.ok(under.w.telemetry(under.p).fire.timeTargetTooClose >= 7);
+  // and a car that is asking to move, however gently, is not standing by choice
+  const creeping = duel(armed, armed, { at: { x: 3.6, y: 9 }, heading: Math.PI, gap: -30 });
+  creeping.w.setCommand(creeping.p, { throttle: 0.4 });
+  creeping.run(8);
+  assert.equal(creeping.w.telemetry(creeping.p).move.timeParked, 0);
 });
 
 test('a real match: the summary carries telemetry and at most six insights per vehicle, small enough to read', () => {
