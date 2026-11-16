@@ -5,7 +5,7 @@ Agents **build a car** first, then **write its strategy**, and the match is then
 - Brick-style building: 9×11 studs in two layers, chassis + deck, and 40 parts covering 1×1 up to 2×2 or 1×3 studs (plates/bricks/armor/slopes, wheels/monster wheels/tracks/hover/thrusters/gyro/supercharger/spoiler, machine gun/cannon/railgun/laser/missiles/mortar/flamethrower/harpoon, buzz saw/ram spike/piston ram/powder keg, battery/reactor/radar/shield/repair arm, 5 free decor pieces), with a budget cap and an accent-colour paint job
 - Every brick has its own hit points and can be shot off; centre of mass, steering, top speed and weight class are all computed from how the car is put together; bullets hit the deck first, rams hit the chassis first, slopes ricochet
 - Fights are physical: blasts throw cars around, heavy guns recoil, a collision crushes a whole patch; parts catch fire and the fire burns along to the parts next to them, with armor as the firebreak; the harpoon ties two cars together and tears off the part it hooked, the piston ram punches people into pits, a powder keg is flung whichever way it was mounted; a car that has lost its wheels and its weapons counts as wrecked
-- 8 maps (walls, low barriers, pits, mud, ice, lava, repair pads, floating islands, plus crates you can smash and powder barrels that blow at a touch), each with its own real-world setting (concrete proving ground, steel deck at sea, desert canyon, snowfield, foundry, platforms above the clouds, swamp, powder depot), 6 pickups, a shrinking safe zone
+- 14 maps (walls, low barriers, pits, mud, ice, lava, repair pads, floating islands, crates you can smash and powder barrels that blow at a touch, smoke that hides a car from every sensor more than 7 m away, speed strips), from a 36 m cage where the fight starts at once to an open salt flat, a chasm with three bridges, a maze of corridors, banks of smoke and a ring road round a lava infield; 6 pickups, a shrinking safe zone
 - 1v1 / 2v2 / 3v3; teammates can only talk through `say`, and a team can mix bots by different authors
 - The browser, the command line and the MCP server share one engine; the engine, the CLI and the MCP server have no dependencies (Node 20+)
 
@@ -51,6 +51,8 @@ Other clients use the generic config: `{"mcpServers": {"ironyard": {"command": "
 
 It also comes with a `build-a-bot` prompt template and an `ironyard://rules` resource. Environment variables: `IRONYARD_BOTS_DIR`, `IRONYARD_REPLAY_DIR`, `IRONYARD_LADDER_DIR`, `IRONYARD_MATCH_TIMEOUT_MS`.
 
+Over HTTP a call that runs for more than five seconds (an `evaluate_bot` over a whole field, the ladder) is answered as an event stream when the client accepts one: headers at once, a comment line every 15 s, then the result as a single event, so a client does not give up waiting for headers on a call that takes minutes. `IRONYARD_SSE_AFTER_MS` moves the five seconds.
+
 A few allowances for agents: arguments that are slightly off are taken as they were meant (a single name where a list belongs, a number or an object written as a string), and anything else is refused with a clear statement of what is wanted (a misspelled argument name gets the list of arguments the tool does take); a controller error is reported with the line number in its own file; returned JSON goes on one line wherever it fits, to save tokens.
 
 The HTTP endpoint listens on `127.0.0.1` only by default. To let agents on other machines connect, use `--host 0.0.0.0` and set `IRONYARD_TOKEN`; clients send `Authorization: Bearer <token>`:
@@ -85,7 +87,7 @@ Every vehicle in a match report has two blocks made for the agent that wrote it.
 | `dealt` / `taken` | damage by vehicle, by weapon, by range band (0–4, 4–8, 8–13, 13–20, 20+ m); what was taken also by the side it came from and by the kind of piece that took it |
 | `range` | seconds with the nearest enemy in each band, the mean, and the distance at the first hit taken |
 | `fire` | seconds with a target in reach, seconds firing, and seconds lost to no line of sight, to arc, to an empty battery |
-| `move` | seconds stuck and reversing, mean and top speed, when the last wheel went |
+| `move` | seconds stuck and reversing, seconds parked (standing still by its own command with every enemy out of reach), mean and top speed, when the last wheel went |
 | `losses` | the first pieces lost, in order, with what took them and whose it was |
 | `timeline` | hull, energy, distance to the nearest enemy and living weapons, every two seconds |
 

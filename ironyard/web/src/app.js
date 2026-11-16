@@ -614,8 +614,8 @@ function renderLadder() {
     : LB.by === 'author'
       ? 'Authors are ordered by their best bot, then mean rating. An author is a self-declared entrant label, not necessarily a model.'
       : LB.queue === '1v1'
-        ? 'Every pair, all eight maps, seed 1, both spawn sides. Rating fits all results with a 1500 anchor; rank uses unrounded rating, not win percentage.'
-        : '40 mixed-team rounds; each pairing plays every team slot from both spawn sides. Rating estimates individual contribution, accounting for teammates and opponents. Game counts and map exposure differ.';
+        ? `Every pair, all ${(data.maps || IY.MAP_IDS).length} maps, seed ${data.soloSeed ?? 1}, both spawn sides. Rating fits all results with a 1500 anchor; rank uses unrounded rating, not win percentage.`
+        : `${data.teamRounds ?? 40} mixed-team rounds; each pairing plays every team slot from both spawn sides. Rating estimates individual contribution, accounting for teammates and opponents. Game counts differ.`;
   $('lb-note').textContent = `${notes} This is a saved snapshot; custom tournaments below do not change it.${errors ? ' Match errors require review before comparing scores.' : ''}`;
 }
 

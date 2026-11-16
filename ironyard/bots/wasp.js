@@ -1,14 +1,14 @@
-// WASP — hover missile boat. Six hover pads carry a twin-missile pod, a radar
-// and a point-defence machine gun. It floats over pits, mud, ice and mines,
+// WASP — hover missile boat. Six hover pads carry two twin-missile pods and a
+// radar. It floats over pits, mud, ice and mines,
 // keeps 15-22 m away and lets the homing missiles do the work.
-const meta = { name: 'Wasp', author: 'ironyard', notes: 'Hover kiter: 2 missile racks + radar, stays far, crosses pits.' };
+const meta = { name: 'Wasp', author: 'ironyard', notes: 'Hover kiter: 2 missile pods + radar, stays far, crosses pits.' };
 
 const design = (ctx, api) => api.util.blueprint('Wasp', {
   deck: [
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  /^ /^ /^ .  .  .',
-    '.  .  m^ :  :  a  m^ .  .',
-    '.  .  .  M^ :  d  .  .  .',
+    '.  .  :  :  a  :  :  .  .',
+    '.  .  M^ :  d  M^ :  .  .',
     '.  .  .  a  @  a  .  .  .',
     '.  .  .  f^ t  f^ .  .  .',
     '.  .  .  .  .  .  .  .  .',
@@ -21,10 +21,10 @@ const design = (ctx, api) => api.util.blueprint('Wasp', {
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  p  p  p  .  .  .',
     '.  h  p  p  p  p  p  h  .',
-    '.  .  .  p  r  p  .  .  .',
+    '.  .  p  p  r  p  p  .  .',
     '.  h  p  p  p  p  p  h  .',
     '.  .  .  r  e  p  .  .  .',
-    '.  h  p  p  J^ p  p  h  .',
+    '.  h  p  p  p  p  p  h  .',
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  .  .  .  .  .  .',

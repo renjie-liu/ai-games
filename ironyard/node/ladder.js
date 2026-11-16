@@ -16,7 +16,8 @@ import { withSources } from './runner.js';
 
 export const LADDER_DIR = process.env.IRONYARD_LADDER_DIR ? path.resolve(process.env.IRONYARD_LADDER_DIR) : path.join(ROOT, 'ladder');
 export const QUEUES = ['1v1', '2v2', '3v3'];
-export const TEAM_ROUNDS = 40;
+// rounds per team queue: at least 40, and a whole number of times round the maps, so that every map is played equally often
+export const TEAM_ROUNDS = Math.ceil(40 / MAP_IDS.length) * MAP_IDS.length;
 export const LADDER_METHOD = 'mixed-slot-rotation-v2';
 const SEED = 1, START = 1500, PRIOR = 2;
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
