@@ -81,6 +81,8 @@ A bot's author is the `author` in its `meta`: a self-declared entrant label. Aut
 
 The saved ladder now includes an overview across modes, completion counts and model attribution. Its fitted ratings differ from the browser’s custom round-robin points (win 3, draw 1; same bot in every team slot). Neither is a general model benchmark. See [ranking methodology and audit](docs/RANKING.md) for the formula, schedule, fixes and limitations.
 
+Custom tournaments report failed matches as unscored or an attributed forfeit, with completion counts; failed matches never earn draw points. The browser's **Stop** button keeps completed results, and arena matches can run while a tournament is in progress. Head-to-head **Watch** buttons use the completed tournament's map, seed, side, mode, budget and controller sources. Starting another tournament begins a new run. CLI tournaments exit with an error status if any match failed.
+
 [TOURNAMENT.md](TOURNAMENT.md) records the separate seven-entry round robin for Fable, Opus, Sol, Astra, Carbon, Hydrogen and Muse: all eight maps, seeds 1 and 2, both spawn sides, and all three modes. It includes points, win/loss records, head-to-head results and reproduction commands.
 
 ## Write a bot

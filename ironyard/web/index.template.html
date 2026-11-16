@@ -377,7 +377,7 @@ details > summary { cursor: pointer; padding: 8px 12px; font-weight: 500; }
       <div class="sheet">
         <header><h2>Custom tournament</h2><span class="code">Both spawn sides</span></header>
         <div class="pad stack">
-          <p class="note">Round robin: 3 points for a win, 1 for a draw; hull difference breaks points ties. In team modes, one bot fills every slot. This does not update the saved mixed-team ladder above.</p>
+          <p class="note">Round robin: 3 points for a win, 1 for a draw; hull difference breaks points ties. Matches with runtime or unassigned errors are unscored; attributed controller failures forfeit. In team modes, one bot fills every slot. This does not update the saved mixed-team ladder above.</p>
           <p class="note"><a href="https://github.com/renjie-liu/ai-games/blob/main/ironyard/TOURNAMENT.md" target="_blank" rel="noopener">Saved tournament results: Fable, Opus, Sol, Astra, Carbon, Hydrogen and Muse</a></p>
           <div><div class="cat-h">Entrants (each bot fills its whole team)</div><div class="chips" id="lg-bots"></div></div>
           <div class="row">
@@ -385,7 +385,7 @@ details > summary { cursor: pointer; padding: 8px 12px; font-weight: 500; }
             <label class="f" style="width:110px">Seeds per map<select id="lg-seeds"><option>1</option><option>2</option><option>3</option></select></label>
           </div>
           <div><div class="cat-h">Maps</div><div class="chips" id="lg-maps"></div></div>
-          <div class="row"><button class="btn primary" type="button" id="lg-run">Start</button><span class="note" id="lg-count"></span></div>
+          <div class="row"><button class="btn primary" type="button" id="lg-run">Start</button><button class="btn" type="button" id="lg-stop" hidden>Stop</button><span class="note" id="lg-count"></span></div>
           <div class="progress" aria-hidden="true"><i id="lg-bar"></i></div>
           <div id="lg-msg"></div>
         </div>

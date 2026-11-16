@@ -1,6 +1,6 @@
 # Ironyard leaderboard
 
-Engine 0.5.0 · 20 bots · 1200 credits per vehicle · mixed-slot-rotation-v2.
+Engine 0.5.1 · 20 bots · 1200 credits per vehicle · mixed-slot-rotation-v2.
 
 Status: **Complete**. Reproduce with `node node/cli.js ladder --write`, then `npm run build`.
 

@@ -15,6 +15,7 @@ const replayFile = path.join(os.tmpdir(), 'ironyard-replay-test.json');
 fs.writeFileSync(replayFile, JSON.stringify(runMatch({ mode: '1v1', map: 'canyon', seed: 4, teams: [[loadBot('hornet')], [loadBot('wasp')]] })));
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', headless: true,
   args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+try {
 const page = await browser.newPage();
 await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
 const errors = [];
@@ -130,8 +131,8 @@ await up.uploadFile(replayFile);
 await page.waitForFunction(() => /Replay loaded/.test(document.getElementById('setup-msg').textContent), { timeout: 10000 });
 assert.match(await text('#roster'), /Hornet/); assert.match(await text('#roster'), /Wasp/);
 
-// 5. playback controls: jump to the end -> banner + report
-await page.evaluate(() => { const s = document.getElementById('scrub'); s.value = s.max; s.dispatchEvent(new Event('input')); });
+// 5. Even while paused, seeking to the exact end shows the result immediately.
+await page.evaluate(() => { window.__ironyard.state.playing = false; const s = document.getElementById('scrub'); s.value = s.max; s.dispatchEvent(new Event('input')); });
 await page.waitForFunction(() => !document.getElementById('banner').hidden, { timeout: 5000 });
 assert.match(await text('#banner'), /wins|Draw/);
 assert.match(await text('#report'), /Accuracy/);
@@ -144,9 +145,59 @@ assert.match(await text('#lg-count'), /^18 matches/);
 await page.click('#lg-run');
 await page.waitForFunction(() => !document.getElementById('lg-result').hidden, { timeout: 60000 });
 assert.equal(await page.$$eval('#lg-table tbody tr', (r) => r.length), 3);
-await page.evaluate(() => document.querySelector('#lg-h2h td.h2h button').click());
+assert.match(await text('#lg-msg'), /Complete.*18\/18 scored; 0 unscored/);
+const watched = await page.evaluate(() => [...document.querySelectorAll('#lg-h2h tbody tr')].find(r => r.querySelector('th').textContent === 'my-test-car').querySelector('button').title);
+const matchSettings = /Watch (\w+), seed (\d+)/.exec(watched);
+// Change future tournament settings and source; watch must replay the completed match's snapshot.
+await page.evaluate(() => {
+  const s = window.__ironyard.state;
+  s.league.mode = '3v3'; s.setup.budget = 800; s.setup.seed = 999;
+  s.custom['my-test-car'] = 'const design = {parts:[]}; function tick(){return {}}';
+  [...document.querySelectorAll('#lg-h2h tbody tr')].find(r => r.querySelector('th').textContent === 'my-test-car').querySelector('button').click();
+});
 await ready();
 assert.equal(await page.evaluate(() => location.hash), '#arena');
+
+assert.deepEqual(await page.evaluate(() => {
+  const r = window.__ironyard.state.replay;
+  return [r.mode, r.map, r.seed, window.__ironyard.state.setup.budget, r.vehicles.flatMap(v => v.errors)];
+}), ['1v1', matchSettings[1], Number(matchSettings[2]), 1200, []]);
+await page.evaluate(s => { window.__ironyard.state.custom['my-test-car'] = s; }, src);
+
+// A long league and an arena match can run independently; stop preserves completed results.
+await page.evaluate(() => {
+  const s = window.__ironyard.state;
+  s.league.bots = new Set(['rookie', 'hornet', 'wasp', 'thumper', 'boxer', 'medic']);
+  s.league.maps = new Set(['proving', 'canyon', 'sumo']); s.league.mode = '1v1';
+  document.getElementById('lg-seeds').value = '3';
+});
+await tab('league');
+await page.click('#lg-run');
+assert.equal(await page.$eval('#lg-seeds', n => n.disabled), true);
+assert.equal(await page.$$eval('#lg-bots button', bs => bs.every(b => b.disabled)), true);
+await page.waitForFunction(() => parseFloat(document.getElementById('lg-bar').style.width) > 0);
+await tab('arena');
+await page.click('#reseed'); await ready();
+assert.equal(await page.evaluate(() => window.__ironyard.state.league.running), true);
+await tab('league'); await page.click('#lg-stop');
+await page.waitForFunction(() => !window.__ironyard.state.league.running);
+assert.match(await text('#lg-msg'), /Stopped.*[1-9]\d*\/270 scored.*remaining/);
+assert.equal(await page.$eval('#lg-run', n => n.disabled), false);
+assert.equal(await page.$eval('#lg-stop', n => n.hidden), true);
+
+// Runtime errors produce an unscored, provisional tournament, never two draws.
+await page.evaluate(s => {
+  const st = window.__ironyard.state;
+  st.custom['late-failure'] = s.replace('function tick(state, api) {', 'function tick(state, api) { if (state.t > 9) throw new Error("late fixture failure");');
+  st.league.bots = new Set(['late-failure', 'rookie']); st.league.maps = new Set(['proving']);
+  document.getElementById('lg-seeds').value = '1';
+}, src);
+await tab('league'); await page.click('#lg-run');
+await page.waitForFunction(() => !window.__ironyard.state.league.running);
+assert.match(await text('#lg-msg'), /Provisional.*0\/2 scored; 2 unscored/);
+assert.ok(await page.$$eval('#lg-table tbody tr', rows => rows.every(r => r.cells[2].textContent === '0' && r.cells[4].textContent === '0' && r.cells[8].textContent === '2')));
+assert.equal(await page.$$eval('#lg-h2h button', bs => bs.length), 0);
+await page.evaluate(() => { delete window.__ironyard.state.custom['late-failure']; });
 
 // 7. deep link + reload keeps the custom bot
 await page.goto(appUrl('index.html', '#rules'));
@@ -178,4 +229,4 @@ assert.deepEqual(errors, []);
   await p2.close();
 }
 console.log('UI end-to-end: all checks passed');
-await browser.close();
+} finally { await browser.close(); }

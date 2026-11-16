@@ -9,7 +9,7 @@ const WORKER_URL = new URL('./worker.js', import.meta.url);
 export class MatchPool {
   constructor({ size = Math.max(1, Math.min(4, os.cpus().length)), timeoutMs = 60_000, memoryMb = 512 } = {}) {
     this.size = size; this.timeoutMs = timeoutMs; this.memoryMb = memoryMb;
-    this.idle = []; this.queue = []; this.all = new Set(); this.nextId = 1; this.closed = false;
+    this.idle = []; this.queue = []; this.all = new Set(); this.running = new Map(); this.nextId = 1; this.closed = false;
   }
 
   spawn() {
@@ -22,6 +22,7 @@ export class MatchPool {
 
   /** spec.teams = [[{id, source}], ...]; spec.want = 'full' | 'summary' | 'score' */
   run(spec, { timeoutMs = this.timeoutMs } = {}) {
+    if (this.closed) return Promise.reject(new Error('Match pool is closed'));
     return new Promise((resolve, reject) => {
       this.queue.push({ spec, timeoutMs, resolve, reject });
       this.pump();
@@ -29,6 +30,7 @@ export class MatchPool {
   }
 
   pump() {
+    if (this.closed) return;
     while (this.queue.length && (this.idle.length || this.all.size < this.size)) {
       const job = this.queue.shift();
       const w = this.idle.pop() || this.spawn();
@@ -38,7 +40,7 @@ export class MatchPool {
       let done = false;
       const finish = (fn, reuse) => {
         if (done) return; done = true;
-        clearTimeout(timer); w.off('message', onMsg); w.off('error', onErr);
+        clearTimeout(timer); w.off('message', onMsg); w.off('error', onErr); w.off('exit', onExit); this.running.delete(w);
         if (reuse && !this.closed) this.idle.push(w); else { this.all.delete(w); w.terminate(); }
         fn(); this.pump();
       };
@@ -66,14 +68,20 @@ export class MatchPool {
           ? `match timed out after ${job.timeoutMs} ms: controller "${culprit}" did not return (infinite loop?)`
           : `match timed out after ${job.timeoutMs} ms`), { detail: { timeout: true, bot: culprit } })), false);
       }, job.timeoutMs);
-      w.on('message', onMsg); w.on('error', onErr);
-      w.postMessage({ id, spec: job.spec, trace: sab });
+      const onExit = code => finish(() => job.reject(new Error(`Match worker exited before returning a result (code ${code})`)), false);
+      this.running.set(w, err => finish(() => job.reject(err), false));
+      w.on('message', onMsg); w.on('error', onErr); w.on('exit', onExit);
+      try { w.postMessage({ id, spec: job.spec, trace: sab }); }
+      catch (e) { finish(() => job.reject(e), false); }
     }
   }
 
   async close() {
     this.closed = true;
-    await Promise.all([...this.all].map((w) => w.terminate()));
+    const workers = [...this.all], err = new Error('Match pool is closed');
+    for (const job of this.queue.splice(0)) job.reject(err);
+    for (const stop of [...this.running.values()]) stop(err);
+    await Promise.all(workers.map((w) => w.terminate()));
     this.all.clear(); this.idle.length = 0;
   }
 }

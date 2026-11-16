@@ -13,7 +13,7 @@ import readline from 'node:readline';
 import crypto from 'node:crypto';
 import {
   MAPS, MAP_IDS, MODES, PARTS, ITEMS, TILES, RULES, BUDGETS, DEFAULT_BUDGET, CELL, GRID_HX, GRID_HY, GRID_W, GRID_L, PAINTS, DECOR_LIMIT,
-  validateDesign, parseBlueprint, renderDesign, makeSchedule, standings, summarize, FLAG, ENGINE_VERSION,
+  validateDesign, parseBlueprint, renderDesign, makeSchedule, standings, summarize, FLAG, ENGINE_VERSION, tournamentResult, tournamentStatus, scoredResult,
 } from '../engine/index.js';
 import { ladder, QUEUES } from './ladder.js';
 import { rulesMarkdown } from '../engine/rulesdoc.js';
@@ -250,28 +250,33 @@ const TOOLS = [
       let errors = 0;
       const results = await Promise.all(schedule.map(async (m) => {
         const mine = m.a === name ? 0 : 1;
+        let r;
         try {
           const s = await pool.run({ map: m.map, mode, seed: m.seed, swap: m.swap, budget: a.budget ?? DEFAULT_BUDGET, want: 'summary',
             teams: m.teams.map((t) => t.map((id) => ({ id, source: sources[id] }))) });
-          const won = s.winner === mine, draw = s.winner < 0;
-          const row = (byMap[m.map] ||= { w: 0, d: 0, l: 0 });
-          row[won ? 'w' : draw ? 'd' : 'l']++;
-          for (const v of s.vehicles) if (v.team === mine && v.death) deaths[v.death.cause] = (deaths[v.death.cause] || 0) + 1;
-          if (!won && !draw) losses.push({ opponent: m.a === name ? m.b : m.a, map: m.map, seed: m.seed, swap: m.swap, reason: s.reason, duration: s.duration,
-            hullLeft: [s.teams[mine].hull, s.teams[1 - mine].hull] });
-          if (s.vehicles.some((v) => v.team === mine && v.errors.length)) errors++;
-          return { ...m, winner: s.winner, hull: [s.teams[0].hull, s.teams[1].hull] };
+          if (s.vehicles.some(v => v.team === mine && v.errors.length)) errors++;
+          r = tournamentResult(m, s);
+          if (scoredResult(r)) {
+            for (const v of s.vehicles) if (v.team === mine && v.death) deaths[v.death.cause] = (deaths[v.death.cause] || 0) + 1;
+            if (r.winner >= 0 && r.winner !== mine) losses.push({ opponent: m.a === name ? m.b : m.a, map: m.map, seed: m.seed, swap: m.swap, reason: s.reason, duration: s.duration,
+              hullLeft: [s.teams[mine].hull, s.teams[1 - mine].hull] });
+          }
         } catch (e) {
-          errors++;
-          return { ...m, winner: e.detail && e.detail.bot === name ? 1 - mine : -1, error: e.message };
+          if (e.detail?.bot === name) errors++;
+          r = tournamentResult(m, null, e);
         }
+        if (scoredResult(r)) {
+          const row = (byMap[m.map] ||= { w: 0, d: 0, l: 0 });
+          row[r.winner === mine ? 'w' : r.winner === -1 ? 'd' : 'l']++;
+        }
+        return r;
       }));
       const table = standings(entrants, results);
       const me = table.find((r) => r.id === name);
       losses.sort((x, y) => (y.hullLeft[1] - y.hullLeft[0]) - (x.hullLeft[1] - x.hullLeft[0]));
       const failed = results.filter((r) => r.error);
       return {
-        bot: name, mode, matches: me.played, wins: me.w, draws: me.d, losses: me.l, winRate: me.winRate,
+        bot: name, mode, ...tournamentStatus(results, schedule.length), matches: me.played, wins: me.w, draws: me.d, losses: me.l, winRate: me.winRate,
         vsOpponent: Object.fromEntries(Object.entries(me.vs).map(([k, v]) => [k, `${v.w}W ${v.d}D ${v.l}L`])),
         byMap: Object.fromEntries(Object.entries(byMap).map(([k, v]) => [k, `${v.w}W ${v.d}D ${v.l}L`])),
         howMyVehiclesDied: deaths,
@@ -285,7 +290,7 @@ const TOOLS = [
   {
     name: 'run_tournament',
     title: 'Round robin',
-    description: 'Round-robin between several bots (each fills its whole team) over maps x seeds x both sides. Returns the standings and the head-to-head table.',
+    description: 'Round-robin between several bots (each fills its whole team) over maps x seeds x both sides. Returns standings, head-to-head results and completion counts. Attributed controller failures forfeit; runtime errors or unattributed failures are unscored, not draws.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -310,16 +315,15 @@ const TOOLS = [
         try {
           const s = await pool.run({ map: m.map, mode, seed: m.seed, swap: m.swap, budget: a.budget ?? DEFAULT_BUDGET, want: 'score',
             teams: m.teams.map((t) => t.map((id) => ({ id, source: sources[id] }))) });
-          return { ...m, winner: s.winner, hull: [s.teams[0].hull, s.teams[1].hull] };
+          return tournamentResult(m, s);
         } catch (e) {
-          const by = e.detail && e.detail.bot;
-          return { ...m, winner: by === m.a ? 1 : by === m.b ? 0 : -1, error: e.message, errorBy: by };
+          return tournamentResult(m, null, e);
         }
       }));
       const table = standings(entrants, results);
       return {
-        mode, maps, seeds: seeds.length, matches: results.length,
-        standings: table.map((r, i) => ({ rank: i + 1, bot: r.id, points: r.points, w: r.w, d: r.d, l: r.l, winRate: r.winRate, hullDiff: r.hullDiff })),
+        mode, maps, seeds: seeds.length, matches: results.length, ...tournamentStatus(results, schedule.length),
+        standings: table.map((r, i) => ({ rank: r.played ? i + 1 : null, bot: r.id, played: r.played, unscored: r.unscored, points: r.points, w: r.w, d: r.d, l: r.l, winRate: r.winRate, hullDiff: r.hullDiff })),
         headToHead: Object.fromEntries(table.map((r) => [r.id, Object.fromEntries(Object.entries(r.vs).map(([k, v]) => [k, `${v.w}-${v.d}-${v.l}`]))])),
         errors: results.filter((r) => r.error).slice(0, 3).map((r) => r.error),
       };

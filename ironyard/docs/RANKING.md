@@ -15,7 +15,7 @@ The website is a build-time snapshot. Adding a source file or running a custom t
 
 ## Season and fairness
 
-The standard budget is 1200 credits per vehicle; engine 0.5.0 uses eight maps.
+The standard budget is 1200 credits per vehicle; engine 0.5.1 uses eight maps.
 
 - **1v1:** every unordered pair plays all eight maps with seed 1, from both spawn sides. For 20 bots: `20 × 19 / 2 × 8 × 2 = 3040` matches; each bot plays 304.
 - **Teams:** 40 deterministic rounds. A hash of the round and bot id determines participation; entrants who cannot fill an even number of full teams sit out. Bots from the same author are distributed across teams where possible, then opponents are scrambled.
@@ -44,6 +44,10 @@ Sort by **unrounded rating**, then raw win percentage, then bot id. Display rati
 ## Failure handling and cache
 
 Worker results are checked for controller exceptions and a finished match. A failure reliably attributed to one bot is a forfeit for that side and is prominently reported. An unattributed failure is **unscored**, not a draw, and is retried on the next call. `ladder --write` refuses an incomplete or error-containing season.
+
+Custom browser, CLI and MCP tournaments use the same failure policy: returned controller errors and unfinished results are unscored; a thrown exception attributed to exactly one team is a forfeit. Only clean results and attributed forfeits earn points. Completion counts distinguish scheduled, attempted, scored, unscored and remaining games. CLI tournaments return a nonzero exit code if any errors occur. Browser tournaments can be stopped, preserving completed results as provisional standings; restarting creates a fresh tournament.
+
+Per-decision wall-clock timing is telemetry only. Engine 0.5.1 removes the old 250 ms penalty that could cut off a healthy controller when the host was busy. Worker watchdogs and memory limits still protect the host; a triggered watchdog is reported as a failure, rather than silently changing the simulated battle. See the [0.5.1 review](REVIEW-2026-11-16.md).
 
 Cache keys include engine version, map, mode, seed, spawn swap, ordered team members and source hashes. Changing the slot order therefore creates a distinct match. Cache records also carry a result-check version: older records that did not check controller exceptions are rerun once. If engine behavior changes without a version bump, its cache must be invalidated. Source metadata changes can also invalidate a bot's results because the full file is hashed.
 
@@ -90,6 +94,8 @@ Carbon (`gemini-4-carbon-medium`) and Hydrogen (`gemini-4-hydrogen-medium`) are 
 ## Current 20-bot season with Muse
 
 Muse Spark’s `tailwind` joins unchanged from [PR #8](https://github.com/renjie-liu/ai-games/pull/8). All **4560** ladder matches completed without controller errors: 3040 solo, 800 doubles and 720 triples. Adding this entrant changes both the solo field and mixed-team schedule. The separate seven-entry, same-bot-team tournament is documented in [TOURNAMENT.md](../TOURNAMENT.md).
+
+On 2026-11-16, all 4560 matches were rerun under engine 0.5.1 after the timing and tournament reliability fixes. No match errors occurred. Every rank, displayed rating, win/draw/loss count and author table exactly matched the previous 0.5.0 snapshot. The seven-entry tournament report remains its historical 0.5.0 run.
 
 | Bot | Recorded model | 1v1 | 2v2 | 3v3 |
 |---|---|---:|---:|---:|
