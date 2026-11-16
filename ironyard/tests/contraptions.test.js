@@ -401,3 +401,68 @@ test('armor and slopes: the engine and the published arithmetic give the same an
   }
   assert.equal(hitOn(PARTS.armor, 4), 2); assert.equal(hitOn(PARTS.armor, 1), 0.25); assert.equal(hitOn(PARTS.armor, 22, 'energy'), 22);
 });
+
+test('a design is made of our parts and our four facings, whatever else its JSON may hold', () => {
+  const base = car().parts;
+  // an array that reads like a name, and names every object has, are not parts or facings
+  for (const type of [['core'], ['plate'], 'constructor', 'toString', '__proto__', 7, null, { toString: () => 'plate' }]) {
+    const v = validateDesign({ parts: base.concat([{ type, x: 0, y: 3, z: 0 }]) });
+    assert.equal(v.ok, false, `type ${JSON.stringify(type)}`);
+    assert.match(v.errors.join(' '), /unknown part type/);
+  }
+  for (const dir of [['E'], 'toString', 'valueOf', 'constructor', 3, {}]) {
+    const v = validateDesign({ parts: base.concat([{ type: 'thruster', x: 0, y: -2, z: 0, dir }]) });
+    assert.equal(v.ok, false, `dir ${JSON.stringify(dir)}`);
+    assert.match(v.errors.join(' '), /dir must be one of N, E, S, W/);
+  }
+  // and a bot that hands such a design over is refused before the match, by name, not allowed to break it for both sides
+  const evil = makeBot('evil', `const meta = { name: 'Evil' }; const design = { parts: ${JSON.stringify(base)}.map((p) => (p.type === 'core' ? { ...p, type: ['core'] } : p)) }; function tick() { return {}; }`);
+  assert.throws(() => runMatch({ map: 'proving', teams: [[evil], [loadBot('rookie')]], record: false }), /bot "evil".*invalid design/);
+});
+
+test('a repair kit puts every fire on the vehicle out', () => {
+  const { w, p, q, run } = duel(car(), car(), { gap: 20 });
+  for (const part of p.parts.filter((x) => x.type === 'plate').slice(0, 3)) w.warm(p, part, 2, q.id);
+  run(0.2);
+  assert.ok(p.burning >= 3);
+  w.pickup(p, { ...w.itemSpawns[0], type: 'repair', present: true });
+  assert.equal(p.burning, 0);
+  run(1);
+  assert.equal(p.burning, 0, 'and nothing smoulders on');
+});
+
+test('flamethrower: a piece of several studs is washed once a tick, not once per stud', () => {
+  const flamer = car([{ type: 'flamer', x: 0, y: 1, z: 1, dir: 'N' }]);
+  // the same nose, once as four 1x1 plates and once as one 2x2 plate
+  const nose = (parts) => legal([
+    ...[-1, 0, 1].flatMap((x) => [-1, 0, 1, 2].map((y) => ({ type: 'armor', x, y, z: 0 }))), ...parts,
+    { type: 'wheel', x: -2, y: 2, z: 0 }, { type: 'wheel', x: 2, y: 2, z: 0 }, { type: 'wheel', x: -2, y: -1, z: 0 }, { type: 'wheel', x: 2, y: -1, z: 0 },
+    { type: 'core', x: 0, y: 0, z: 1 }]);
+  const lost = (design, type) => {
+    const { w, p, q, run } = duel(flamer, design, { gap: 5 });
+    w.setCommand(p, { fire: true, aim: { x: q.x, y: q.y } });
+    run(0.5);
+    const hit = q.parts.filter((x) => x.type === type);
+    return Math.max(...hit.map((x) => x.maxHp - x.hp));
+  };
+  const small = lost(nose([{ type: 'plate', x: 0, y: 3, z: 0 }, { type: 'plate', x: -1, y: 3, z: 0 }, { type: 'plate', x: 0, y: 4, z: 0 }, { type: 'plate', x: -1, y: 4, z: 0 }]), 'plate');
+  const big = lost(nose([{ type: 'plate4', x: -1, y: 3, z: 0 }]), 'plate4');
+  assert.ok(small > 0.5 && big > 0.5, `both are burnt (${small.toFixed(2)}, ${big.toFixed(2)})`);
+  assert.ok(big < small * 1.3, `the 2x2 plate loses about what one 1x1 plate does (${big.toFixed(2)} against ${small.toFixed(2)}), not four times it`);
+});
+
+test('nobody ends a tick inside a wall, however hard they are thrown at it', () => {
+  // proving has a pillar two tiles thick at x 14..18, y 38..42: straight at its seam, fast enough to be past the face in one tick
+  let inside = 0;
+  for (let k = 0; k < 40; k++) {
+    const { w, p, q } = duel(car(), car(), { gap: 30, at: { x: 13.0 + (k % 8) * 0.03, y: 39.7 + Math.floor(k / 8) * 0.12 } });
+    q.x = 50; q.y = 10; w.updateCells(q);
+    p.vx = 40;
+    for (let i = 0; i < 120; i++) {
+      w.step();
+      const tx = Math.floor(p.x / 2), ty = Math.floor(p.y / 2);
+      if (w.map.tiles[ty * w.map.w + tx] === Object.keys(TILES).indexOf('wall')) inside++;
+    }
+  }
+  assert.equal(inside, 0);
+});

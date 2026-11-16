@@ -686,7 +686,13 @@ export class World {
       if (!vs[i].alive) continue;
       for (let j = i + 1; j < vs.length; j++) if (vs[j].alive) this.collidePair(vs[i], vs[j]);
     }
-    for (const v of vs) if (v.alive) this.collideWalls(v);
+    for (const v of vs) if (v.alive) {
+      this.collideWalls(v);
+      // thrown hard enough at a thick wall, a car could end the tick with its centre inside it and stay there:
+      // it is put back where it last stood clear, and stopped
+      if (!TILE_SOLID[tileCodeAt(this.map, v.x, v.y)]) { v.clearX = v.x; v.clearY = v.y; }
+      else if (v.clearX !== undefined) { v.x = v.clearX; v.y = v.clearY; v.vx = 0; v.vy = 0; this.updateCells(v); }
+    }
     this.stepTethers(dt);
     this.settle();
 
@@ -1197,6 +1203,7 @@ export class World {
     let reached = false;
     for (const e of this.teams[1 - v.team]) {
       if (!e.alive || Math.hypot(e.x - mx, e.y - my) > d.range + e.radius) continue;
+      const done = new Set();   // a piece of several studs is washed once, not once per stud
       for (const c of e.cols) {
         const dx = c.wx - mx, dy = c.wy - my, dist = Math.hypot(dx, dy);
         if (dist > d.range || (dist > 0.3 && (dx * ca + dy * sa) / dist < cosCone)) continue;
@@ -1204,7 +1211,8 @@ export class World {
         // a shield that is up takes the whole stream, once, however many columns it would have reached
         if (e.shield + e.overshield > 0) { this.drainShield(e, d.dps * 3 * dt * od); reached = true; break; }
         const p = e.parts[c.top >= 0 ? c.top : c.bot];
-        if (!p.alive) continue;
+        if (!p.alive || done.has(p)) continue;
+        done.add(p);
         reached = true;
         const near = 1 - 0.5 * (dist / d.range);   // hotter up close
         this.damage(e, p, d.dps * near * dt * od, d.dtype, v, undefined, undefined, gun);
@@ -1369,6 +1377,7 @@ export class World {
     this.event({ k: 'pickup', v: v.id, s: s.id, type: s.type });
     if (def.held) { v.item = { type: s.type, charges: def.charges }; return; }
     if (s.type === 'repair') {
+      this.douse(v);   // a repair kit puts every fire on the vehicle out
       for (const p of v.parts) if (p.alive && !p.decor && p.hp < p.maxHp) {
         const add = Math.min(p.maxHp - p.hp, p.maxHp * 0.35);
         p.hp += add; v.hpNow += add; v.stats.healing += add;

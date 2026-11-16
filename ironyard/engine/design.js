@@ -98,7 +98,8 @@ export function validateDesign(input, opts = {}) {
   input.parts.forEach((raw, i) => {
     const at = `parts[${i}]`;
     if (!raw || typeof raw !== 'object') { errors.push(`${at} is not an object`); return; }
-    const def = PARTS[raw.type];
+    // (a controller hands its design over as JSON: an array ["core"] or the name of an inherited property would look a part up without being one)
+    const def = typeof raw.type === 'string' && Object.hasOwn(PARTS, raw.type) ? PARTS[raw.type] : null;
     if (!def) { errors.push(`${at}: unknown part type "${raw.type}". Valid: ${Object.keys(PARTS).join(', ')}`); return; }
     let z = raw.z;
     if (z === 'chassis') z = 0; else if (z === 'deck') z = 1;
@@ -107,7 +108,7 @@ export function validateDesign(input, opts = {}) {
     if (def.layer !== 'any' && def.layer !== LAYER_NAME[z]) { errors.push(`${at}: ${raw.type} can only go on the ${def.layer} layer (z = ${def.layer === 'deck' ? 1 : 0})`); return; }
     let dir = raw.dir ?? 'N';
     if (def.fixedDir) dir = 'N';
-    if (!DIRS[dir]) { errors.push(`${at} (${raw.type}): dir must be one of N, E, S, W (N = front), got "${raw.dir}"`); return; }
+    if (typeof dir !== 'string' || !Object.hasOwn(DIRS, dir)) { errors.push(`${at} (${raw.type}): dir must be one of N, E, S, W (N = front), got "${raw.dir}"`); return; }
     const p = { type: raw.type, x: raw.x, y: raw.y, z, dir };
     if (!Number.isInteger(p.x) || !Number.isInteger(p.y)) { errors.push(`${at} (${raw.type}): x and y must be integers, got (${raw.x}, ${raw.y})`); return; }
     const cells = cellsOf(p);

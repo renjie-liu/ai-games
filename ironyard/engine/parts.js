@@ -219,7 +219,7 @@ export const PARTS = {
   shieldgen: {
     name: 'Shield generator', cat: 'utility', glyph: 'G', layer: 'deck', max: 1,
     cost: 130, mass: 12, hp: 70, burn: 0.6, shield: 120, shieldRegen: 10, shieldDelay: 3, energyUse: 2.5,
-    desc: 'Bubble that absorbs 120 projectile/beam/blast damage, recharging after 3 s without a hit. Rams and saws go straight through.',
+    desc: 'Bubble that absorbs 120 damage from shots, beams, flame and the bursts of shells, missiles and mortar rounds, recharging after 3 s without a hit. Rams, saws, pistons, fire already burning, and the blasts of powder kegs, barrels and mines go straight through.',
   },
   repairer: {
     name: 'Repair arm', cat: 'utility', glyph: '+', layer: 'deck', max: 2,
@@ -316,7 +316,7 @@ export const TILES = {
   barrier: { ch: '-', name: 'Barrier', solid: true,
     desc: 'Blocks vehicles only; shots fly over.' },
   pit:     { ch: '_', name: 'Pit',
-    desc: 'Centre of mass over a pit = instant elimination, unless hovering.' },
+    desc: 'Centre of mass over a pit = elimination within a quarter of a second, unless hovering.' },
   mud:     { ch: 'm', name: 'Mud',
     desc: 'Wheels lose 60% traction (monster wheels 25%), tracks 15%. Hover ignores it.' },
   ice:     { ch: 'i', name: 'Ice',

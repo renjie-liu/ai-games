@@ -1,4 +1,4 @@
-# Ironyard — rules and controller contract (engine 0.5.0)
+# Ironyard — rules and controller contract (engine 0.5.1)
 
 Ironyard is a deterministic vehicle-combat arena. **You build the car and you write its brain.**
 Before a match you hand in ONE JavaScript file containing a blueprint (which bricks go where, within a
@@ -150,7 +150,7 @@ What happens under fire:
 | `battery` | e | 1x1 | 35 | 9 | 60 | either layer | +140 energy cap, burns | +140 energy capacity. |
 | `reactor` | r | 1x1 | 75 | 12 | 70 | either layer | +20 energy cap, +8 energy/s, burns slowly | +8 energy/s. Volatile: when destroyed it blasts every piece touching it (sides, above, below) for 35. |
 | `radar` | d | 1x1 | 40 | 3 | 35 | deck, low | sensor +16 m, max 1, burns slowly | +16 m sensor range (shared with the team) and reveals enemy mines. |
-| `shieldgen` | G | 1x1 | 130 | 12 | 70 | deck | 120 shield, +10/s after 3s, 2.5 energy/s, max 1, burns slowly | Bubble that absorbs 120 projectile/beam/blast damage, recharging after 3 s without a hit. Rams and saws go straight through. |
+| `shieldgen` | G | 1x1 | 130 | 12 | 70 | deck | 120 shield, +10/s after 3s, 2.5 energy/s, max 1, burns slowly | Bubble that absorbs 120 damage from shots, beams, flame and the bursts of shells, missiles and mortar rounds, recharging after 3 s without a hit. Rams, saws, pistons, fire already burning, and the blasts of powder kegs, barrels and mines go straight through. |
 | `repairer` | + | 1x1 | 90 | 8 | 50 | deck | 9 hp/s heal within 5 m, 6 energy/s, max 2, burns slowly | Heals the most damaged piece on you or an ally within 5 m for 9 hp/s. Cannot rebuild destroyed pieces. |
 
 **Decor (free)**
@@ -218,7 +218,7 @@ One map tile is 2 m.
 | `floor` | `.` | Normal ground. |
 | `wall` | `#` | Blocks vehicles, shots and beams. Mortar shells fly over. |
 | `barrier` | `-` | Blocks vehicles only; shots fly over. |
-| `pit` | `_` | Centre of mass over a pit = instant elimination, unless hovering. |
+| `pit` | `_` | Centre of mass over a pit = elimination within a quarter of a second, unless hovering. |
 | `mud` | `m` | Wheels lose 60% traction (monster wheels 25%), tracks 15%. Hover ignores it. |
 | `ice` | `i` | Almost no side grip and 65% less traction for wheels (tracks cope better). |
 | `lava` | `L` | Every piece takes 12 hp/s (3 hp/s while hovering). |
