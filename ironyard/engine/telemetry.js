@@ -39,7 +39,7 @@ export function newTelemetry(v, nv) {
   let movers = 0;
   for (const p of v.parts) {
     if (p.def.weapon || p.def.punch) weapons.push(p.tw = { i: p.i, type: p.type, dir: p.dir, shots: 0, hits: 0, damage: 0, firingTime: 0, lostAt: null, lostTo: null, lostBy: null });
-    if (p.def.mover) movers++;
+    if (p.def.mover || p.def.thrust) movers++;   // wheels, tracks, hover pads — and thrusters: the wreck rule counts them too
   }
   return {
     nv, weapons, movers, moversLost: 0, immobileAt: null,
@@ -101,7 +101,7 @@ export function noteDamage(w, v, p, dealt, dtype, src, shotAng, via) {
 function lost(T, p, t, cause, by) {
   T.losses.push({ t, type: p.type, i: p.i, cause, by });
   if (p.tw) { p.tw.lostAt = t; p.tw.lostTo = cause; p.tw.lostBy = by; }
-  if (p.def.mover && ++T.moversLost === T.movers) T.immobileAt = t;
+  if ((p.def.mover || p.def.thrust) && ++T.moversLost === T.movers) T.immobileAt = t;
 }
 
 /** Piece `p` of `v` is gone (not decor). `via` as in noteDamage, when damage did it; else `cause` is the engine's word. */

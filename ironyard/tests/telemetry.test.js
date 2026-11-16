@@ -2,7 +2,7 @@
 // from which side and how far away, what was lost and when — and the sentences an agent reads first.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAPS, World, validateDesign, runMatch, summarize, compactTelemetry, insightList, insightsFor, matchDigest, diagnose, telemetryView, BANDS } from '../engine/index.js';
+import { MAPS, World, validateDesign, runMatch, summarize, compactTelemetry, insightList, insightsFor, matchDigest, diagnose, telemetryView, BANDS, tileCodeAt, TILE_NAME } from '../engine/index.js';
 import { loadBot } from '../node/loader.js';
 
 const legal = (parts) => { const v = validateDesign({ parts }); assert.equal(v.ok, true, v.errors.join('; ')); return v.design; };
@@ -361,4 +361,38 @@ test('firing time is time with the trigger held: a gun that only cools down, or 
   hook.run(3);
   const h = hook.p.tel.weapons.find((g) => g.type === 'harpoon');
   assert.ok(h.shots >= 1 && h.firingTime < 0.1, `${h.shots} shot, ${h.firingTime.toFixed(2)} s`);
+});
+
+test('the track lines up with the frames: sample n is what the controller asked for, and stood on, at (n + 1) half seconds', () => {
+  // frostbite has ice and floor side by side, so being half a second out shows
+  const res = runMatch({ map: 'frostbite', seed: 1, teams: [[loadBot('bulldozer')], [loadBot('boxer')]], record: true });
+  // (frames keep positions to the centimetre, so a car exactly on the line between two tiles may read as either:
+  //  the samples must agree almost always, and clearly better than they would half a second out)
+  const agree = (shift) => {
+    let same = 0, all = 0;
+    for (const v of res.vehicles) {
+      const k = v.telemetry.track;
+      for (let n = 0; n < k.tile.length; n++) {
+        const f = res.frames[Math.round(((n + 1 + shift) * k.step) / res.frameDt)];
+        if (!f) break;
+        const [x, y] = f.v[v.id];
+        all++;
+        if (k.tile[n] === TILE_NAME[tileCodeAt(MAPS.frostbite, x, y)]) same++;
+      }
+    }
+    return { same, all };
+  };
+  const right = agree(0), early = agree(-1);
+  assert.ok(right.all > 40 && right.same / right.all > 0.97, `${right.same} of ${right.all} samples agree with the frame at (n + 1) half seconds`);
+  assert.ok(right.same > early.same, `and fewer (${early.same}) with the frame half a second earlier`);
+});
+
+test('a car that still has a thruster is not immobile when its wheels are gone', () => {
+  const jet = car([{ type: 'thruster', x: 0, y: -2, z: 0, dir: 'N' }]);
+  const { w, p, q } = duel(jet, car(), { gap: 12 });
+  assert.equal(p.tel.movers, 5, 'four wheels and a thruster');
+  for (const wheel of p.parts.filter((x) => x.type === 'wheel')) w.destroy(p, wheel, q, 'test');
+  assert.equal(p.tel.immobileAt, null, 'the thruster is still there');
+  w.destroy(p, p.parts.find((x) => x.type === 'thruster'), q, 'test');
+  assert.equal(p.tel.immobileAt, w.t);
 });
