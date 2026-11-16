@@ -224,15 +224,22 @@ const BUILD = {
     }
     return finish(N, N, C, R, H, null, 5);
   },
-  // a wall of toy bricks, 4 m x 4 m: courses 0.4 m high, bricks 0.8 m long, laid half a brick over the one below
-  brick(pr = 160, pg = 165, pb = 169) {
-    const N = 512, { C, R, H } = fields(N), course = N / 10, len = N / 5, gap = 2.2;
+  // a wall of toy bricks, 4 m x 4 m: courses 0.4 m high, laid half a brick over the one below, in two colours.
+  // mode: 'band' a dark plinth course and the top course of a six-course wall in the second colour; 'checker' every other
+  // brick; 'stripe' every other course; 'speckle' an odd brick here and there. The texture's first row is the foot of the wall.
+  brick(pr = 160, pg = 165, pb = 169, ar = pr, ag = pg, ab = pb, mode = 'plain') {
+    const N = 512, { C, R, H } = fields(N), course = N / 10, per = mode === 'checker' ? 4 : 5, len = N / per, gap = 2.2;
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
       const i = y * N + x, row = Math.floor(y / course), bx = (x + (row & 1) * len / 2) % N, col = Math.floor(bx / len);
       const dy = Math.min(y - row * course, (row + 1) * course - y), dx = Math.min(bx - col * len, (col + 1) * len - bx);
       const edge = Math.min(dx, dy), seam = sm(gap, 0, edge), bevel = sm(gap * 3, gap, edge);
-      const tone = 0.96 + 0.08 * hash2(row, col, 7), l = tone * (1 - 0.5 * seam) * (1 - 0.08 * bevel);
-      put(C, i, pr * l, pg * l, pb * l); H[i] = 1 - seam; R[i] = 0.4;
+      let second = false, dark = 1;
+      if (mode === 'band') { second = row === 5; if (row === 0) dark = 0.7; }
+      else if (mode === 'checker') second = ((col + (row >> 1)) & 1) === 1;
+      else if (mode === 'stripe') second = (row & 1) === 1;
+      else if (mode === 'speckle') second = hash2(row, col, 11) < 0.28;
+      const tone = 0.96 + 0.08 * hash2(row, col, 7), l = dark * tone * (1 - 0.5 * seam) * (1 - 0.08 * bevel);
+      put(C, i, (second ? ar : pr) * l, (second ? ag : pg) * l, (second ? ab : pb) * l); H[i] = 1 - seam; R[i] = 0.4;
     }
     return finish(N, N, C, R, H, null, 2.5);
   },
@@ -274,20 +281,20 @@ const THEME_OF = { cage: 'depot', saltflat: 'canyon', causeway: 'proving', labyr
 // Every arena is built of toy bricks on a studded baseplate. Per map: the baseplate, the walls, the low barriers,
 // and the plates that stand for mud. Plain plastic colours; the theme keeps its sky, sun and haze.
 const BRICKS = {
-  proving:   { plate: 0xa0a5a9, wall: 0x6c6e68, low: 0xf2cd37, mud: 0x6b4226 },
-  sumo:      { plate: 0x6074a1, wall: 0x0a3463, low: 0xf2cd37, mud: 0x6b4226 },
-  canyon:    { plate: 0xe4cd9e, wall: 0xaa7d55, low: 0x958a73, mud: 0x7a4a2a },
-  frostbite: { plate: 0xf2f3f2, wall: 0x6074a1, low: 0x36aebf, mud: 0x6b4226 },
-  foundry:   { plate: 0x55595e, wall: 0x1b2a34, low: 0xfe8a18, mud: 0x3a2a20 },
-  skybridge: { plate: 0xa0a5a9, wall: 0x36aebf, low: 0xf2cd37, mud: 0x6b4226 },
-  bog:       { plate: 0x4b9f4a, wall: 0x958a73, low: 0x237841, mud: 0x6b4226 },
-  depot:     { plate: 0x958a73, wall: 0xc91a09, low: 0xf2cd37, mud: 0x6b4226 },
-  cage:      { plate: 0x6c6e68, wall: 0xf2cd37, low: 0x1b2a34, mud: 0x6b4226 },
-  saltflat:  { plate: 0xece6d4, wall: 0xaa7d55, low: 0xc91a09, mud: 0x8a6a48 },
-  causeway:  { plate: 0xa0a5a9, wall: 0x0055bf, low: 0xf2cd37, mud: 0x6b4226 },
-  labyrinth: { plate: 0xe4cd9e, wall: 0x237841, low: 0xf2cd37, mud: 0x6b4226 },
-  fogbank:   { plate: 0x3f8f45, wall: 0x6c6e68, low: 0x958a73, mud: 0x6b4226 },
-  ringroad:  { plate: 0x55595e, wall: 0xc91a09, low: 0xf2f3f2, mud: 0x3a2a20 },
+  proving:   { plate: 0xa0a5a9, wall: 0x6c6e68, accent: 0xf2cd37, lay: 'band',    low: 0xf2cd37, low2: 0x1b2a34, mud: 0x6b4226, print: 0xf2f3f2, lamp: 0xffe9a8, around: ['lamp', 'tree'] },
+  sumo:      { plate: 0x6074a1, wall: 0x0a3463, accent: 0xf2f3f2, lay: 'band',    low: 0xf2cd37, low2: 0x1b2a34, mud: 0x6b4226, print: 0xf2f3f2, lamp: 0xffe9a8, around: [] },
+  canyon:    { plate: 0xe4cd9e, wall: 0xaa7d55, accent: 0xd09168, lay: 'speckle', low: 0x958a73, low2: 0xe4cd9e, mud: 0x7a4a2a, print: 0x7a4a2a, lamp: 0xffc48a, around: ['cactus', 'rock'] },
+  frostbite: { plate: 0xf2f3f2, wall: 0x6074a1, accent: 0xffffff, lay: 'band',    low: 0x36aebf, low2: 0xf2f3f2, mud: 0x6b4226, print: 0x0a3463, lamp: 0xbfe8ff, around: ['pine'] },
+  foundry:   { plate: 0x55595e, wall: 0x1b2a34, accent: 0xfe8a18, lay: 'band',    low: 0xfe8a18, low2: 0x1b2a34, mud: 0x3a2a20, print: 0xf2cd37, lamp: 0xff8a3c, around: ['stack', 'lamp'] },
+  skybridge: { plate: 0xa0a5a9, wall: 0x36aebf, accent: 0xf2f3f2, lay: 'band',    low: 0xf2cd37, low2: 0x1b2a34, mud: 0x6b4226, print: 0xf2f3f2, lamp: 0xffe9a8, around: [] },
+  bog:       { plate: 0x4b9f4a, wall: 0x958a73, accent: 0x237841, lay: 'speckle', low: 0x6b4226, low2: 0x958a73, mud: 0x6b4226, print: 0xe4cd9e, lamp: 0xffe9a8, around: ['bush', 'tree'] },
+  depot:     { plate: 0x958a73, wall: 0xc91a09, accent: 0xf2f3f2, lay: 'band',    low: 0xf2cd37, low2: 0x1b2a34, mud: 0x6b4226, print: 0xf2f3f2, lamp: 0xffe9a8, around: ['lamp', 'pile'] },
+  cage:      { plate: 0x6c6e68, wall: 0xf2cd37, accent: 0x1b2a34, lay: 'checker', low: 0x1b2a34, low2: 0xf2cd37, mud: 0x6b4226, print: 0xf2cd37, lamp: 0xffe9a8, around: ['lamp', 'pile'] },
+  saltflat:  { plate: 0xece6d4, wall: 0xaa7d55, accent: 0xe4cd9e, lay: 'stripe',  low: 0xc91a09, low2: 0xf2f3f2, mud: 0x8a6a48, print: 0xc91a09, lamp: 0xffc48a, around: ['cactus', 'rock'] },
+  causeway:  { plate: 0xa0a5a9, wall: 0x0055bf, accent: 0xf2f3f2, lay: 'band',    low: 0xf2cd37, low2: 0x1b2a34, mud: 0x6b4226, print: 0xf2f3f2, lamp: 0xffe9a8, around: ['lamp', 'tree'] },
+  labyrinth: { plate: 0xe4cd9e, wall: 0x237841, accent: 0x4b9f4a, lay: 'speckle', low: 0xf2cd37, low2: 0x1b2a34, mud: 0x6b4226, print: 0x958a73, lamp: 0xffe9a8, around: ['bush', 'tree'] },
+  fogbank:   { plate: 0x3f8f45, wall: 0x6c6e68, accent: 0xa0a5a9, lay: 'speckle', low: 0x958a73, low2: 0x6c6e68, mud: 0x6b4226, print: 0xe4cd9e, lamp: 0xd8f0ff, around: ['pine', 'bush'] },
+  ringroad:  { plate: 0x55595e, wall: 0xc91a09, accent: 0xf2f3f2, lay: 'checker', low: 0xf2f3f2, low2: 0xc91a09, mud: 0x3a2a20, print: 0xf2f3f2, lamp: 0xffe9a8, around: ['tyres', 'lamp'] },
 };
 const rgb = (h, k = 1) => [((h >> 16) & 255) * k, ((h >> 8) & 255) * k, (h & 255) * k];
 /** Size of the kit the arenas are built from: a stud every 0.4 m (the cars' own), a course of bricks 0.4 m high. */
@@ -295,7 +302,8 @@ export const STUD = 0.4, COURSE = 0.4;
 export const themeOf = (map) => {
   const base = THEMES[map.id] || THEMES[THEME_OF[map.id]] || THEMES.proving, b = BRICKS[map.id] || BRICKS.proving;
   return { ...base, bricks: b, rock: false, wallH: 6 * COURSE, wallMetal: 0, marks: 'yard', props: false,
-    wall: ['brick', ...rgb(b.wall)], wallTop: ['plain', ...rgb(b.wall)], barrier: ['brick', ...rgb(b.low)], slab: ['brick', ...rgb(b.plate, 0.72)] };
+    wall: ['brick', ...rgb(b.wall), ...rgb(b.accent), b.lay], wallTop: ['plain', ...rgb(b.wall)],
+    barrier: ['brick', ...rgb(b.low), ...rgb(b.low2), 'checker'], slab: ['brick', ...rgb(b.plate, 0.72), ...rgb(b.plate, 0.6), 'stripe'] };
 };
 
 // ── per-map control map: R mud, G ice, B lava light, A contact shadow ────
@@ -338,8 +346,34 @@ function paintDecals(IY, map, th) {
   g.lineCap = 'round'; g.lineJoin = 'round';
 
   if (th.bricks) {
-    // a baseplate is clean plastic: the studs and the plate seams are drawn by the ground shader, and only the
-    // markings below (hazard edges, speed strips, pads, item and spawn marks) are printed on it
+    // a baseplate is clean plastic, printed like the board of a game: each team's end in its colour, a halfway line,
+    // and a kerb line along the foot of everything that stands on it. The studs are drawn by the ground shader.
+    const pr = th.bricks.print, line = `rgba(${(pr >> 16) & 255},${(pr >> 8) & 255},${pr & 255},0.82)`;
+    (map.spawns || []).forEach((slots, team) => {
+      const ys = slots.map((q) => q.y), xs = slots.map((q) => q.x);
+      const ty0 = Math.floor((Math.min(...ys) - 3.5) / T), ty1 = Math.floor((Math.max(...ys) + 3.5) / T), tx0 = Math.floor((Math.min(...xs) - 6) / T), tx1 = Math.floor((Math.max(...xs) + 6) / T);
+      g.fillStyle = team ? 'rgba(40,140,236,0.24)' : 'rgba(244,123,32,0.24)';
+      for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) if (code(tx, ty) === C.floor) g.fillRect(tx * T, ty * T, T, T);
+      // the edge of the end, towards the middle: a row of chevrons pointing at the other side
+      const edge = team ? (ty1 + 1) * T : ty0 * T, dir = team ? 1 : -1;
+      g.strokeStyle = team ? 'rgba(40,140,236,0.8)' : 'rgba(244,123,32,0.8)'; g.lineWidth = 0.14; g.lineCap = 'butt'; g.lineJoin = 'miter';
+      for (let tx = tx0; tx <= tx1; tx++) {
+        if (code(tx, team ? ty1 : ty0) !== C.floor) continue;
+        const cx = (tx + 0.5) * T; g.beginPath(); g.moveTo(cx - 0.55, edge - dir * 0.5); g.lineTo(cx, edge - dir * 0.05); g.lineTo(cx + 0.55, edge - dir * 0.5); g.stroke();
+      }
+    });
+    g.fillStyle = line;
+    for (let tx = 0; tx < map.w; tx++) if (code(tx, map.h / 2 - 1) === C.floor && code(tx, map.h / 2) === C.floor) g.fillRect(tx * T + 0.35, H / 2 - 0.07, T - 0.7, 0.14);
+    g.strokeStyle = line; g.lineWidth = 0.12; g.lineCap = 'butt';
+    for (let ty = 0; ty < map.h; ty++) for (let tx = 0; tx < map.w; tx++) {
+      if (!open(code(tx, ty))) continue;
+      for (const [dx, dy, ax, ay, bx, by] of SIDES) {
+        const c2 = code(tx + dx, ty + dy);
+        if (c2 !== C.wall && c2 !== C.barrier) continue;
+        g.beginPath(); g.moveTo((tx + ax) * T - dx * 0.34, (ty + ay) * T - dy * 0.34); g.lineTo((tx + bx) * T - dx * 0.34, (ty + by) * T - dy * 0.34); g.stroke();
+      }
+    }
+    g.lineCap = 'round'; g.lineJoin = 'round';
   } else if (built) {
     // slabs: a patchwork of pours with expansion joints (deck plates on steel)
     const step = th.marks === 'deck' ? 2 : 4;
@@ -427,7 +461,7 @@ function paintDecals(IY, map, th) {
     g.fillStyle = 'rgba(236,240,238,0.92)'; g.fillRect(p.x - 0.16, p.y - 0.55, 0.32, 1.1); g.fillRect(p.x - 0.55, p.y - 0.16, 1.1, 0.32);
   }
   // item points: a stencilled ring with four ticks
-  const ink = th.base[0] === 'snow' ? 'rgba(40,70,120,0.6)' : 'rgba(240,240,236,0.62)';
+  const ink = th.bricks ? `rgba(${(th.bricks.print >> 16) & 255},${(th.bricks.print >> 8) & 255},${th.bricks.print & 255},0.8)` : th.base[0] === 'snow' ? 'rgba(40,70,120,0.6)' : 'rgba(240,240,236,0.62)';
   for (const s of map.itemSpawns) {
     g.strokeStyle = ink; g.lineWidth = 0.09; g.beginPath(); g.arc(s.x, s.y, 0.95, 0, TAU); g.stroke();
     g.beginPath(); for (let k = 0; k < 4; k++) { const a = k * (TAU / 4) + TAU / 8; g.moveTo(s.x + Math.cos(a) * 1.1, s.y + Math.sin(a) * 1.1); g.lineTo(s.x + Math.cos(a) * 1.5, s.y + Math.sin(a) * 1.5); } g.stroke();
@@ -504,8 +538,8 @@ float sr = length(sc);
 vec2 sdir = sc / max(sr, 0.0001);
 vec2 tl = fract(gp / 2.0);
 float seam = 1.0 - smoothstep(0.0, 0.016, min(min(tl.x, 1.0 - tl.x), min(tl.y, 1.0 - tl.y)));
-vec2 tid = floor(gp / 2.0);
-float tone = 0.95 + 0.07 * fract(sin(dot(tid, vec2(12.9898, 78.233))) * 43758.5453);
+vec2 blk = floor(gp / 4.0);
+float tone = mix(0.9, 1.0, mod(blk.x + blk.y, 2.0));
 vec3 plastic = mix(uPlate * 0.8, uPlate, gin) * tone;
 plastic = mix(plastic, uPlateMud * tone, mud);
 plastic = mix(plastic, iceC, ice);
@@ -741,8 +775,63 @@ export function buildArena(IY, map, env) {
       }
       im.receiveShadow = true; im.frustumCulled = false; group.add(im); owned.push(g, m);
     };
-    studs(C.wall, th.wallH, th.bricks.wall);
+    studs(C.wall, th.wallH, th.bricks.lay === 'band' ? th.bricks.accent : th.bricks.wall);
     studs(C.barrier, 2 * COURSE, th.bricks.low);
+  }
+
+  // Posts: the corners, ends and free-standing pillars of a wall carry a 2x2 post two courses high under a pyramid cap
+  // with a lamp on it, and every fourth tile of a straight run a low one. They are what turns a row of bricks into a wall
+  // somebody built. Around the arena, on the baseplate beyond the walls where no car can go, stand a few things made of
+  // the same bricks — trees, cacti, lamps, chimneys — so that the board sits in a place.
+  {
+    const b = th.bricks, d = new THREE.Object3D(), isW = (x, y) => code(x, y) === C.wall, tall = [], low = [];
+    for (let ty = 0; ty < map.h; ty++) for (let tx = 0; tx < map.w; tx++) {
+      if (!isW(tx, ty)) continue;
+      const n = isW(tx, ty + 1), s2 = isW(tx, ty - 1), e = isW(tx + 1, ty), w2 = isW(tx - 1, ty), cnt = n + s2 + e + w2;
+      const runH = e && w2 && !n && !s2, runV = n && s2 && !e && !w2;
+      if (runH || runV) { if ((runH ? tx : ty) % 4 === 2) low.push([tx, ty]); }
+      else if (cnt <= 1) tall.push([tx, ty]);
+      else if (cnt === 2 && !isW(tx + (e ? 1 : -1), ty + (n ? 1 : -1))) tall.push([tx, ty]);   // the corner of a line of bricks, not of a block
+    }
+    const plasticM = (hex) => new THREE.MeshStandardMaterial({ color: lin(hex), roughness: 0.42, envMap: env, envMapIntensity: 0.3 });
+    const glowM = (hex) => new THREE.MeshBasicMaterial({ color: lin(hex), toneMapped: false });
+    const many = (geo, mat, list, place, cast = true) => {
+      if (!list.length) { geo.dispose(); mat.dispose(); return; }
+      const im = new THREE.InstancedMesh(geo, mat, list.length);
+      list.forEach((q, i) => { d.position.set(0, 0, 0); d.rotation.set(0, 0, 0); d.scale.set(1, 1, 1); place(q, d); d.updateMatrix(); im.setMatrixAt(i, d.matrix); });
+      im.castShadow = cast; im.receiveShadow = true; im.frustumCulled = false; group.add(im); owned.push(geo, mat);
+    };
+    const cx = (q) => (q[0] + 0.5) * T, cz = (q) => -(q[1] + 0.5) * T, H0 = th.wallH;
+    many(new THREE.BoxGeometry(0.8, 0.8, 0.8), plasticM(b.wall), tall, (q, o) => o.position.set(cx(q), H0 + 0.4, cz(q)));
+    many(new THREE.ConeGeometry(0.62, 0.42, 4).rotateY(Math.PI / 4), plasticM(b.accent), tall, (q, o) => o.position.set(cx(q), H0 + 1.01, cz(q)));
+    many(new THREE.SphereGeometry(0.17, 10, 8), glowM(b.lamp), tall, (q, o) => o.position.set(cx(q), H0 + 1.3, cz(q)), false);
+    many(new THREE.BoxGeometry(0.8, 0.4, 0.8), plasticM(b.accent), low, (q, o) => o.position.set(cx(q), H0 + 0.2, cz(q)));
+
+    if (!th.void && b.around.length) {
+      const R2 = rng32(hashStr(map.id || 'map') + 99), bins = new Map(), snow = map.id === 'frostbite';
+      // one piece of a prop: a unit box / cylinder / cone / four-sided cone, scaled and set down at (x, y up, z)
+      const pc = (geo, hex, x, y, z, sx, sy, sz, glow = false) => { const k = `${geo}:${hex}:${glow}`; if (!bins.has(k)) bins.set(k, { geo, hex, glow, at: [] }); bins.get(k).at.push([x, y, z, sx, sy, sz]); };
+      const GREEN = [0x237841, 0x4b9f4a, 0x184632];
+      const PROP = {
+        tree(x, z, k) { const c = GREEN[Math.floor(R2() * 2)]; pc('cyl', 0x582a12, x, 0.7 * k, z, 0.5 * k, 1.4 * k, 0.5 * k); pc('cyl', c, x, 1.75 * k, z, 2.6 * k, 0.7 * k, 2.6 * k); pc('cyl', c, x, 2.45 * k, z, 2.0 * k, 0.7 * k, 2.0 * k); pc('cyl', c, x, 3.1 * k, z, 1.2 * k, 0.6 * k, 1.2 * k); },
+        pine(x, z, k) { pc('cyl', 0x582a12, x, 0.5 * k, z, 0.45 * k, 1.0 * k, 0.45 * k); pc('cone', GREEN[2], x, 1.7 * k, z, 2.6 * k, 1.6 * k, 2.6 * k); pc('cone', GREEN[2], x, 2.7 * k, z, 2.0 * k, 1.5 * k, 2.0 * k); pc('cone', snow ? 0xf2f3f2 : GREEN[0], x, 3.6 * k, z, 1.3 * k, 1.3 * k, 1.3 * k); },
+        bush(x, z, k) { const c = GREEN[Math.floor(R2() * 2)]; pc('cyl', c, x, 0.3 * k, z, 1.9 * k, 0.6 * k, 1.9 * k); pc('cyl', c, x, 0.85 * k, z, 1.2 * k, 0.5 * k, 1.2 * k); pc('cyl', R2() < 0.5 ? 0xc91a09 : 0xf2cd37, x, 1.16 * k, z, 0.3 * k, 0.12 * k, 0.3 * k); },
+        cactus(x, z, k) { pc('cyl', 0x4b9f4a, x, 1.2 * k, z, 0.7 * k, 2.4 * k, 0.7 * k); for (const sd of [-1, 1]) { pc('box', 0x4b9f4a, x + sd * 0.55 * k, (1.0 + (sd > 0 ? 0.3 : 0)) * k, z, 0.6 * k, 0.4 * k, 0.4 * k); pc('cyl', 0x4b9f4a, x + sd * 0.8 * k, (1.55 + (sd > 0 ? 0.3 : 0)) * k, z, 0.45 * k, 0.9 * k, 0.45 * k); } },
+        rock(x, z, k) { pc('box', 0xaa7d55, x, 0.4 * k, z, 2.4 * k, 0.8 * k, 2.0 * k); pc('box', 0xe4cd9e, x + 0.2 * k, 1.2 * k, z - 0.2 * k, 1.6 * k, 0.8 * k, 1.2 * k); pc('box', 0x958a73, x + 0.4 * k, 1.8 * k, z - 0.2 * k, 0.8 * k, 0.4 * k, 0.8 * k); },
+        lamp(x, z) { pc('cyl', 0x6c6e68, x, 0.2, z, 0.8, 0.4, 0.8); pc('cyl', 0x1b2a34, x, 2.5, z, 0.22, 4.2, 0.22); pc('box', 0x1b2a34, x, 4.7, z, 1.2, 0.2, 0.4); pc('box', b.lamp, x, 4.55, z, 0.9, 0.12, 0.3, true); },
+        stack(x, z, k) { pc('cyl', 0x1b2a34, x, 3.2 * k, z, 1.6 * k, 6.4 * k, 1.6 * k); pc('cyl', 0xc91a09, x, 5.4 * k, z, 1.68 * k, 0.8 * k, 1.68 * k); pc('cyl', 0xf2f3f2, x, 4.6 * k, z, 1.68 * k, 0.4 * k, 1.68 * k); pc('cyl', 0xfe8a18, x, 6.45 * k, z, 1.2 * k, 0.1 * k, 1.2 * k, true); },
+        pile(x, z) { pc('box', 0xaa7d55, x, 0.6, z, 1.6, 1.2, 1.6); pc('box', 0xa95500, x + 1.7, 0.6, z + 0.2, 1.6, 1.2, 1.6); pc('box', 0x958a73, x + 0.85, 1.8, z + 0.1, 1.6, 1.2, 1.6); },
+        tyres(x, z) { for (let i = 0; i < 3; i++) pc('cyl', 0x1b2a34, x, 0.225 + i * 0.45, z, 1.3, 0.45, 1.3); pc('cyl', 0xf2f3f2, x, 1.575, z, 1.3, 0.45, 1.3); },
+      };
+      const count = Math.round((W + H) / 2.4);
+      for (let i = 0; i < count; i++) {
+        const side = Math.floor(R2() * 4), along = R2(), out = 3.5 + R2() * 14, k = 0.8 + R2() * 0.55;
+        const x = side < 2 ? along * (W + 22) - 11 : side === 2 ? -out : W + out, y = side === 0 ? -out : side === 1 ? H + out : along * (H + 22) - 11;
+        PROP[b.around[Math.floor(R2() * b.around.length)]](x, -y, k);
+      }
+      const GEO = { box: () => new THREE.BoxGeometry(1, 1, 1), cyl: () => new THREE.CylinderGeometry(0.5, 0.5, 1, 12), cone: () => new THREE.ConeGeometry(0.5, 1, 10) };
+      for (const bin of bins.values()) many(GEO[bin.geo](), bin.glow ? glowM(bin.hex) : plasticM(bin.hex), bin.at, (q, o) => { o.position.set(q[0], q[1], q[2]); o.scale.set(q[3], q[4], q[5]); }, !bin.glow);
+    }
   }
 
   // repair pads: four bollards with a green lamp each

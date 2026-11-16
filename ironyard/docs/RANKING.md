@@ -148,3 +148,30 @@ Against `main`'s 0.5.1 season: in 1v1 `grindstone` goes from 4th to 1st, with 27
 No other entry's source changed. The entries written against 0.5.0 are playing on an engine whose steering, route following and shields have since been corrected, which is part of why their places moved; none of them has been re-tuned. The seven-entry tournament in [TOURNAMENT.md](../TOURNAMENT.md) is the record of the 0.5.0 sources and has not been re-run.
 
 Two things the tuning asked of the tools were added afterwards. `validate_design` and `scout_bot` now list `weakLanes`: the lanes of studs on which the least has to be shot away before a mover, or two guns, fall off without being hit, checked in the tests against what the engine drops when that lane is shot out. `evaluate_bot` takes the seeds themselves as well as a count, gives the comparison with a baseline as numbers as well as text, and says for each of the worst losses how much damage went each way.
+
+## Current 20-bot season (engine 0.6.0, fourteen maps)
+
+All **6916** matches — 5320 solo, 840 doubles, 756 triples — were played on engine 0.6.0 with no controller errors. Three things changed at once, so this season is not comparable match for match with the one above:
+
+- **The kit was rebalanced against a weapon bench** (one hull, one plain controller, different loadouts at the same price: `node tools/weapon-bench.mjs`). Missiles, flamethrowers and fire were weakened, the railgun and the shield generator strengthened, cannon and mortar retimed. The figures and the reasoning are in [DESIGN.md](DESIGN.md).
+- **Six maps were added** (Scrap Cage, Salt Flat, Causeway, Rat Run, Fogbank, Ring Road) with two new tiles, smoke and speed strips. The team queues now play 42 rounds, three times round the maps.
+- **Two engine fixes** change how every car behaves: a last-seen note the team can see is wrong is dropped (two cars that passed each other unseen used to park on each other's old position until the zone closed), and a missile no longer homes on a target its team cannot see.
+
+The entries' `author` labels are now their recorded model names, at the repository owner's request; that edit changes each file's hash but not a line of its design or controller.
+
+| Bot | Author (recorded model) | 1v1 | 2v2 | 3v3 |
+|---|---|---:|---:|---:|
+| grindstone | Opus | 1 | 3 | 6 |
+| quillback | Fable | 2 | 1 | 2 |
+| carbon | gemini-4-carbon-medium | 3 | 6 | 4 |
+| astra | gpt-6-astra | 4 | 2 | 1 |
+| sol | gpt-6-sol | 5 | 4 | 3 |
+| tailwind | Muse Spark | 6 | 5 | 5 |
+| hydrogen | gemini-4-hydrogen-medium | 7 | 7 | 8 |
+
+In 1v1 the order of the seven is what it was on 0.5.4: `grindstone` first with 493 wins of 532, then `quillback` (464), `carbon` (436) and `astra` (430). On mixed teams `quillback` and `astra` lead and `grindstone` is 3rd and 6th. In 2v2, places 3 to 6 are 12 rating points apart (1688 to 1676), so their order there carries little weight.
+
+Two cautions about reading this table. No entry was re-tuned for 0.6.0: all seven are playing on numbers and maps none of them was written for, and `grindstone` remains the only one tuned on a recent engine. And the bench shows the entries share a blind spot that the ladder cannot: none of them carries a long gun, and on the bench a plain four-cannon car still wins about 70% of its matches against them. A field in which somebody builds one would rank differently.
+
+Of the house reference bots only `wasp` was changed: it carried a single missile pod, which the missile changes left worthless (2% on the bench), and now carries two.
+

@@ -161,7 +161,14 @@ Lasers were left alone: weak in plain hands on the bench, and the entry at the t
 
 The new maps found a bug the old ones had hidden. On Rat Run two cars could pass each other in parallel corridors without either sensor reaching, drive on to where the other had started, and stand there until the zone closed 90 s later: each still had a note saying the enemy was "last seen" on the very spot it was parked on. A note the team can see is wrong is now dropped until the enemy is seen again. It was found by a number added in the same release — seconds a car stood still by its own command with the enemy beyond every gun — which is the thing an agent tuning a controller most needs to be told and could not see before.
 
-**Built of bricks.** The cars were always bricks; the ground they fought on was concrete, sand and grass. Now every arena is a studded baseplate in one plain plastic colour, with a stud every 0.4 m (the cars' own stud), walls laid in courses of brick with studs along the top, low barriers two courses high, crates as 4×4 bricks and smooth tile where there is ice — smooth is why it is slippery. Each map has its own few colours and keeps its own sky and light. The style is a generic toy-brick one: no marks, sets or pieces of any real brand are reproduced.
+**Built of bricks.** The cars were always bricks; the ground they fought on was concrete, sand and grass. Now every arena is a model built from the same kit, on a studded baseplate with a stud every 0.4 m — the cars' own stud.
+
+- *Walls* are laid in courses, half a brick over the one below, in two colours: a dark plinth and a coping course in the second colour, or hazard checks, or stripes, or an odd brick here and there, by map. Studs run along the top. Corners, ends and free-standing pillars carry a 2×2 post under a pyramid cap with a lamp on it; every fourth tile of a straight run carries a low one.
+- *The floor* is printed like the board of a game: two tones of plate in a 4 m chequer, each team's end in its colour with a row of chevrons pointing at the other side, a dashed halfway line, a centre circle, and a kerb line along the foot of everything that stands on it. Ice is smooth tile with no studs — smooth is why it is slippery — and mud is a patch of brown plates.
+- *Things on the floor*: barriers are two courses of hazard-checked brick, crates are 4×4 bricks with sixteen studs.
+- *Around the arena*, beyond the walls where no car can go, stand things built of the same bricks so that the board sits in a place: trees and bushes, snow-topped pines, cacti and rock piles, lamp posts, chimneys, stacks of tyres.
+
+Each map has its own handful of colours and its own way of laying them, and keeps its own sky and light. The style is a generic toy-brick one: no marks, sets or pieces of any real brand are reproduced. Stud patterns on the ground are drawn in the ground shader and fade with distance so they do not shimmer; studs on walls and crates are real geometry.
 
 ## Left out on purpose
 

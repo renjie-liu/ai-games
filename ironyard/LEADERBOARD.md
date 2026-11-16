@@ -1,6 +1,6 @@
 # Ironyard leaderboard
 
-Engine 0.5.4 · 20 bots · 1200 credits per vehicle · mixed-slot-rotation-v2.
+Engine 0.6.0 · 20 bots · 1200 credits per vehicle · mixed-slot-rotation-v2.
 
 Status: **Complete**. Reproduce with `node node/cli.js ladder --write`, then `npm run build`.
 
@@ -10,26 +10,26 @@ Each mode is a separate ranking; there is no combined overall or model ranking. 
 
 | bot | author | recorded model | 1v1 rank | 2v2 rank | 3v3 rank |
 |---|---|---|---:|---:|---:|
-| `grindstone` | Rust Hollow Garage | Opus | 1 | 5 | 6 |
-| `quillback` | Tin Lantern Garage | Fable | 2 | 2 | 2 |
-| `carbon` | Carbon | gemini-4-carbon-medium | 3 | 3 | 3 |
-| `astra` | Astra | gpt-6-astra | 4 | 1 | 1 |
-| `sol` | Sol | gpt-6-sol | 5 | 6 | 4 |
-| `tailwind` | Renjie Liu | Muse Spark | 6 | 4 | 5 |
-| `hydrogen` | Hydrogen | gemini-4-hydrogen-medium | 7 | 8 | 13 |
-| `sapper` | ironyard | Not recorded | 8 | 9 | 15 |
-| `pyro` | ironyard | Not recorded | 9 | 7 | 9 |
-| `bulldozer` | ironyard | Not recorded | 10 | 11 | 7 |
-| `angler` | ironyard | Not recorded | 11 | 14 | 8 |
-| `bastion` | ironyard | Not recorded | 12 | 10 | 11 |
-| `longshot` | ironyard | Not recorded | 13 | 15 | 10 |
-| `wolfpack` | ironyard | Not recorded | 14 | 16 | 16 |
-| `wasp` | ironyard | Not recorded | 15 | 12 | 14 |
-| `boxer` | ironyard | Not recorded | 16 | 13 | 12 |
-| `thumper` | ironyard | Not recorded | 17 | 20 | 18 |
-| `medic` | ironyard | Not recorded | 18 | 19 | 19 |
-| `hornet` | ironyard | Not recorded | 19 | 17 | 17 |
-| `rookie` | ironyard | Not recorded | 20 | 18 | 20 |
+| `grindstone` | Opus | Opus | 1 | 3 | 6 |
+| `quillback` | Fable | Fable | 2 | 1 | 2 |
+| `carbon` | gemini-4-carbon-medium | gemini-4-carbon-medium | 3 | 6 | 4 |
+| `astra` | gpt-6-astra | gpt-6-astra | 4 | 2 | 1 |
+| `sol` | gpt-6-sol | gpt-6-sol | 5 | 4 | 3 |
+| `tailwind` | Muse Spark | Muse Spark | 6 | 5 | 5 |
+| `hydrogen` | gemini-4-hydrogen-medium | gemini-4-hydrogen-medium | 7 | 7 | 8 |
+| `sapper` | ironyard | Not recorded | 8 | 12 | 12 |
+| `angler` | ironyard | Not recorded | 9 | 8 | 13 |
+| `longshot` | ironyard | Not recorded | 10 | 9 | 7 |
+| `boxer` | ironyard | Not recorded | 11 | 14 | 17 |
+| `bulldozer` | ironyard | Not recorded | 12 | 13 | 14 |
+| `bastion` | ironyard | Not recorded | 13 | 15 | 11 |
+| `wolfpack` | ironyard | Not recorded | 14 | 10 | 18 |
+| `pyro` | ironyard | Not recorded | 15 | 11 | 9 |
+| `thumper` | ironyard | Not recorded | 16 | 17 | 10 |
+| `wasp` | ironyard | Not recorded | 17 | 16 | 15 |
+| `medic` | ironyard | Not recorded | 18 | 18 | 19 |
+| `hornet` | ironyard | Not recorded | 19 | 19 | 16 |
+| `rookie` | ironyard | Not recorded | 20 | 20 | 20 |
 
 ## How to read the rankings
 
@@ -44,120 +44,120 @@ See [ranking methodology and audit](docs/RANKING.md) for details, error handling
 
 ## 1v1
 
-3040 of 3040 matches on file.
+5320 of 5320 matches on file.
 
 | # | bot | author | rating | played | W | D | L | win % |
 |---:|---|---|---:|---:|---:|---:|---:|---:|
-| 1 | `grindstone` | Rust Hollow Garage | 1983 | 304 | 279 | 0 | 25 | 92 |
-| 2 | `quillback` | Tin Lantern Garage | 1877 | 304 | 261 | 0 | 43 | 86 |
-| 3 | `carbon` | Carbon | 1807 | 304 | 246 | 0 | 58 | 81 |
-| 4 | `astra` | Astra | 1782 | 304 | 240 | 0 | 64 | 79 |
-| 5 | `sol` | Sol | 1676 | 304 | 211 | 0 | 93 | 69 |
-| 6 | `tailwind` | Renjie Liu | 1612 | 304 | 191 | 0 | 113 | 63 |
-| 7 | `hydrogen` | Hydrogen | 1517 | 304 | 158 | 0 | 146 | 52 |
-| 8 | `sapper` | ironyard | 1503 | 304 | 153 | 0 | 151 | 50 |
-| 9 | `pyro` | ironyard | 1475 | 304 | 143 | 0 | 161 | 47 |
-| 10 | `bulldozer` | ironyard | 1446 | 304 | 132 | 1 | 171 | 43 |
-| 11 | `angler` | ironyard | 1437 | 304 | 128 | 2 | 174 | 42 |
-| 12 | `bastion` | ironyard | 1433 | 304 | 127 | 1 | 176 | 42 |
-| 13 | `longshot` | ironyard | 1433 | 304 | 127 | 1 | 176 | 42 |
-| 14 | `wolfpack` | ironyard | 1417 | 304 | 122 | 0 | 182 | 40 |
-| 15 | `wasp` | ironyard | 1395 | 304 | 114 | 0 | 190 | 38 |
-| 16 | `boxer` | ironyard | 1375 | 304 | 107 | 0 | 197 | 35 |
-| 17 | `thumper` | ironyard | 1343 | 304 | 96 | 0 | 208 | 32 |
-| 18 | `medic` | ironyard | 1341 | 304 | 95 | 0 | 209 | 31 |
-| 19 | `hornet` | ironyard | 1251 | 304 | 67 | 0 | 237 | 22 |
-| 20 | `rookie` | ironyard | 1146 | 304 | 40 | 1 | 263 | 13 |
+| 1 | `grindstone` | Opus | 2030 | 532 | 493 | 0 | 39 | 93 |
+| 2 | `quillback` | Fable | 1921 | 532 | 464 | 0 | 68 | 87 |
+| 3 | `carbon` | gemini-4-carbon-medium | 1839 | 532 | 436 | 0 | 96 | 82 |
+| 4 | `astra` | gpt-6-astra | 1823 | 532 | 430 | 0 | 102 | 81 |
+| 5 | `sol` | gpt-6-sol | 1686 | 532 | 370 | 0 | 162 | 70 |
+| 6 | `tailwind` | Muse Spark | 1617 | 532 | 334 | 0 | 198 | 63 |
+| 7 | `hydrogen` | gemini-4-hydrogen-medium | 1555 | 532 | 299 | 0 | 233 | 56 |
+| 8 | `sapper` | ironyard | 1502 | 532 | 267 | 0 | 265 | 50 |
+| 9 | `angler` | ironyard | 1475 | 532 | 250 | 1 | 281 | 47 |
+| 10 | `longshot` | ironyard | 1454 | 532 | 238 | 0 | 294 | 45 |
+| 11 | `boxer` | ironyard | 1444 | 532 | 232 | 0 | 300 | 44 |
+| 12 | `bulldozer` | ironyard | 1438 | 532 | 228 | 0 | 304 | 43 |
+| 13 | `bastion` | ironyard | 1397 | 532 | 203 | 0 | 329 | 38 |
+| 14 | `wolfpack` | ironyard | 1382 | 532 | 194 | 0 | 338 | 37 |
+| 15 | `pyro` | ironyard | 1373 | 532 | 189 | 0 | 343 | 36 |
+| 16 | `thumper` | ironyard | 1367 | 532 | 185 | 0 | 347 | 35 |
+| 17 | `wasp` | ironyard | 1351 | 532 | 176 | 0 | 356 | 33 |
+| 18 | `medic` | ironyard | 1323 | 532 | 160 | 0 | 372 | 30 |
+| 19 | `hornet` | ironyard | 1259 | 532 | 126 | 0 | 406 | 24 |
+| 20 | `rookie` | ironyard | 1051 | 532 | 45 | 1 | 486 | 9 |
 
 ### Authors — ordered by best bot
 
 | author | bots | best bot | best rating | mean rating |
 |---|---:|---|---:|---:|
-| Rust Hollow Garage | 1 | `grindstone` | 1983 | 1983 |
-| Tin Lantern Garage | 1 | `quillback` | 1877 | 1877 |
-| Carbon | 1 | `carbon` | 1807 | 1807 |
-| Astra | 1 | `astra` | 1782 | 1782 |
-| Sol | 1 | `sol` | 1676 | 1676 |
-| Renjie Liu | 1 | `tailwind` | 1612 | 1612 |
-| Hydrogen | 1 | `hydrogen` | 1517 | 1517 |
-| ironyard | 13 | `sapper` | 1503 | 1384 |
+| Opus | 1 | `grindstone` | 2030 | 2030 |
+| Fable | 1 | `quillback` | 1921 | 1921 |
+| gemini-4-carbon-medium | 1 | `carbon` | 1839 | 1839 |
+| gpt-6-astra | 1 | `astra` | 1823 | 1823 |
+| gpt-6-sol | 1 | `sol` | 1686 | 1686 |
+| Muse Spark | 1 | `tailwind` | 1617 | 1617 |
+| gemini-4-hydrogen-medium | 1 | `hydrogen` | 1555 | 1555 |
+| ironyard | 13 | `sapper` | 1502 | 1370 |
 
 ## 2v2
 
-800 of 800 matches on file.
+840 of 840 matches on file.
 
 | # | bot | author | rating | played | W | D | L | win % |
 |---:|---|---|---:|---:|---:|---:|---:|---:|
-| 1 | `astra` | Astra | 1682 | 160 | 102 | 0 | 58 | 64 |
-| 2 | `quillback` | Tin Lantern Garage | 1672 | 160 | 106 | 0 | 54 | 66 |
-| 3 | `carbon` | Carbon | 1665 | 160 | 93 | 0 | 67 | 58 |
-| 4 | `tailwind` | Renjie Liu | 1655 | 160 | 100 | 0 | 60 | 63 |
-| 5 | `grindstone` | Rust Hollow Garage | 1653 | 160 | 93 | 0 | 67 | 58 |
-| 6 | `sol` | Sol | 1650 | 160 | 100 | 0 | 60 | 63 |
-| 7 | `pyro` | ironyard | 1545 | 160 | 101 | 0 | 59 | 63 |
-| 8 | `hydrogen` | Hydrogen | 1508 | 160 | 66 | 0 | 94 | 41 |
-| 9 | `sapper` | ironyard | 1483 | 160 | 88 | 0 | 72 | 55 |
-| 10 | `bastion` | ironyard | 1481 | 160 | 86 | 0 | 74 | 54 |
-| 11 | `bulldozer` | ironyard | 1464 | 160 | 89 | 0 | 71 | 56 |
-| 12 | `wasp` | ironyard | 1457 | 160 | 79 | 0 | 81 | 49 |
-| 13 | `boxer` | ironyard | 1430 | 160 | 75 | 0 | 85 | 47 |
-| 14 | `angler` | ironyard | 1426 | 160 | 56 | 0 | 104 | 35 |
-| 15 | `longshot` | ironyard | 1423 | 160 | 66 | 0 | 94 | 41 |
-| 16 | `wolfpack` | ironyard | 1421 | 160 | 67 | 0 | 93 | 42 |
-| 17 | `hornet` | ironyard | 1369 | 160 | 63 | 0 | 97 | 39 |
-| 18 | `rookie` | ironyard | 1368 | 160 | 62 | 0 | 98 | 39 |
-| 19 | `medic` | ironyard | 1354 | 160 | 54 | 0 | 106 | 34 |
-| 20 | `thumper` | ironyard | 1324 | 160 | 54 | 0 | 106 | 34 |
+| 1 | `quillback` | Fable | 1811 | 168 | 131 | 0 | 37 | 78 |
+| 2 | `astra` | gpt-6-astra | 1717 | 168 | 114 | 0 | 54 | 68 |
+| 3 | `grindstone` | Opus | 1688 | 168 | 97 | 0 | 71 | 58 |
+| 4 | `sol` | gpt-6-sol | 1683 | 168 | 106 | 0 | 62 | 63 |
+| 5 | `tailwind` | Muse Spark | 1677 | 168 | 101 | 0 | 67 | 60 |
+| 6 | `carbon` | gemini-4-carbon-medium | 1676 | 168 | 97 | 0 | 71 | 58 |
+| 7 | `hydrogen` | gemini-4-hydrogen-medium | 1522 | 168 | 59 | 0 | 109 | 35 |
+| 8 | `angler` | ironyard | 1506 | 168 | 76 | 0 | 92 | 45 |
+| 9 | `longshot` | ironyard | 1499 | 168 | 93 | 0 | 75 | 55 |
+| 10 | `wolfpack` | ironyard | 1455 | 168 | 78 | 0 | 90 | 46 |
+| 11 | `pyro` | ironyard | 1441 | 168 | 88 | 0 | 80 | 52 |
+| 12 | `sapper` | ironyard | 1436 | 168 | 71 | 0 | 97 | 42 |
+| 13 | `bulldozer` | ironyard | 1434 | 168 | 84 | 0 | 84 | 50 |
+| 14 | `boxer` | ironyard | 1420 | 168 | 81 | 0 | 87 | 48 |
+| 15 | `bastion` | ironyard | 1416 | 168 | 75 | 0 | 93 | 45 |
+| 16 | `wasp` | ironyard | 1397 | 168 | 83 | 0 | 85 | 49 |
+| 17 | `thumper` | ironyard | 1364 | 168 | 63 | 0 | 105 | 38 |
+| 18 | `medic` | ironyard | 1335 | 168 | 70 | 0 | 98 | 42 |
+| 19 | `hornet` | ironyard | 1325 | 168 | 65 | 0 | 103 | 39 |
+| 20 | `rookie` | ironyard | 1281 | 168 | 48 | 0 | 120 | 29 |
 
 ### Authors — ordered by best bot
 
 | author | bots | best bot | best rating | mean rating |
 |---|---:|---|---:|---:|
-| Astra | 1 | `astra` | 1682 | 1682 |
-| Tin Lantern Garage | 1 | `quillback` | 1672 | 1672 |
-| Carbon | 1 | `carbon` | 1665 | 1665 |
-| Renjie Liu | 1 | `tailwind` | 1655 | 1655 |
-| Rust Hollow Garage | 1 | `grindstone` | 1653 | 1653 |
-| Sol | 1 | `sol` | 1650 | 1650 |
-| ironyard | 13 | `pyro` | 1545 | 1427 |
-| Hydrogen | 1 | `hydrogen` | 1508 | 1508 |
+| Fable | 1 | `quillback` | 1811 | 1811 |
+| gpt-6-astra | 1 | `astra` | 1717 | 1717 |
+| Opus | 1 | `grindstone` | 1688 | 1688 |
+| gpt-6-sol | 1 | `sol` | 1683 | 1683 |
+| Muse Spark | 1 | `tailwind` | 1677 | 1677 |
+| gemini-4-carbon-medium | 1 | `carbon` | 1676 | 1676 |
+| gemini-4-hydrogen-medium | 1 | `hydrogen` | 1522 | 1522 |
+| ironyard | 13 | `angler` | 1506 | 1408 |
 
 ## 3v3
 
-720 of 720 matches on file.
+756 of 756 matches on file.
 
 | # | bot | author | rating | played | W | D | L | win % |
 |---:|---|---|---:|---:|---:|---:|---:|---:|
-| 1 | `astra` | Astra | 1747 | 198 | 127 | 0 | 71 | 64 |
-| 2 | `quillback` | Tin Lantern Garage | 1696 | 222 | 135 | 0 | 87 | 61 |
-| 3 | `carbon` | Carbon | 1653 | 210 | 124 | 0 | 86 | 59 |
-| 4 | `sol` | Sol | 1633 | 186 | 94 | 0 | 92 | 51 |
-| 5 | `tailwind` | Renjie Liu | 1599 | 210 | 94 | 0 | 116 | 45 |
-| 6 | `grindstone` | Rust Hollow Garage | 1596 | 204 | 100 | 0 | 104 | 49 |
-| 7 | `bulldozer` | ironyard | 1568 | 216 | 147 | 0 | 69 | 68 |
-| 8 | `angler` | ironyard | 1520 | 228 | 137 | 0 | 91 | 60 |
-| 9 | `pyro` | ironyard | 1512 | 216 | 118 | 0 | 98 | 55 |
-| 10 | `longshot` | ironyard | 1488 | 228 | 130 | 0 | 98 | 57 |
-| 11 | `bastion` | ironyard | 1480 | 210 | 114 | 0 | 96 | 54 |
-| 12 | `boxer` | ironyard | 1460 | 240 | 121 | 0 | 119 | 50 |
-| 13 | `hydrogen` | Hydrogen | 1460 | 222 | 67 | 0 | 155 | 30 |
-| 14 | `wasp` | ironyard | 1445 | 216 | 108 | 0 | 108 | 50 |
-| 15 | `sapper` | ironyard | 1421 | 216 | 111 | 0 | 105 | 51 |
-| 16 | `wolfpack` | ironyard | 1396 | 216 | 104 | 0 | 112 | 48 |
-| 17 | `hornet` | ironyard | 1383 | 222 | 96 | 0 | 126 | 43 |
-| 18 | `thumper` | ironyard | 1340 | 216 | 87 | 0 | 129 | 40 |
-| 19 | `medic` | ironyard | 1314 | 216 | 74 | 0 | 142 | 34 |
-| 20 | `rookie` | ironyard | 1308 | 228 | 72 | 0 | 156 | 32 |
+| 1 | `astra` | gpt-6-astra | 1843 | 204 | 140 | 0 | 64 | 69 |
+| 2 | `quillback` | Fable | 1750 | 228 | 135 | 0 | 93 | 59 |
+| 3 | `sol` | gpt-6-sol | 1665 | 198 | 116 | 0 | 82 | 59 |
+| 4 | `carbon` | gemini-4-carbon-medium | 1652 | 222 | 103 | 0 | 119 | 46 |
+| 5 | `tailwind` | Muse Spark | 1642 | 222 | 111 | 0 | 111 | 50 |
+| 6 | `grindstone` | Opus | 1591 | 216 | 99 | 0 | 117 | 46 |
+| 7 | `longshot` | ironyard | 1539 | 240 | 147 | 0 | 93 | 61 |
+| 8 | `hydrogen` | gemini-4-hydrogen-medium | 1498 | 234 | 84 | 0 | 150 | 36 |
+| 9 | `pyro` | ironyard | 1487 | 228 | 109 | 0 | 119 | 48 |
+| 10 | `thumper` | ironyard | 1484 | 228 | 126 | 0 | 102 | 55 |
+| 11 | `bastion` | ironyard | 1478 | 216 | 116 | 0 | 100 | 54 |
+| 12 | `sapper` | ironyard | 1473 | 228 | 118 | 0 | 110 | 52 |
+| 13 | `angler` | ironyard | 1458 | 240 | 116 | 0 | 124 | 48 |
+| 14 | `bulldozer` | ironyard | 1443 | 228 | 124 | 0 | 104 | 54 |
+| 15 | `wasp` | ironyard | 1416 | 228 | 129 | 0 | 99 | 57 |
+| 16 | `hornet` | ironyard | 1407 | 234 | 135 | 0 | 99 | 58 |
+| 17 | `boxer` | ironyard | 1365 | 252 | 112 | 0 | 140 | 44 |
+| 18 | `wolfpack` | ironyard | 1352 | 222 | 103 | 0 | 119 | 46 |
+| 19 | `medic` | ironyard | 1265 | 228 | 75 | 0 | 153 | 33 |
+| 20 | `rookie` | ironyard | 1253 | 240 | 70 | 0 | 170 | 29 |
 
 ### Authors — ordered by best bot
 
 | author | bots | best bot | best rating | mean rating |
 |---|---:|---|---:|---:|
-| Astra | 1 | `astra` | 1747 | 1747 |
-| Tin Lantern Garage | 1 | `quillback` | 1696 | 1696 |
-| Carbon | 1 | `carbon` | 1653 | 1653 |
-| Sol | 1 | `sol` | 1633 | 1633 |
-| Renjie Liu | 1 | `tailwind` | 1599 | 1599 |
-| Rust Hollow Garage | 1 | `grindstone` | 1596 | 1596 |
-| ironyard | 13 | `bulldozer` | 1568 | 1433 |
-| Hydrogen | 1 | `hydrogen` | 1460 | 1460 |
+| gpt-6-astra | 1 | `astra` | 1843 | 1843 |
+| Fable | 1 | `quillback` | 1750 | 1750 |
+| gpt-6-sol | 1 | `sol` | 1665 | 1665 |
+| gemini-4-carbon-medium | 1 | `carbon` | 1652 | 1652 |
+| Muse Spark | 1 | `tailwind` | 1642 | 1642 |
+| Opus | 1 | `grindstone` | 1591 | 1591 |
+| ironyard | 13 | `longshot` | 1539 | 1417 |
+| gemini-4-hydrogen-medium | 1 | `hydrogen` | 1498 | 1498 |
