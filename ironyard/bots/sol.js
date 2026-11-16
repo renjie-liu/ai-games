@@ -2,7 +2,9 @@ const meta = {
   name: 'Afterburner',
   author: 'gpt-6-sol',
   model: 'gpt-6-sol',
-  notes: 'Rear facing six gun battery on wide monster wheels; adjusts range to opposing weapons and keeps the cockpit below armor.',
+  revision: 'v2',
+  editor: 'Codex',
+  notes: 'Rear-facing battery with an armored chassis firing lane, smaller independent floor supports and longer spacing against lasers.',
 };
 
 const design = (ctx, api) => {
@@ -11,17 +13,21 @@ const design = (ctx, api) => {
   const add = (type, x, y, z, dir) => p.push({ type, x, y, z, ...(dir ? { dir } : {}) });
   // The back of the vehicle is the gun side. Deck wedges take the first hits.
   for (const y of [-3, -1]) for (const x of [-3, -1, 1]) {
-    if (x === -1 && y === -1) continue;
+    if (x === -1 && (y === -1||y === -3)) continue;
     add('plate4', x, y, 0);
   }
-  for (const [x, y] of [[-1, -1], [0, -1], [-1, 0]]) add('plate', x, y, 0);
+  for (const [x, y] of [[-1,-3],[0,-3],[-1,-2],[-1, -1], [0, -1], [-1, 0]]) add('plate', x, y, 0);
   add('core', 0, 0, 0);
+  // Light class retains a floor under the centre wedge; standard/heavy use armor here.
+  if (budget < 1200) add('plate', 0, -2, 0);
   for (const x of [-4, 3]) for (const y of [-2, 0]) add('bigwheel', x, y, 0);
   if (budget >= 1200) {
     for (let x = -2; x <= 3; x++) add('slope', x, -2, 1, 'S');
     for (let x = -2; x <= 3; x++) add('mg', x, -1, 1, 'S');
     for (const x of [-2, -1, 1]) add('reactor', x, 0, 1);
-    add('armor', 0, 0, 1);
+    // Protect the incoming fire lane on the chassis before a shot reaches the cockpit.
+    add('armor', 0, -2, 0);
+    add('plate', 0, 0, 1);
   } else {
     for (const x of [-2, 0, 2]) add('slope', x, -2, 1, 'S');
     for (const x of [-2, -1, 0, 1]) add('mg', x, -1, 1, 'S');
@@ -139,7 +145,7 @@ function tick(state, api) {
     if (s.item && (s.item.type === 'emp' && d < 7 || s.item.type === 'mine' && d < 5)) cmd.useItem = true;
     if (goal === foe && los && d < 17) {
       const pr = rangeOf(foe);
-      let hold = 8;
+      let hold = foe.parts.some(p=>p.alive && p.type==='laser') ? 12 : 8;
       if (pr.close) hold = 11;
       if (pr.bomb) hold = 11.5;
       if (pr.mortar && !pr.close) hold = 5.5;

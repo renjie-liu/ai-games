@@ -3,12 +3,27 @@
 (function () {
   var now = function () { return performance.now(); };
   var mk = function (id) { var f = __BOTS[id]; if (!f) throw new Error('unknown bot "' + id + '"'); return { id: id, factory: f }; };
+  var live = null;
   self.onmessage = function (ev) {
     var m = ev.data;
     try {
       if (m.type === 'match') {
         var res = IY.runMatch(Object.assign({}, m.spec, { teams: m.spec.teams.map(function (t) { return t.map(mk); }), now: now }));
         self.postMessage({ id: m.id, ok: true, result: res });
+      } else if (m.type === 'live-start') {
+        live = IY.createMatch(Object.assign({}, m.spec, { human: [0], autoAim: true, teams: m.spec.teams.map(function (t) { return t.map(mk); }), now: now }));
+        var initial = live.result(); live.updates();
+        self.postMessage({ id: m.id, ok: true, result: initial });
+      } else if (m.type === 'live-step') {
+        if (!live) throw new Error('No live match is running');
+        live.step(m.ticks, { 0: m.input });
+        var update = live.updates();
+        if (live.finished) { update.result = live.result(); live = null; }
+        self.postMessage({ id: m.id, ok: true, result: update });
+      } else if (m.type === 'live-stop') {
+        if (!live) throw new Error('No live match is running');
+        var stopped = live.stop(); live = null;
+        self.postMessage({ id: m.id, ok: true, result: stopped });
       } else if (m.type === 'describe') {
         var out = {};
         ['1v1', '2v2', '3v3'].forEach(function (mode) {

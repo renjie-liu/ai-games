@@ -1,5 +1,5 @@
 // Astra: sustained-fire assault car with a protected low cockpit.
-const meta = {name:'Astra — Starforge',author:'gpt-6-astra',model:'gpt-6-astra',notes:'Adaptive sustained-fire battery, component targeting, coordinated focus and predictive terrain guards.'};
+const meta = {name:'Astra — Starforge',author:'gpt-6-astra',model:'gpt-6-astra',revision:'v2', editor:'Codex', notes:'Compact-arena aft cockpit and pursuit-aware spacing; balanced touring chassis for larger maps, component targeting and team focus.'};
 function design(ctx,api){
  const p=[], put=(type,x,y,z,dir='N')=>p.push({type,x,y,z,dir});
  const light=ctx.budget<1100,heavy=ctx.budget>=1700;
@@ -22,6 +22,14 @@ function design(ctx,api){
   put('plate',0,-2,0);put('repairer',0,-2,1);
   for(const x of [-2,2]){put('plate',x,-1,0);put('armor',x,0,1);}
   put('reactor',0,-3,0);put('radar',0,-3,1);
+ }
+ // Compact arenas reward a tucked-back cockpit; keep the balanced touring chassis on large maps.
+ if(!light&&!heavy&&Math.min(api.map.width,api.map.height)<=40){
+  for(const q of p){
+   if(q.type==='core')q.y=-1;
+   else if(q.type==='reactor'&&q.x===0)q.y=0;
+   else if(q.type==='armor'&&q.x===0&&q.y===0&&q.z===1)q.y=-1;
+  }
  }
  return {name:'Astra Starforge',paint:{accent:'purple'},parts:p};
 }
@@ -77,11 +85,15 @@ function tick(state,api){
   const los=N.los(s.x,s.y,e.x,e.y);
   cmd.fire=los&&d<14;
   const close=e.parts.some(p=>p.alive&&['saw','piston','flamer','spike','plow','keg'].includes(p.type));
-  const keep=close?10:4.5;
+  const laser=e.parts.some(p=>p.alive&&p.type==='laser');
+  const compact=Math.min(api.map.width,api.map.height)<=40&&api.rules.budget>=1100&&api.rules.budget<1700;
+  const keep=compact?(close?11:laser?12:4.5):(close?10:4.5);
   if(los&&d<15){
    const a=U.angleTo(s,lead),err=U.angDiff(a,s.heading);
    cmd.steer=clamp(err*2.0-s.angVel*.55,-1,1);
-   const desired=clamp((d-keep)*1.5,-5,5);
+   // Match an approaching threat's velocity as well as its distance.
+   const pursuit=(close||laser)?e.vx*Math.cos(s.heading)+e.vy*Math.sin(s.heading):0;
+   const desired=compact?clamp((d-keep)*1.5+pursuit,-8,6):clamp((d-keep)*1.5,-5,5);
    const vf=s.vx*Math.cos(s.heading)+s.vy*Math.sin(s.heading);
    cmd.throttle=Math.abs(err)<1.1?clamp((desired-vf)*.35,-1,1):0;
    cmd.brake=Math.abs(d-keep)<1?0.6:0;

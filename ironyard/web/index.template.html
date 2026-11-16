@@ -114,6 +114,10 @@ pre { background: #08111b; border: 1px solid var(--line); border-radius: var(--r
 .transport input[type="range"] { flex: 1 1 140px; min-width: 100px; accent-color: var(--hazard); }
 .transport .btn, .transport select { min-height: 34px; padding: 5px 9px; }
 .transport .time { font: 500 12px var(--mono); color: var(--dim); min-width: 84px; text-align: right; }
+.driver-pad { padding: 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--paper); }
+.driver-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.driver-buttons button { touch-action: none; user-select: none; min-width: 48px; min-height: 48px; }
+.driver-buttons button[aria-pressed="true"] { background: var(--hazard); color: #101010; }
 .team-card { border-left: 3px solid; padding: 0; }
 .team-card.t0 { border-left-color: var(--hazard); } .team-card.t1 { border-left-color: var(--coolant); }
 .veh { display: grid; grid-template-columns: minmax(0, 1fr) 96px 26px; gap: 8px; align-items: center; padding: 7px 10px; border-bottom: 1px solid var(--line); background: none; border-left: 0; border-right: 0; border-top: 0; width: 100%; text-align: left; color: var(--chalk); }
@@ -215,7 +219,7 @@ details > summary { cursor: pointer; padding: 8px 12px; font-weight: 500; }
 <body>
 <header class="masthead">
   <div class="brand"><span class="brand-mark">IRON<i>YARD</i></span></div>
-  <p class="brand-tag">Agents build a car out of bricks, then write its strategy; matches run offline, and the same seed always gives the same result.</p>
+  <p class="brand-tag">Build a car out of bricks. Watch the bots battle, or take the wheel yourself.</p>
   <nav class="tabs" role="tablist" aria-label="Pages">
     <button class="tab" role="tab" data-tab="arena">Arena</button>
     <button class="tab" role="tab" data-tab="garage">Garage</button>
@@ -248,6 +252,22 @@ details > summary { cursor: pointer; padding: 8px 12px; font-weight: 500; }
             <span class="time num" id="time">0.0 / 0.0s</span>
             <div class="seg" role="group" aria-label="View"><button id="view3d" aria-pressed="true">3D</button><button id="view2d" aria-pressed="false">2D</button></div>
             <select id="camera" aria-label="Camera"></select>
+            <button class="btn primary" id="drive-start" type="button">Drive Orange #1</button>
+          </div>
+        </div>
+        <div class="driver-pad" id="driver-panel" hidden>
+          <strong id="driver-status" role="status">You drive Orange #1</strong>
+          <p class="note">WASD / arrows: drive · Space: fire · X: brake · Shift: boost · E: use item. Guns assist aim at visible enemies within their firing arcs. You can also hold the buttons below.</p>
+          <div class="driver-buttons" role="group" aria-label="Driving controls">
+            <button type="button" class="btn" data-drive="left" aria-label="Steer left">←</button>
+            <button type="button" class="btn" data-drive="forward" aria-label="Drive forward">↑</button>
+            <button type="button" class="btn" data-drive="reverse" aria-label="Reverse">↓</button>
+            <button type="button" class="btn" data-drive="right" aria-label="Steer right">→</button>
+            <button type="button" class="btn" data-drive="fire">Fire</button>
+            <button type="button" class="btn" data-drive="brake">Brake</button>
+            <button type="button" class="btn" data-drive="boost">Boost</button>
+            <button type="button" class="btn" data-drive="item">Item</button>
+            <button type="button" class="btn" id="driver-stop">End drive</button>
           </div>
         </div>
         <div class="sheet" id="report-sheet">
@@ -260,6 +280,7 @@ details > summary { cursor: pointer; padding: 8px 12px; font-weight: 500; }
         <form class="sheet" id="setup">
           <header><h2>Match setup</h2></header>
           <div class="pad stack">
+            <label class="f">Control<select id="control"><option value="watch">Watch bots</option><option value="drive">Drive Orange #1</option></select></label>
             <div class="row">
               <div class="seg" id="mode-seg" role="group" aria-label="Mode"></div>
               <label class="f grow">Map<select id="map"></select></label>
@@ -278,6 +299,7 @@ details > summary { cursor: pointer; padding: 8px 12px; font-weight: 500; }
               <button class="btn" type="button" id="reseed" title="Run again with the next seed">Next seed</button>
             </div>
             <div class="row"><label class="btn ghost" style="font-size:13px">Import replay JSON<input type="file" id="replay-file" accept=".json,application/json" hidden></label><span class="note">A file saved by the MCP tool run_match with save_replay</span></div>
+            <button class="btn ghost" type="button" id="replay-save">Save replay JSON</button>
             <div id="setup-msg"></div>
           </div>
         </form>
