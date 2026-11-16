@@ -1,4 +1,4 @@
-# Ironyard — rules and controller contract (engine 0.5.4)
+# Ironyard — rules and controller contract (engine 0.6.0)
 
 Ironyard is a deterministic vehicle-combat arena. **You build the car and you write its brain.**
 Before a match you hand in ONE JavaScript file containing a blueprint (which bricks go where, within a
@@ -78,22 +78,23 @@ What happens under fire:
 * Slopes: a kinetic or explosive hit arriving against the slope's facing (within 60°) only does 45%.
 * **What a hit is worth** after the piece it lands on has had its say (armor takes 2 off every kinetic or explosive hit, never
   more than three quarters of it; a slope struck on its face lets 45% through and then takes 1 off). Lasers, flame and saws are not reduced by either.
-  A mortar round comes down from above and the splash of any burst has no direction: a slope's face deflects neither:
+  A mortar round comes down from above and the splash of any burst has no direction: a slope's face deflects neither. Nor does it turn
+  a rail slug, which only loses the slope's armor point:
 
 | weapon | one hit | on a plain piece | on armor | on a slope, face on | on a slope, from elsewhere |
 |---|---|---:|---:|---:|---:|
 | mg | 4 kinetic | 4 | 2 | 0.8 | 3 |
 | cannon | 30 kinetic | 30 | 28 | 12.5 | 29 |
-| railgun | 64 kinetic | 64 | 62 | 27.8 | 63 |
-| missile | 30 x2 explosive | 30 | 28 | 12.5 | 29 |
+| railgun | 90 kinetic | 90 | 88 | 89 | 89 |
+| missile | 28 x2 explosive | 28 | 26 | 11.6 | 27 |
 | mortar | 46 explosive | 46 | 44 | 45 | 45 |
 
 * Decor is not solid: shots pass through it, and it is shaken off when the piece under it takes 20 damage.
 * **Fire.** Every piece has heat. Flamethrowers and lava raise it steadily. Every blast raises it too: the burst of a cannon shell, a missile or a
   mortar round gives each piece it damages up to 0.35 heat (times that piece's `burn`, less towards the edge of the burst), so three
   or four bursts on the same plates light them, and the blast of a keg or a barrel lights everything in reach that burns at once. At heat 1 a piece
-  that burns catches fire. It then loses 6 hp/s for 6 s (armor does not help) and heats every piece touching
-  it by 0.45/s, so the fire walks across the vehicle. A piece burns once. The tables say what burns: plates, bricks,
+  that burns catches fire. It then loses 5 hp/s for 5 s (armor does not help) and heats every piece touching
+  it by 0.4/s, so the fire walks across the vehicle. A piece burns once. The tables say what burns: plates, bricks,
   wheels and most equipment do; armor, slopes, tracks, spikes, plows, pistons and the core do not, so a row of them is a
   firebreak. A fire is put out by parking on a repair pad, by a repair kit, by a repair arm (it goes for burning pieces
   first), or by letting go of the piece (`jettison`). A keg that catches fire goes off.
@@ -131,14 +132,14 @@ What happens under fire:
 | type | glyph | studs | cost | mass kg | hp | placement | numbers | notes |
 |---|---|---|---|---|---|---|---|---|
 | `mg` | m | 1x1 | 70 | 6 | 90 | deck, dir, clear lane | 4 dmg / 0.125s (32 dps), range 13 m, arc ±50°, traverse 5 rad/s, shot speed 28 m/s, 0.7 energy/shot, kinetic, burns slowly | Wide-arc turret, 32 dps. Shreds plates and wheels; armor halves it. |
-| `cannon` | C | 1x2 | 110 | 13 | 170 | deck, dir, clear lane | 30 dmg / 1.4s (21 dps), range 19 m, arc ±20°, traverse 2.2 rad/s, shot speed 24 m/s, 9 energy/shot, splash 0.75 m x0.3, recoil 100 N·s, kinetic, burns slowly | Slow heavy shell with small splash. Narrow arc: point the car. |
-| `railgun` | R | 1x3 | 170 | 16 | 160 | deck, dir, clear lane | 64 dmg / 4.4s (15 dps), range 24 m, arc ±8°, traverse 1.2 rad/s, instant hit, 30 energy/shot, recoil 220 N·s, kinetic, burns slowly | Instant-hit sniper, three studs long. Punches through 2 pieces (the second takes half). Nearly fixed mount, hungry for energy. |
+| `cannon` | C | 1x2 | 110 | 13 | 170 | deck, dir, clear lane | 30 dmg / 1.6s (19 dps), range 19 m, arc ±20°, traverse 2.2 rad/s, shot speed 24 m/s, 9 energy/shot, splash 0.75 m x0.3, recoil 100 N·s, kinetic, burns slowly | Slow heavy shell with small splash. Narrow arc: point the car. |
+| `railgun` | R | 1x3 | 170 | 16 | 160 | deck, dir, clear lane | 90 dmg / 4s (23 dps), range 24 m, arc ±8°, traverse 1.2 rad/s, instant hit, 30 energy/shot, goes through 3 pieces, slopes do not turn it, recoil 220 N·s, kinetic, burns slowly | Instant-hit sniper, three studs long. Punches through 3 pieces (each takes half of the one before) and a slope does not turn its slug. Nearly fixed mount, hungry for energy. |
 | `laser` | L | 1x1 | 120 | 8 | 90 | deck, dir, clear lane | 22 dps beam, range 10 m, arc ±35°, traverse 4 rad/s, instant hit, 11 energy/s, energy, burns slowly | Continuous beam that ignores armor and slopes. Short range and drains energy fast. |
-| `missile` | M | 2x2 | 170 | 15 | 200 | deck, dir, clear lane | 30 dmg x2 / 3.6s (17 dps), range 40 m, arc ±60°, traverse 6 rad/s, shot speed 13 m/s, 16 energy/shot, splash 1.1 m x0.6, recoil 40 N·s, explosive, burns slowly | Fires two homing missiles with splash. Slow enough to dodge behind walls. |
-| `mortar` | N | 2x2 | 150 | 18 | 160 | deck, dir | 46 dmg / 4.4s (10 dps), range 6-24 m, arc 360°, traverse 2.5 rad/s, shot speed 15 m/s, 14 energy/shot, blast 2 m, up to 7 pieces, recoil 150 N·s, explosive, burns slowly | Lobs a shell OVER walls to the point you aim at (give `aim` as {x, y}). 2 m blast. Cannot hit closer than 6 m; needs no clear lane. |
+| `missile` | M | 2x2 | 170 | 15 | 200 | deck, dir, clear lane | 28 dmg x2 / 3.8s (15 dps), range 32 m, arc ±60°, traverse 6 rad/s, shot speed 13 m/s, 16 energy/shot, splash 1 m x0.5, recoil 40 N·s, explosive, burns slowly | Fires two homing missiles with splash. A missile steers for its target only while your team can see it (in sensor range, or in the 1.5 s after it fires): out of sight it flies on straight, so a radar is what makes the full range usable. Slow enough to dodge behind walls. |
+| `mortar` | N | 2x2 | 150 | 18 | 160 | deck, dir | 46 dmg / 4s (12 dps), range 6-24 m, arc 360°, traverse 2.5 rad/s, shot speed 15 m/s, 14 energy/shot, blast 2 m, up to 7 pieces, recoil 150 N·s, explosive, burns slowly | Lobs a shell OVER walls to the point you aim at (give `aim` as {x, y}). 2 m blast. Cannot hit closer than 6 m; needs no clear lane. |
 | `saw` | S | 1x1 | 60 | 10 | 120 | chassis, dir, clear lane | 60 dps on contact, 4 energy/s while cutting, burns slowly | Grinds any enemy piece it touches for 60 dps. Ignores armor and shields, eats the chassis first. |
 | `spike` | V | 1x1 | 28 | 7 | 160 | chassis, dir, clear lane | ram dealt x3, taken x0.25, fireproof | Collisions through this stud deal x3 damage and you take only 25% back. |
-| `flamer` | Y | 1x1 | 100 | 9 | 90 | deck, dir, clear lane | 5 dps to each piece in a ±15° stream, heats them 1.25/s (a piece catches fire at heat 1), range 5.5 m, arc ±40°, traverse 4 rad/s, instant hit, 9 energy/s, fire, burns slowly | Short stream of fire. The stream itself does little: it heats every piece it washes over until they catch fire, and fire spreads from piece to piece. Armor, tracks and cores do not burn. Shields keep it off. |
+| `flamer` | Y | 1x1 | 100 | 9 | 90 | deck, dir, clear lane | 3.5 dps to each piece in a ±15° stream, heats them 1/s (a piece catches fire at heat 1), range 5.5 m, arc ±40°, traverse 4 rad/s, instant hit, 9 energy/s, fire, burns slowly | Short stream of fire. The stream itself does little: it heats every piece it washes over until they catch fire, and fire spreads from piece to piece. Armor, tracks and cores do not burn. Shields keep it off. |
 | `harpoon` | H | 1x2 | 90 | 10 | 120 | deck, dir, clear lane | 10 dmg / 6s (2 dps), range 11 m, arc ±30°, traverse 3 rad/s, shot speed 32 m/s, 10 energy/shot, cable holds 7 s, reels in 3 m/s down to 1.5 m, pulled tight it tears the hooked piece at 45 hp/s, kinetic, burns slowly | Fires a hook on a cable. If it bites, the two vehicles are tied together for up to 7 s: neither gets further from the other than the cable is long, and `reel` winds it in at 3 m/s. The heavier one, or the one with more grip, decides where both go. While the cable is pulled tight it works the piece it bit into loose at 45 hp/s (armour a quarter of that): held, the piece comes off, with whatever only it was holding on. `release` lets go. A shield turns the hook away. |
 | `piston` | U | 1x1 | 70 | 12 | 150 | chassis, dir, clear lane | 24 dmg and 1300 N·s per punch, reach 0.75 m, 2.4 s to reset, 14 energy/punch, fireproof | Punches whatever is right in front of it: 24 damage and a 1300 N·s shove — a 250 kg car leaves at 5 m/s — with the same shove back on you. Fires by itself when an enemy, a crate or a rolling bomb is in reach (`melee: false` holds it). |
 | `keg` | K | 1x1 | 40 | 8 | 110 | either layer, dir | blast 70 dmg, 3.2 m, up to 8 pieces per vehicle, let go, it is flung 8 m/s the way it faces and goes off on the first other vehicle it reaches, or after 2 s, max 4, burns | A bomb you carry. `detonate` sets it off where it sits; `jettison` flings it the way it faces, 8 m/s faster than you were going: it rolls about 10 m, and goes off against the first other vehicle it reaches or after 2 s. Facing forward it is a torpedo, facing back a mine for whoever is chasing. Either way the blast hits everything within 3.2 m, you and your team included, throws it back and sets it alight — and anything that destroys the keg, or sets it on fire, sets it off. |
@@ -150,7 +151,7 @@ What happens under fire:
 | `battery` | e | 1x1 | 35 | 9 | 60 | either layer | +140 energy cap, burns | +140 energy capacity. |
 | `reactor` | r | 1x1 | 75 | 12 | 70 | either layer | +20 energy cap, +8 energy/s, burns slowly | +8 energy/s. Volatile: when destroyed it blasts every piece touching it (sides, above, below) for 35. |
 | `radar` | d | 1x1 | 40 | 3 | 35 | deck, low | sensor +16 m, max 1, burns slowly | +16 m sensor range (shared with the team) and reveals enemy mines. |
-| `shieldgen` | G | 1x1 | 130 | 12 | 70 | deck | 120 shield, +10/s after 3s, 2.5 energy/s, max 1, burns slowly | Bubble that absorbs 120 damage from shots, beams, flame and every blast from outside it — shells, missiles, mortar rounds, powder kegs, barrels, mines — recharging after 3 s without a hit. A blast it soaks still shoves you. Rams, saws, pistons, fire already burning, and a keg that goes off while still bolted to you go straight through. |
+| `shieldgen` | G | 1x1 | 130 | 12 | 70 | deck | 240 shield, +16/s after 2.5s, 2.5 energy/s, max 1, burns slowly | Bubble that absorbs 240 damage from shots, beams, flame and every blast from outside it — shells, missiles, mortar rounds, powder kegs, barrels, mines — recharging after 2.5 s without a hit. A blast it soaks still shoves you. Rams, saws, pistons, fire already burning, and a keg that goes off while still bolted to you go straight through. |
 | `repairer` | + | 1x1 | 90 | 8 | 50 | deck | 9 hp/s heal within 5 m, 6 energy/s, max 2, burns slowly | Heals the most damaged piece on you or an ally within 5 m for 9 hp/s. Cannot rebuild destroyed pieces. |
 
 **Decor (free)**
@@ -225,13 +226,15 @@ One map tile is 2 m.
 | `pad` | `+` | Park on it (speed < 2 m/s) to heal 25 hp/s from a 150 hp pool that refills at 6 hp/s. Puts out fires. |
 | `crate` | `x` | A wall you can break: 150 hp. Shots, blasts, fire, pistons and driving into it at speed all count. Gone, it is floor. |
 | `barrel` | `!` | Blocks the way until something touches it off: 40 hp, then a blast that hits everything within 3 m, shoves it and sets it alight. Barrels set each other off. |
+| `smoke` | `s` | A vehicle whose centre is in smoke is seen only from within 7 m, whatever the sensors — until it fires, which gives it away for 1.5 s as anywhere. A missile stops steering for a target it cannot see. Smoke stops no shot, slows nobody, and hides nothing that lies on the ground (mines, kegs, barrels). |
+| `turbo` | `=` | Wheels, tracks and hover pads push 50% harder while the vehicle is on it. A fast lane for a flank or a getaway. |
 
 Off the edge of the map counts as a pit.
 
 * **Safe zone:** from t=85s to t=138s a circle centred on the map shrinks to 7 m radius (some maps differ: read `state.zone`).
   Outside it every piece takes 10 hp/s.
 * **Vision:** you see an enemy if it is within the sensor range of any living teammate (core 22 m, radar +16 m),
-  or for 1.5s after it fires a gun. Walls do not block vision. `state.lastSeen` remembers where each enemy was.
+  or for 1.5s after it fires a gun. Walls do not block vision. Smoke does: a vehicle whose centre is on a smoke tile is seen only from within 7 m, until it fires. `state.lastSeen` remembers where each enemy was — until one of your team is within 7 m of that spot and the enemy is not to be seen: it has gone, and the entry is dropped until it is seen again. An enemy that dies is always listed, with `alive: false`.
 * **Friendly fire is off** for guns, flamethrowers, saws, pistons and hooks: shots and their splash pass through
   teammates. You can still bump into them. **Powder kegs and barrels are the exception**: their blasts hit everyone in
   reach, a teammate sets off a rolling keg by touching it, and nothing done to your own side counts as damage dealt.
@@ -531,6 +534,208 @@ A yard stacked with crates and powder barrels. Crates are walls until somebody b
 ################################
 ```
 
+### `cage` — Scrap Cage (18x18 tiles = 36x36 m)
+A small walled cage: the teams start 26 m apart with nowhere to run. Crates for cover, powder barrels between the two sides, one repair pad in the middle to fight over. Items: repair, overdrive, shield, emp.
+
+```
+##################
+#................#
+#...B...A....C...#
+#................#
+#................#
+#..xx........xx..#
+#.......!!.......#
+#.*............*.#
+#.......++.......#
+#.......++.......#
+#.*............*.#
+#.......!!.......#
+#..xx........xx..#
+#................#
+#................#
+#...c....a...b...#
+#................#
+##################
+```
+
+### `saltflat` — Salt Flat (44x32 tiles = 88x64 m)
+Wide open and almost bare: two low barriers, one pillar, a mud wallow in the middle and a speed strip down each flank. Whoever sees further and shoots further has the first word; speed has the last. Items: repair, shield, overdrive, nitro, mine, emp.
+
+```
+############################################
+#..........................................#
+#....................A.....................#
+#..........B....................C..........#
+#.==....................................==.#
+#.==....................................==.#
+#.==....................................==.#
+#.==.................*..................==.#
+#.==....................................==.#
+#.==......---..................---......==.#
+#.==....................................==.#
+#.==.................##.................==.#
+#.==.*................................*.==.#
+#.==....................................==.#
+#.==.........*.....mmmmmm...............==.#
+#.==...............mmmmmm...............==.#
+#.==...............mmmmmm...............==.#
+#.==...............mmmmmm.....*.........==.#
+#.==....................................==.#
+#.==.*................................*.==.#
+#.==.................##.................==.#
+#.==....................................==.#
+#.==......---..................---......==.#
+#.==....................................==.#
+#.==..................*.................==.#
+#.==....................................==.#
+#.==....................................==.#
+#.==....................................==.#
+#..........c....................b..........#
+#.....................a....................#
+#..........................................#
+############################################
+```
+
+### `causeway` — Causeway (36x28 tiles = 72x56 m)
+A chasm cuts the map in two. One broad bridge in the middle with powder barrels at its mouth, a narrow one on each flank behind a crate. Shots cross the gap freely; wheels have to pick a bridge, hover craft do not. Items: repair, shield, overdrive, mine, emp, nitro.
+
+```
+####################################
+#..................................#
+#.......B........A.........C.......#
+#..................................#
+#..................................#
+#..................................#
+#.*..............*...............*.#
+#........###............###........#
+#..................................#
+#..................................#
+#...xxx.......!......!.......xxx...#
+#..................................#
+#___...________-..*.-________...___#
+#___...________-....-________...___#
+#___...________-....-________...___#
+#___...________-.*..-________...___#
+#..................................#
+#...xxx.......!......!.......xxx...#
+#..................................#
+#..................................#
+#........###............###........#
+#.*...............*..............*.#
+#..................................#
+#..................................#
+#..................................#
+#.......c.........a........b.......#
+#..................................#
+####################################
+```
+
+### `labyrinth` — Rat Run (30x30 tiles = 60x60 m)
+Corridors six metres wide, walls everywhere, crates plugging the short cuts and smoke over the crossroads in the middle. Nothing here is a long shot: mortars lob over the walls, everything else meets round a corner. Items: repair, shield, overdrive, mine, emp, nitro.
+
+```
+##############################
+#............................#
+#......B......A.......C......#
+#............................#
+#............................#
+#...########......########...#
+#...#....................#...#
+#.*.#.........*..........#.*.#
+#...#....................#...#
+#xxx#....#####xx#####....#xxx#
+#........#..........#........#
+#........#..........#........#
+#.....*..#..ssssss..#........#
+#...........ssssss...........#
+#...........ssssss...........#
+#...........ssssss...........#
+#...........ssssss...........#
+#........#..ssssss..#..*.....#
+#........#..........#........#
+#........#..........#........#
+#xxx#....#####xx#####....#xxx#
+#...#....................#...#
+#.*.#..........*.........#.*.#
+#...#....................#...#
+#...########......########...#
+#............................#
+#............................#
+#......c.......a......b......#
+#............................#
+##############################
+```
+
+### `fogbank` — Fogbank (32x28 tiles = 64x56 m)
+Three banks of smoke with a few pillars between them. A car in the smoke is seen only from seven metres, so the long guns are blind until something fires: ambush country. Items: repair, shield, overdrive, nitro, mine, emp.
+
+```
+################################
+#..............................#
+#......B.......A........C......#
+#..............................#
+#...........--....--...........#
+#..............*...............#
+#...ssssssss........ssssssss...#
+#...ssssssss...##...ssssssss...#
+#...ssssssss...##...ssssssss...#
+#.*.ssssssss........ssssssss.*.#
+#...ssssssss........ssssssss...#
+#............ssssss............#
+#......##....ss*sss....##......#
+#............ssssss............#
+#............ssssss............#
+#......##....sss*ss....##......#
+#............ssssss............#
+#...ssssssss........ssssssss...#
+#.*.ssssssss........ssssssss.*.#
+#...ssssssss...##...ssssssss...#
+#...ssssssss...##...ssssssss...#
+#...ssssssss........ssssssss...#
+#...............*..............#
+#...........--....--...........#
+#..............................#
+#......c........a.......b......#
+#..............................#
+################################
+```
+
+### `ringroad` — Ring Road (36x30 tiles = 72x60 m)
+A circuit round a lava infield: speed strips on the straights, ice in the corners, and one crossing through the middle with a repair pad on it. Fights go round and round, or meet head-on in the crossing. Items: nitro, repair, shield, overdrive, emp, mine.
+
+```
+####################################
+#iiii..........................iiii#
+#iiii....B.......A........C....iiii#
+#iiii..........................iiii#
+#iiii..........................iiii#
+#...============================...#
+#...============================...#
+#...==...........*............==...#
+#...==........................==...#
+#.*.==.#..LLLLLL....LLLLLL..#.==.*.#
+#...==.#..LLLLLL....LLLLLL..#.==...#
+#...==.#..LLLLLL.*..LLLLLL..#.==...#
+#...==....LLLLLL....LLLLLL....==...#
+#...==....LLLLLL....LLLLLL....==...#
+#...==....LLLLLL.++.LLLLLL....==...#
+#...==....LLLLLL.++.LLLLLL....==...#
+#...==....LLLLLL....LLLLLL....==...#
+#...==....LLLLLL....LLLLLL....==...#
+#...==.#..LLLLLL..*.LLLLLL..#.==...#
+#...==.#..LLLLLL....LLLLLL..#.==...#
+#.*.==.#..LLLLLL....LLLLLL..#.==.*.#
+#...==........................==...#
+#...==............*...........==...#
+#...============================...#
+#...============================...#
+#iiii..........................iiii#
+#iiii..........................iiii#
+#iiii....c........a.......b....iiii#
+#iiii..........................iiii#
+####################################
+```
+
 ## 4. What `tick` receives
 
 ```
@@ -549,7 +754,7 @@ state = {
   enemies: [ same shape — ONLY enemies your team can currently see; parts[] shows their layout (with z) and damage: every piece
              they started with stays in the list, the ones shot off with alive: false ],
   enemiesAlive,                      // how many are left, seen or not
-  lastSeen: [{ id, x, y, t, alive }],
+  lastSeen: [{ id, x, y, t, alive }],   // where each enemy was last seen; left out once your team has been to the spot and found it empty
   projectiles: [{ kind: 'bullet' | 'shell' | 'missile' | 'mortar' | 'hook', x, y, vx, vy, landsAt?, landsIn? }],  // enemy shots in sensor range, nearest first (max 24)
   mines: [{ x, y }],                 // enemy mines within 5 m (anywhere in sensor range with a radar)
   items: [{ id, type, x, y }],       // every pick-up currently on the map

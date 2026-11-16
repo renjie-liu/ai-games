@@ -142,6 +142,11 @@ test('model attribution and snapshot completion are explicit', () => {
   assert.equal(snap.queues['1v1'].standings[0][8], null);
   const md = ladderMarkdown(board);
   assert.match(md, /Provisional/); assert.match(md, /Not recorded/); assert.match(md, /1 contain errors/);
+  // the notes under the tables describe the season that was played, not one from another release
+  const told = ladderMarkdown({ ...board, maps: MAP_IDS, soloSeed: 1, teamRounds: TEAM_ROUNDS });
+  assert.match(told, new RegExp(`every pair plays all ${MAP_IDS.length} maps from both spawn sides, with seed 1\\.`));
+  assert.match(told, new RegExp(`${TEAM_ROUNDS} deterministic mixed-team rounds`));
+  assert.equal(TEAM_ROUNDS % MAP_IDS.length, 0, 'the team rounds go round the maps a whole number of times');
 });
 
 

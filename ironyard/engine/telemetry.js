@@ -5,7 +5,7 @@
 // hooks from the places where it already does the work (damage, destroy, firing) and
 // `sampleTelemetry` once a tick, which looks at the vehicles ten times a second.
 import { PARTS } from './parts.js';
-import { tileCodeAt, TILE_NAME } from './maps.js';
+import { tileCodeAt, TILE_NAME, TILE_CODE } from './maps.js';
 
 const TYPES = Object.keys(PARTS);
 /** Every label a point of damage can carry: the part type of the weapon that dealt it, or one of the rest. */
@@ -51,7 +51,7 @@ export function newTelemetry(v, nv) {
     cTick: -1, cSrc: -1, cDist: 0, cBand: 0, cSide: 0,   // attacker of the moment: how far, which side
     timeIn: new Float64Array(5), distSum: 0, distT: 0,
     fire: 0, tReach: 0, tFiring: 0, tUnseen: 0, tNoLos: 0, tArc: 0, tStarved: 0, tHeld: 0, tStun: 0, tUnder: 0, tWasted: 0,
-    stuck: 0, stuckOn: 0, reversing: 0, top: 0,
+    stuck: 0, stuckOn: 0, parked: 0, parkedDist: 0, reversing: 0, top: 0,
     losses: [], lossTick: -1, lossBy: null,
     hull: [], energy: [], dist: [], guns: [],
     trk: [[], [], [], []],             // throttle, steer, fire asked for (0/1), tile underneath — every TRACK_STEP while alive
@@ -184,7 +184,14 @@ export function sampleTelemetry(w) {
     // movement
     const sp = Math.hypot(v.vx, v.vy);
     if (sp > T.top) T.top = sp;
-    if (sp < 0.3) { if (v.stun <= 0 && Math.abs(v.cmd.throttle) > 0.5) { T.stuck += h; if (touching) T.stuckOn += h; } }   // (pushing on an enemy is its own kind of stuck)
+    if (sp < 0.3) {
+      if (v.stun <= 0 && Math.abs(v.cmd.throttle) > 0.5) { T.stuck += h; if (touching) T.stuckOn += h; }   // (pushing on an enemy is its own kind of stuck)
+      // standing by choice while there is an enemy to go for and none within reach of a gun: the command asked for no
+      // movement, so nothing above counts it, and yet nothing is going to happen (a guard that zeroes the throttle,
+      // a route with no next step). Not on a repair pad, where standing still is the point; not with nothing left to drive on.
+      // (`under`: an enemy inside a mortar's minimum range is too near, not out of reach, and has its own counter)
+      else if (v.stun <= 0 && !inReach && !under && near < Infinity && (reach > 0 || lob > 0) && Math.abs(v.cmd.throttle) <= 0.15 && T.immobileAt === null && tileCodeAt(w.map, v.x, v.y) !== TILE_CODE.pad) { T.parked += h; T.parkedDist += near * h; }
+    }
     else if (v.vx * v.fx + v.vy * v.fy < -0.3) T.reversing += h;
     if (line) timelinePoint(w, v, near);
   }
@@ -228,7 +235,7 @@ export function telemetryOf(w, v) {
       timeTargetInReach: T.tReach, timeFiring: T.tFiring, timeNoLineOfSight: T.tNoLos, timeOutOfArc: T.tArc, timeEnergyStarved: T.tStarved,
       timeTargetUnseen: T.tUnseen, timeHoldingFire: T.tHeld, timeStunned: T.tStun, timeTargetTooClose: T.tUnder, timeFiringNoTarget: T.tWasted,
     },
-    move: { timeStuck: T.stuck, timeStuckOnEnemy: T.stuckOn, timeReversing: T.reversing, meanSpeed: life > 0 ? v.stats.distance / life : 0, topSpeed: T.top,
+    move: { timeStuck: T.stuck, timeStuckOnEnemy: T.stuckOn, timeParked: T.parked, parkedAt: T.parked > 0 ? T.parkedDist / T.parked : null, timeReversing: T.reversing, meanSpeed: life > 0 ? v.stats.distance / life : 0, topSpeed: T.top,
       movers: T.movers, moversLost: T.moversLost, immobileAt: T.immobileAt },
     losses: T.losses.map((l) => ({ ...l })), lossesByCause,
     timeline: { step: TIMELINE_STEP, hull: T.hull.slice(), energy: T.energy.slice(), dist: T.dist.slice(), weapons: T.guns.slice() },
@@ -272,7 +279,7 @@ export function compactTelemetry(t, { brief = false } = {}) {
     },
     range: { timeIn: keep(t.range.timeIn, r1), mean: orNull(t.range.mean), atFirstHitTaken: orNull(t.range.atFirstHitTaken) },
     fire,
-    move: { timeStuck: sec(m.timeStuck), ...(sec(m.timeStuckOnEnemy) > 0 ? { timeStuckOnEnemy: sec(m.timeStuckOnEnemy) } : {}), timeReversing: sec(m.timeReversing), meanSpeed: sec(m.meanSpeed), topSpeed: sec(m.topSpeed),
+    move: { timeStuck: sec(m.timeStuck), ...(sec(m.timeStuckOnEnemy) > 0 ? { timeStuckOnEnemy: sec(m.timeStuckOnEnemy) } : {}), ...(sec(m.timeParked) > 0 ? { timeParked: sec(m.timeParked), parkedAt: sec(m.parkedAt) } : {}), timeReversing: sec(m.timeReversing), meanSpeed: sec(m.meanSpeed), topSpeed: sec(m.topSpeed),
       movers: m.movers, moversLost: m.moversLost, immobileAt: orNull(m.immobileAt) },
     lossesByCause: rank(t.lossesByCause),
   };

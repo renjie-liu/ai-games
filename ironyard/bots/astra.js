@@ -1,5 +1,5 @@
 // Astra: sustained-fire assault car with a protected low cockpit.
-const meta = {name:'Astra — Starforge',author:'Astra',model:'gpt-6-astra',notes:'Adaptive sustained-fire battery, component targeting, coordinated focus and predictive terrain guards.'};
+const meta = {name:'Astra — Starforge',author:'gpt-6-astra',model:'gpt-6-astra',notes:'Adaptive sustained-fire battery, component targeting, coordinated focus and predictive terrain guards.'};
 function design(ctx,api){
  const p=[], put=(type,x,y,z,dir='N')=>p.push({type,x,y,z,dir});
  const light=ctx.budget<1100,heavy=ctx.budget>=1700;

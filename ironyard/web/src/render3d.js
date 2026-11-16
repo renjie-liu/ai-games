@@ -167,6 +167,19 @@ export class Render3D {
       new THREE.MeshBasicMaterial({ map: this.tex.scorch, transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), Math.max(1, burns.length));
     burns.forEach((b, i) => { this.dummy.position.set(b.x, 0.02, -b.y); this.dummy.rotation.set(0, hash01(i + 3) * 6.283, 0); this.dummy.scale.set(b.r, 1, b.r); this.dummy.updateMatrix(); w.burns.setMatrixAt(i, this.dummy.matrix); });
     w.burns.count = 0; w.burns.frustumCulled = false; root.add(w.burns);
+    // smoke banks: two soft puffs over every smoke tile, thin enough to see the cars inside
+    const smoky = [];
+    for (let ty = 0; ty < rp.map.h; ty++) for (let tx = 0; tx < rp.map.w; tx++) if (rp.map.tiles[ty * rp.map.w + tx] === C.smoke) smoky.push([tx, ty]);
+    if (smoky.length) {
+      const T = this.IY.TILE, puffs = new THREE.InstancedMesh(this.g('puff', () => new THREE.IcosahedronGeometry(1, 2)),
+        new THREE.MeshLambertMaterial({ color: L(0xc3ccd6), transparent: true, opacity: 0.17, depthWrite: false }), smoky.length * 2);
+      smoky.forEach(([tx, ty], i) => { for (let k = 0; k < 2; k++) {
+        const j = i * 2 + k, a = hash01(j * 7 + 1), b = hash01(j * 13 + 5), c = hash01(j * 3 + 9);
+        this.dummy.position.set((tx + 0.5) * T + (a - 0.5) * 1.2, 0.9 + k * 0.9 + c * 0.4, -((ty + 0.5) * T + (b - 0.5) * 1.2));
+        this.dummy.rotation.set(0, a * 6.283, 0); this.dummy.scale.set(1.5 + b * 0.5, 0.8 + c * 0.4, 1.5 + a * 0.5); this.dummy.updateMatrix(); puffs.setMatrixAt(j, this.dummy.matrix);
+      } });
+      puffs.frustumCulled = false; puffs.renderOrder = 3; root.add(puffs);
+    }
     this.scene.add(root);
     this.applyTheme(w.arena.theme, w.arena.sunDir, rp.map);
     this.fit();
@@ -205,11 +218,12 @@ export class Render3D {
     w.hooks = im(new THREE.ConeGeometry(0.09, 0.4, 6).rotateZ(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: L(0xd3d8de), roughness: 0.3, metalness: 0.8, envMap: this.env }), 8);
     // crates and barrels: one instance each, shrunk to nothing once the replay has passed the moment they broke
     const tiles = rp.tiles || [], nc = Math.max(1, tiles.filter((x) => x.kind === 'crate').length), nbar = Math.max(1, tiles.filter((x) => x.kind === 'barrel').length);
-    const wood = new THREE.MeshStandardMaterial({ color: L(0xffffff), roughness: 0.85, envMap: this.env, envMapIntensity: 0.25 });
-    w.crates = im(new THREE.BoxGeometry(1.86, 1.5, 1.86).translate(0, 0.75, 0), wood, nc, true);
-    w.crateBands = im(new THREE.BoxGeometry(1.94, 0.16, 1.94), new THREE.MeshStandardMaterial({ color: L(0x5a3c1e), roughness: 0.9 }), nc * 2);
-    w.crateLids = im(new THREE.BoxGeometry(1.6, 0.06, 1.6), new THREE.MeshStandardMaterial({ color: L(0x7a5230), roughness: 0.9 }), nc);
-    w.drums = im(new THREE.CylinderGeometry(0.42, 0.42, 1.15, 14).translate(0, 0.575, 0), new THREE.MeshStandardMaterial({ color: L(0xb3261e), roughness: 0.45, metalness: 0.3, envMap: this.env, envMapIntensity: 0.5 }), nbar * 3);
+    // a crate is a 4x4 brick three courses high: plastic, a hairline at each course, sixteen studs on top
+    const plastic = () => new THREE.MeshStandardMaterial({ color: L(0xffffff), roughness: 0.42, envMap: this.env, envMapIntensity: 0.3 });
+    w.crates = im(new THREE.BoxGeometry(1.6, 1.2, 1.6).translate(0, 0.6, 0), plastic(), nc, true);
+    w.crateBands = im(new THREE.BoxGeometry(1.615, 0.03, 1.615), new THREE.MeshStandardMaterial({ color: L(0x3a2616), roughness: 0.8 }), nc * 2);
+    w.crateLids = im(new THREE.CylinderGeometry(0.12, 0.12, 0.085, 10), plastic(), nc * 16, true);
+    w.drums = im(new THREE.CylinderGeometry(0.42, 0.42, 1.15, 14).translate(0, 0.575, 0), new THREE.MeshStandardMaterial({ color: L(0xc91a09), roughness: 0.4, metalness: 0, envMap: this.env, envMapIntensity: 0.4 }), nbar * 3);
     w.drumBands = im(new THREE.CylinderGeometry(0.435, 0.435, 0.2, 14), new THREE.MeshStandardMaterial({ color: L(0xf5cd2f), roughness: 0.6 }), nbar * 3);
     for (const m of [w.crates, w.crateBands, w.crateLids, w.drums, w.drumBands]) { m.castShadow = true; m.receiveShadow = true; }
     w.tileState = null;   // which tiles were standing at the last draw
@@ -369,12 +383,16 @@ export class Render3D {
       for (let i = 0; i < tiles.length; i++) {
         const tl = tiles[i], up = t < tl.t ? 1 : 0, h = hash01(tl.tx * 13 + tl.ty * 7);
         if (tl.kind === 'crate') {
-          d.rotation.set(0, (h - 0.5) * 0.08, 0); d.scale.setScalar(up || 1e-4);
+          d.rotation.set(0, 0, 0); d.scale.setScalar(up || 1e-4);   // bricks sit square on the studs
           d.position.set(tl.x, 0, -tl.y); d.updateMatrix(); w.crates.setMatrixAt(ci, d.matrix);
-          w.crates.setColorAt(ci, col.setHex(h > 0.66 ? 0xa9753f : h > 0.33 ? 0x9a6a3a : 0x8a5c32).convertSRGBToLinear());
-          d.position.set(tl.x, 0.32 * up, -tl.y); d.updateMatrix(); w.crateBands.setMatrixAt(ci * 2, d.matrix);
-          d.position.set(tl.x, 1.18 * up, -tl.y); d.updateMatrix(); w.crateBands.setMatrixAt(ci * 2 + 1, d.matrix);
-          d.position.set(tl.x, 1.52 * up, -tl.y); d.updateMatrix(); w.crateLids.setMatrixAt(ci, d.matrix);
+          w.crates.setColorAt(ci, col.setHex(h > 0.66 ? 0xaa7d55 : h > 0.33 ? 0xa95500 : 0x958a73).convertSRGBToLinear());
+          d.position.set(tl.x, 0.4 * up, -tl.y); d.updateMatrix(); w.crateBands.setMatrixAt(ci * 2, d.matrix);
+          d.position.set(tl.x, 0.8 * up, -tl.y); d.updateMatrix(); w.crateBands.setMatrixAt(ci * 2 + 1, d.matrix);
+          d.rotation.set(0, 0, 0);
+          for (let k = 0; k < 16; k++) {
+            d.position.set(tl.x + ((k % 4) - 1.5) * 0.4, 1.2425 * up, -tl.y + (Math.floor(k / 4) - 1.5) * 0.4); d.updateMatrix();
+            w.crateLids.setMatrixAt(ci * 16 + k, d.matrix); w.crateLids.setColorAt(ci * 16 + k, col);
+          }
           ci++;
         } else {
           for (let j = 0; j < 3; j++) {
@@ -386,9 +404,10 @@ export class Render3D {
           bi2++;
         }
       }
-      w.crates.count = ci; w.crateBands.count = ci * 2; w.crateLids.count = ci; w.drums.count = bi2 * 3; w.drumBands.count = bi2 * 3;
+      w.crates.count = ci; w.crateBands.count = ci * 2; w.crateLids.count = ci * 16; w.drums.count = bi2 * 3; w.drumBands.count = bi2 * 3;
       for (const m of [w.crates, w.crateBands, w.crateLids, w.drums, w.drumBands]) m.instanceMatrix.needsUpdate = true;
       if (w.crates.instanceColor) w.crates.instanceColor.needsUpdate = true;
+      if (w.crateLids.instanceColor) w.crateLids.instanceColor.needsUpdate = true;
       d.rotation.set(0, 0, 0); d.scale.set(1, 1, 1);
     }
 

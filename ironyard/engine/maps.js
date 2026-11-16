@@ -3,7 +3,7 @@
 // teams always get a mirrored battlefield.
 //
 // Legend:  . floor   # wall   - barrier   _ pit   m mud   i ice   L lava   + repair pad
-//          x crate (breakable wall)   ! powder barrel
+//          x crate (breakable wall)   ! powder barrel   s smoke (hides)   = speed strip
 //          A B C  team-0 spawns (slot 0/1/2)      * item spawn
 import { TILE, TILES, ITEM_IDS } from './parts.js';
 
@@ -83,6 +83,52 @@ const RAW = {
       ['#', 9, 8, 2, 2], ['#', 21, 8, 2, 2], ['x', 14, 9, 4, 1], ['!', 3, 11, 1, 1], ['!', 28, 11, 1, 1],
       ['x', 6, 12, 3, 1], ['x', 23, 12, 3, 1], ['x', 11, 12, 2, 2], ['x', 19, 12, 2, 2], ['!', 13, 13, 1, 1], ['!', 15, 13, 1, 1]],
     spawns: [[15, 2], [7, 2], [24, 2]], itemSpots: [[2, 8], [29, 8], [15, 8], [15, 11]],
+  },
+  cage: {
+    name: 'Scrap Cage', w: 18, h: 18, border: '#',
+    desc: 'A small walled cage: the teams start 26 m apart with nowhere to run. Crates for cover, powder barrels between the two sides, one repair pad in the middle to fight over.',
+    items: ['repair', 'overdrive', 'shield', 'emp'],
+    zone: { start: 50, end: 110, minRadius: 5 },
+    ops: [['x', 3, 5, 2, 1], ['x', 13, 5, 2, 1], ['!', 8, 6, 2, 1], ['+', 8, 8, 2, 1]],
+    spawns: [[8, 2], [4, 2], [13, 2]], itemSpots: [[2, 7], [15, 7]],
+  },
+  saltflat: {
+    name: 'Salt Flat', w: 44, h: 32, border: '#',
+    desc: 'Wide open and almost bare: two low barriers, one pillar, a mud wallow in the middle and a speed strip down each flank. Whoever sees further and shoots further has the first word; speed has the last.',
+    items: ['repair', 'shield', 'overdrive', 'nitro', 'mine', 'emp'],
+    ops: [['-', 10, 9, 3, 1], ['-', 31, 9, 3, 1], ['#', 21, 11, 2, 1], ['=', 2, 4, 2, 12], ['=', 40, 4, 2, 12], ['m', 19, 14, 6, 2]],
+    spawns: [[21, 2], [11, 3], [32, 3]], itemSpots: [[5, 12], [38, 12], [21, 7], [13, 14]],
+  },
+  causeway: {
+    name: 'Causeway', w: 36, h: 28, border: '#',
+    desc: 'A chasm cuts the map in two. One broad bridge in the middle with powder barrels at its mouth, a narrow one on each flank behind a crate. Shots cross the gap freely; wheels have to pick a bridge, hover craft do not.',
+    items: ['repair', 'shield', 'overdrive', 'mine', 'emp', 'nitro'],
+    ops: [['#', 9, 7, 3, 1], ['#', 24, 7, 3, 1], ['_', 1, 12, 34, 2], ['.', 16, 12, 4, 2], ['.', 4, 12, 3, 2], ['.', 29, 12, 3, 2],
+      ['!', 14, 10, 1, 1], ['!', 21, 10, 1, 1], ['x', 4, 10, 3, 1], ['x', 29, 10, 3, 1], ['-', 15, 12, 1, 2], ['-', 20, 12, 1, 2]],
+    spawns: [[17, 2], [8, 2], [27, 2]], itemSpots: [[2, 6], [33, 6], [17, 6], [18, 12]],
+  },
+  labyrinth: {
+    name: 'Rat Run', w: 30, h: 30, border: '#',
+    desc: 'Corridors six metres wide, walls everywhere, crates plugging the short cuts and smoke over the crossroads in the middle. Nothing here is a long shot: mortars lob over the walls, everything else meets round a corner.',
+    items: ['repair', 'shield', 'overdrive', 'mine', 'emp', 'nitro'],
+    ops: [['#', 4, 5, 8, 1], ['#', 18, 5, 8, 1], ['#', 4, 6, 1, 4], ['#', 25, 6, 1, 4], ['#', 9, 9, 5, 1], ['#', 16, 9, 5, 1], ['#', 9, 10, 1, 3], ['#', 20, 10, 1, 3],
+      ['x', 14, 9, 2, 1], ['x', 1, 9, 3, 1], ['x', 26, 9, 3, 1], ['s', 12, 12, 6, 3]],
+    spawns: [[14, 2], [7, 2], [22, 2]], itemSpots: [[2, 7], [27, 7], [14, 7], [6, 12]],
+  },
+  fogbank: {
+    name: 'Fogbank', w: 32, h: 28, border: '#',
+    desc: 'Three banks of smoke with a few pillars between them. A car in the smoke is seen only from seven metres, so the long guns are blind until something fires: ambush country.',
+    items: ['repair', 'shield', 'overdrive', 'nitro', 'mine', 'emp'],
+    ops: [['s', 4, 6, 8, 5], ['s', 20, 6, 8, 5], ['s', 13, 11, 6, 3], ['#', 15, 7, 2, 2], ['#', 7, 12, 2, 1], ['#', 23, 12, 2, 1], ['-', 12, 4, 2, 1], ['-', 18, 4, 2, 1]],
+    spawns: [[15, 2], [7, 2], [24, 2]], itemSpots: [[2, 9], [29, 9], [15, 5], [15, 12]],
+  },
+  ringroad: {
+    name: 'Ring Road', w: 36, h: 30, border: '#',
+    desc: 'A circuit round a lava infield: speed strips on the straights, ice in the corners, and one crossing through the middle with a repair pad on it. Fights go round and round, or meet head-on in the crossing.',
+    items: ['nitro', 'repair', 'shield', 'overdrive', 'emp', 'mine'],
+    ops: [['L', 10, 9, 16, 6], ['.', 16, 9, 4, 6], ['+', 17, 14, 2, 1], ['=', 4, 5, 28, 2], ['=', 4, 7, 2, 8], ['=', 30, 7, 2, 8],
+      ['i', 1, 1, 4, 4], ['i', 31, 1, 4, 4], ['#', 7, 9, 1, 3], ['#', 28, 9, 1, 3]],
+    spawns: [[17, 2], [9, 2], [26, 2]], itemSpots: [[2, 9], [33, 9], [17, 7], [17, 11]],
   },
 };
 

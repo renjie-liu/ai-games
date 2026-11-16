@@ -124,13 +124,19 @@ function renderSetup() {
   });
 }
 const MAP_DESC = { // the page's own blurbs, with the setting; a map without one shows the engine's description
-  proving: 'Concrete proving ground: a walled open arena with a few pillars and a mud patch in the middle. The fairest default.',
-  sumo: 'A steel deck out at sea with no walls, an ice ring and a hole in the middle. Push them into the sea, or just hover.',
-  canyon: 'Desert canyon: rock walls split it into three lanes. Long sightlines down the middle, a mud choke in the centre, rock pillars to hide behind on the flanks.',
+  proving: 'Grey proving ground: a walled open arena with a few pillars and a mud patch in the middle. The fairest default.',
+  sumo: 'A deck out at sea with no walls, an ice ring and a hole in the middle. Push them into the sea, or just hover.',
+  canyon: 'Desert canyon: walls split it into three lanes. Long sightlines down the middle, a mud choke in the centre, pillars to hide behind on the flanks.',
   frostbite: 'Snowfield: a frozen lake fills the middle, with a dry island at its heart and pits in the four corners. Wheels slide; tracks and hover have the edge.',
-  skybridge: 'Concrete platforms above the clouds, joined by bridges. Fall off and you are gone; hover craft can take the shortcut.',
+  skybridge: 'Platforms above the clouds, joined by bridges. Fall off and you are gone; hover craft can take the shortcut.',
   foundry: 'A foundry at night: pools of molten metal with narrow crossings between them, repair pads in the back corners.',
-  bog: 'Big team map in a swamp: mud and standing water, sandbag cover you can shoot over, pits on the flanks, repair pads in the centre.',
+  bog: 'Big team map in a swamp: mud fields, low cover you can shoot over, pits on the flanks, repair pads in the centre.',
+  cage: 'A scrapyard cage, 36 m across: the two sides start in each other\'s faces, with crates for cover, a pair of powder barrels between them and one repair pad to fight over.',
+  saltflat: 'A salt flat with almost nothing on it: two low barriers, one pillar, a mud wallow and a speed strip down each flank. Long guns and fast cars.',
+  causeway: 'A chasm across the middle: one broad bridge with powder barrels at its mouth and a narrow one on each flank behind crates. Shots cross freely; wheels must choose a bridge.',
+  labyrinth: 'Corridors and corners, crates plugging the short cuts and smoke over the crossroads. Nothing here is a long shot.',
+  fogbank: 'Three banks of smoke with pillars between them. A car in smoke is seen only from seven metres until it fires.',
+  ringroad: 'A circuit round a lava infield: speed strips on the straights, ice in the corners, a crossing through the middle with a repair pad on it.',
 };
 
 // ── arena: running + playback ───────────────────────────────────────────
@@ -608,8 +614,8 @@ function renderLadder() {
     : LB.by === 'author'
       ? 'Authors are ordered by their best bot, then mean rating. An author is a self-declared entrant label, not necessarily a model.'
       : LB.queue === '1v1'
-        ? 'Every pair, all eight maps, seed 1, both spawn sides. Rating fits all results with a 1500 anchor; rank uses unrounded rating, not win percentage.'
-        : '40 mixed-team rounds; each pairing plays every team slot from both spawn sides. Rating estimates individual contribution, accounting for teammates and opponents. Game counts and map exposure differ.';
+        ? `Every pair, all ${(data.maps || IY.MAP_IDS).length} maps, seed ${data.soloSeed ?? 1}, both spawn sides. Rating fits all results with a 1500 anchor; rank uses unrounded rating, not win percentage.`
+        : `${data.teamRounds ?? 40} mixed-team rounds; each pairing plays every team slot from both spawn sides. Rating estimates individual contribution, accounting for teammates and opponents. Game counts differ.`;
   $('lb-note').textContent = `${notes} This is a saved snapshot; custom tournaments below do not change it.${errors ? ' Match errors require review before comparing scores.' : ''}`;
 }
 

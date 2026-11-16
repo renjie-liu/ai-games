@@ -19,6 +19,8 @@ function partRow(p) {
     bits.push(p.energyShot ? `${p.energyShot} energy/shot` : `${p.energyUse} energy/s`);
     if (p.splash) bits.push(p.weapon === 'lob' ? `blast ${p.splash.r} m, up to ${p.splash.max} pieces` : `splash ${p.splash.r} m x${p.splash.f}`);
     if (p.rope) bits.push(`cable holds ${p.rope.hold} s, reels in ${p.rope.reel} m/s down to ${p.rope.min} m`, `pulled tight it tears the hooked piece at ${p.rope.tear} hp/s`);
+    if (p.pierce) bits.push(`goes through ${p.pierce} pieces`);
+    if (p.noDeflect) bits.push('slopes do not turn it');
     if (p.recoil) bits.push(`recoil ${p.recoil} N·s`);
     bits.push(p.dtype);
   }
@@ -54,7 +56,7 @@ export function rulesMarkdown() {
   const after = (d, def, faced) => Math.round(hitOn(def, d, 'kinetic', faced) * 10) / 10;
   const hitTable = ['| weapon | one hit | on a plain piece | on armor | on a slope, face on | on a slope, from elsewhere |', '|---|---|---:|---:|---:|---:|',
     ...Object.values(PARTS).filter((p) => p.weapon && p.weapon !== 'hook' && p.dmg && (p.dtype === 'kinetic' || p.dtype === 'explosive')).map((p) =>
-      `| ${p.id} | ${p.dmg}${p.salvo ? ' x' + p.salvo : ''} ${p.dtype} | ${p.dmg} | ${after(p.dmg, PARTS.armor, false)} | ${after(p.dmg, PARTS.slope, p.weapon !== 'lob')} | ${after(p.dmg, PARTS.slope, false)} |`)].join('\n');
+      `| ${p.id} | ${p.dmg}${p.salvo ? ' x' + p.salvo : ''} ${p.dtype} | ${p.dmg} | ${after(p.dmg, PARTS.armor, false)} | ${after(p.dmg, PARTS.slope, p.weapon !== 'lob' && !p.noDeflect)} | ${after(p.dmg, PARTS.slope, false)} |`)].join('\n');
   const partTables = Object.entries(cats).map(([cat, title]) =>
     `**${title}**\n\n| type | glyph | studs | cost | mass kg | hp | placement | numbers | notes |\n|---|---|---|---|---|---|---|---|---|\n` +
     Object.values(PARTS).filter((p) => p.cat === cat).map(partRow).join('\n')).join('\n\n');
@@ -144,7 +146,8 @@ What happens under fire:
 * Slopes: a kinetic or explosive hit arriving against the slope's facing (within 60°) only does ${Math.round(PARTS.slope.deflect * 100)}%.
 * **What a hit is worth** after the piece it lands on has had its say (armor takes ${PARTS.armor.armor} off every kinetic or explosive hit, never
   more than three quarters of it; a slope struck on its face lets ${Math.round(PARTS.slope.deflect * 100)}% through and then takes ${PARTS.slope.armor} off). Lasers, flame and saws are not reduced by either.
-  A mortar round comes down from above and the splash of any burst has no direction: a slope's face deflects neither:
+  A mortar round comes down from above and the splash of any burst has no direction: a slope's face deflects neither. Nor does it turn
+  a rail slug, which only loses the slope's armor point:
 
 ${hitTable}
 
@@ -219,7 +222,7 @@ Off the edge of the map counts as a pit.
 * **Safe zone:** from t=${R.zoneStart}s to t=${R.zoneEnd}s a circle centred on the map shrinks to ${R.zoneMinRadius} m radius (some maps differ: read \`state.zone\`).
   Outside it every piece takes ${R.zoneDps} hp/s.
 * **Vision:** you see an enemy if it is within the sensor range of any living teammate (core ${PARTS.core.sensor} m, radar +${PARTS.radar.sensor} m),
-  or for ${R.revealTime}s after it fires a gun. Walls do not block vision. \`state.lastSeen\` remembers where each enemy was.
+  or for ${R.revealTime}s after it fires a gun. Walls do not block vision. Smoke does: a vehicle whose centre is on a smoke tile is seen only from within ${TILES.smoke.sight} m, until it fires. \`state.lastSeen\` remembers where each enemy was — until one of your team is within ${TILES.smoke.sight} m of that spot and the enemy is not to be seen: it has gone, and the entry is dropped until it is seen again. An enemy that dies is always listed, with \`alive: false\`.
 * **Friendly fire is off** for guns, flamethrowers, saws, pistons and hooks: shots and their splash pass through
   teammates. You can still bump into them. **Powder kegs and barrels are the exception**: their blasts hit everyone in
   reach, a teammate sets off a rolling keg by touching it, and nothing done to your own side counts as damage dealt.
@@ -266,7 +269,7 @@ state = {
   enemies: [ same shape — ONLY enemies your team can currently see; parts[] shows their layout (with z) and damage: every piece
              they started with stays in the list, the ones shot off with alive: false ],
   enemiesAlive,                      // how many are left, seen or not
-  lastSeen: [{ id, x, y, t, alive }],
+  lastSeen: [{ id, x, y, t, alive }],   // where each enemy was last seen; left out once your team has been to the spot and found it empty
   projectiles: [{ kind: 'bullet' | 'shell' | 'missile' | 'mortar' | 'hook', x, y, vx, vy, landsAt?, landsIn? }],  // enemy shots in sensor range, nearest first (max 24)
   mines: [{ x, y }],                 // enemy mines within 5 m (anywhere in sensor range with a radar)
   items: [{ id, type, x, y }],       // every pick-up currently on the map

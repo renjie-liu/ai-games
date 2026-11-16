@@ -132,16 +132,16 @@ export const PARTS = {
   cannon: {
     name: 'Cannon 1x2', cat: 'weapon', glyph: 'C', layer: 'deck', size: [1, 2], directional: true, lane: 'front', weapon: 'shell',
     cost: 110, mass: 13, hp: 170, burn: 0.4,
-    dmg: 30, cooldown: 1.4, projSpeed: 24, range: 19, spread: 0.02, recoil: 100, splash: { r: 0.75, f: 0.3, max: 4 },
+    dmg: 30, cooldown: 1.6, projSpeed: 24, range: 19, spread: 0.02, recoil: 100, splash: { r: 0.75, f: 0.3, max: 4 },
     arc: deg(20), traverse: 2.2, energyShot: 9, dtype: 'kinetic',
     desc: 'Slow heavy shell with small splash. Narrow arc: point the car.',
   },
   railgun: {
     name: 'Railgun 1x3', cat: 'weapon', glyph: 'R', layer: 'deck', size: [1, 3], directional: true, lane: 'front', weapon: 'rail',
     cost: 170, mass: 16, hp: 160, burn: 0.4,
-    dmg: 64, cooldown: 4.4, range: 24, pierce: 2, pierceFalloff: 0.5, recoil: 220,
+    dmg: 90, cooldown: 4, range: 24, pierce: 3, pierceFalloff: 0.5, noDeflect: true, recoil: 220,
     arc: deg(8), traverse: 1.2, energyShot: 30, dtype: 'kinetic',
-    desc: 'Instant-hit sniper, three studs long. Punches through 2 pieces (the second takes half). Nearly fixed mount, hungry for energy.',
+    desc: 'Instant-hit sniper, three studs long. Punches through 3 pieces (each takes half of the one before) and a slope does not turn its slug. Nearly fixed mount, hungry for energy.',
   },
   laser: {
     name: 'Laser', cat: 'weapon', glyph: 'L', layer: 'deck', directional: true, lane: 'front', weapon: 'beam',
@@ -152,14 +152,14 @@ export const PARTS = {
   missile: {
     name: 'Missile pod 2x2', cat: 'weapon', glyph: 'M', layer: 'deck', size: [2, 2], directional: true, lane: 'front', weapon: 'missile',
     cost: 170, mass: 15, hp: 200, burn: 0.8,
-    dmg: 30, salvo: 2, cooldown: 3.6, projSpeed: 13, turn: 2.6, ttl: 4.5, range: 40, recoil: 40, splash: { r: 1.1, f: 0.6, max: 5 },
+    dmg: 28, salvo: 2, cooldown: 3.8, projSpeed: 13, turn: 2.6, ttl: 4.5, range: 32, recoil: 40, splash: { r: 1, f: 0.5, max: 4 },
     arc: deg(60), traverse: 6, energyShot: 16, dtype: 'explosive',
-    desc: 'Fires two homing missiles with splash. Slow enough to dodge behind walls.',
+    desc: 'Fires two homing missiles with splash. A missile steers for its target only while your team can see it (in sensor range, or in the 1.5 s after it fires): out of sight it flies on straight, so a radar is what makes the full range usable. Slow enough to dodge behind walls.',
   },
   mortar: {
     name: 'Mortar 2x2', cat: 'weapon', glyph: 'N', layer: 'deck', size: [2, 2], directional: true, weapon: 'lob',
     cost: 150, mass: 18, hp: 160, burn: 0.6,
-    dmg: 46, cooldown: 4.4, projSpeed: 15, range: 24, minRange: 6, recoil: 150, splash: { r: 2.0, f: 1, max: 7 },
+    dmg: 46, cooldown: 4, projSpeed: 15, range: 24, minRange: 6, recoil: 150, splash: { r: 2.0, f: 1, max: 7 },
     arc: Math.PI, traverse: 2.5, energyShot: 14, dtype: 'explosive',
     desc: 'Lobs a shell OVER walls to the point you aim at (give `aim` as {x, y}). 2 m blast. Cannot hit closer than 6 m; needs no clear lane.',
   },
@@ -177,7 +177,7 @@ export const PARTS = {
   flamer: {
     name: 'Flamethrower', cat: 'weapon', glyph: 'Y', layer: 'deck', directional: true, lane: 'front', weapon: 'flame',
     cost: 100, mass: 9, hp: 90, burn: 0.3,
-    dps: 5, heat: 1.25, range: 5.5, cone: deg(15), arc: deg(40), traverse: 4, energyUse: 9, dtype: 'fire',
+    dps: 3.5, heat: 1, range: 5.5, cone: deg(15), arc: deg(40), traverse: 4, energyUse: 9, dtype: 'fire',
     desc: 'Short stream of fire. The stream itself does little: it heats every piece it washes over until they catch fire, and fire spreads from piece to piece. Armor, tracks and cores do not burn. Shields keep it off.',
   },
   harpoon: {
@@ -218,8 +218,8 @@ export const PARTS = {
   },
   shieldgen: {
     name: 'Shield generator', cat: 'utility', glyph: 'G', layer: 'deck', max: 1,
-    cost: 130, mass: 12, hp: 70, burn: 0.6, shield: 120, shieldRegen: 10, shieldDelay: 3, energyUse: 2.5,
-    desc: 'Bubble that absorbs 120 damage from shots, beams, flame and every blast from outside it — shells, missiles, mortar rounds, powder kegs, barrels, mines — recharging after 3 s without a hit. A blast it soaks still shoves you. Rams, saws, pistons, fire already burning, and a keg that goes off while still bolted to you go straight through.',
+    cost: 130, mass: 12, hp: 70, burn: 0.6, shield: 240, shieldRegen: 16, shieldDelay: 2.5, energyUse: 2.5,
+    desc: 'Bubble that absorbs 240 damage from shots, beams, flame and every blast from outside it — shells, missiles, mortar rounds, powder kegs, barrels, mines — recharging after 2.5 s without a hit. A blast it soaks still shoves you. Rams, saws, pistons, fire already burning, and a keg that goes off while still bolted to you go straight through.',
   },
   repairer: {
     name: 'Repair arm', cat: 'utility', glyph: '+', layer: 'deck', max: 2,
@@ -329,6 +329,10 @@ export const TILES = {
     desc: 'A wall you can break: 150 hp. Shots, blasts, fire, pistons and driving into it at speed all count. Gone, it is floor.' },
   barrel:  { ch: '!', name: 'Powder barrel', solid: true, blocksShots: true, hp: 40, blast: { dmg: 70, r: 3, max: 8 },
     desc: 'Blocks the way until something touches it off: 40 hp, then a blast that hits everything within 3 m, shoves it and sets it alight. Barrels set each other off.' },
+  smoke:   { ch: 's', name: 'Smoke', sight: 7,
+    desc: 'A vehicle whose centre is in smoke is seen only from within 7 m, whatever the sensors — until it fires, which gives it away for 1.5 s as anywhere. A missile stops steering for a target it cannot see. Smoke stops no shot, slows nobody, and hides nothing that lies on the ground (mines, kegs, barrels).' },
+  turbo:   { ch: '=', name: 'Speed strip', drive: 1.5,
+    desc: 'Wheels, tracks and hover pads push 50% harder while the vehicle is on it. A fast lane for a flank or a getaway.' },
 };
 export const TILE_IDS = Object.keys(TILES);
 
@@ -351,9 +355,9 @@ export const RULES = {
   blastPush: 14,           // N·s of shove per point of blast damage
   hitPush: 2.5,            // N·s of shove per point of damage from a shell, bullet, missile or rail slug
   recoil: 1,               // multiplier on each gun's own recoil (N·s)
-  fireDps: 6,              // a burning piece loses this much hp per second
-  fireTime: 6,             // ...for this long; a piece burns once
-  fireSpread: 0.45,        // heat per second a burning piece gives each piece touching it (x that piece's `burn`)
+  fireDps: 5,              // a burning piece loses this much hp per second
+  fireTime: 5,             // ...for this long; a piece burns once
+  fireSpread: 0.4,         // heat per second a burning piece gives each piece touching it (x that piece's `burn`)
   heatDecay: 0.1,          // heat a piece loses per second; it ignites at heat 1
   lavaHeat: 1.2,           // heat per second lava gives the chassis pieces of a vehicle standing in it
   blastHeat: 0.35,         // heat an ordinary blast gives each piece it damages (kegs and barrels ignite outright)

@@ -1,5 +1,5 @@
 // Anthracite — adaptive Ironyard combat vehicle and tactical controller.
-const meta = { name: 'Anthracite', author: 'Carbon', model: 'gemini-4-carbon-medium', notes: 'Terrain-adaptive armored gunship with buried core and reactors, spiked saw-prow, per-weapon fire control, and focus-fire coordination.' };
+const meta = { name: 'Anthracite', author: 'gemini-4-carbon-medium', model: 'gemini-4-carbon-medium', notes: 'Terrain-adaptive armored gunship with buried core and reactors, spiked saw-prow, per-weapon fire control, and focus-fire coordination.' };
 
 function P(type, x, y, z, dir) {
   return dir ? { type, x, y, z, dir } : { type, x, y, z };

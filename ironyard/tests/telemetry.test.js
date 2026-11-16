@@ -265,6 +265,32 @@ test('insights: the findings a situation should give, by kind and in words', () 
   assert.ok(wall.w.telemetry(wall.p).move.timeStuck >= 6, String(wall.w.telemetry(wall.p).move.timeStuck));
   assert.ok(kinds(report(wall.w), 0).includes('stuck'));
   assert.ok(!kinds(report(wall.w), 1).includes('stuck'), 'standing still without trying to move is not being stuck');
+
+  // standing still by its own command, with a gun and an enemy too far away to use it on: that is said too
+  const armed = car([{ type: 'mg', x: 0, y: 1, z: 1, dir: 'N' }]);
+  const idle = duel(armed, armed, { gap: 20 });
+  idle.run(8);
+  const mv = idle.w.telemetry(idle.p).move;
+  assert.ok(mv.timeParked >= 7.5 && Math.abs(mv.parkedAt - 20) < 0.5, JSON.stringify(mv));
+  assert.equal(mv.timeStuck, 0);
+  const said = insightList(report(idle.w), 0).find((x) => x.kind === 'parked');
+  assert.match(said.text, /^stood still for \d+\.\d s of its \d+\.\d s with the nearest enemy about 20 m away, beyond every gun it had/);
+  // within reach of the gun it is holding fire, not parked; and a car with no gun at all is not waiting for a shot
+  const close = duel(armed, armed, { gap: 8 });
+  close.run(8);
+  assert.equal(close.w.telemetry(close.p).move.timeParked, 0);
+  assert.equal(wall.w.telemetry(wall.q).move.timeParked, 0, 'no guns: nothing it is failing to bring to bear');
+  // an enemy inside a mortar's minimum range is too near, not out of reach: that has its own counter
+  const lobber = car([{ type: 'mortar', x: -1, y: 1, z: 1, dir: 'N' }]);
+  const under = duel(lobber, car(), { gap: 4 });
+  under.run(8);
+  assert.equal(under.w.telemetry(under.p).move.timeParked, 0);
+  assert.ok(under.w.telemetry(under.p).fire.timeTargetTooClose >= 7);
+  // and a car that is asking to move, however gently, is not standing by choice
+  const creeping = duel(armed, armed, { at: { x: 3.6, y: 9 }, heading: Math.PI, gap: -30 });
+  creeping.w.setCommand(creeping.p, { throttle: 0.4 });
+  creeping.run(8);
+  assert.equal(creeping.w.telemetry(creeping.p).move.timeParked, 0);
 });
 
 test('a real match: the summary carries telemetry and at most six insights per vehicle, small enough to read', () => {

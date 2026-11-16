@@ -1,7 +1,7 @@
 // Top-down canvas view: the tactical map, and the fallback when WebGL is unavailable.
 const TEAM = ['#ff8b2b', '#4cc3ff'];
 const TILE_COL = { floor: ['#22354a', '#263b52'], wall: ['#7b8fa3', '#8598ab'], barrier: ['#c9a13a', '#c9a13a'], mud: ['#5a4630', '#65503a'],
-  ice: ['#9fd2e8', '#b4e0f2'], lava: ['#ff5a1f', '#ff7a3a'], pad: ['#2f7a55', '#2f7a55'] };
+  ice: ['#9fd2e8', '#b4e0f2'], lava: ['#ff5a1f', '#ff7a3a'], pad: ['#2f7a55', '#2f7a55'], smoke: ['#56616d', '#5e6a77'], turbo: ['#2a2c22', '#30332a'] };
 const PART_COL = { structure: null, mobility: '#1b2027', weapon: '#c9d1d9', utility: '#ffd166', decor: '#f2f3f2' };
 
 export class Render2D {
@@ -40,6 +40,14 @@ export class Render2D {
       if (id === 'crate' || id === 'barrel') id = 'floor';   // those are drawn every frame, for as long as they stand
       c.fillStyle = TILE_COL[id][(tx + ty) % 2];
       c.fillRect(tx * px, (m.h - 1 - ty) * px, px, px);
+      if (id === 'turbo') {   // a chevron pointing along the strip
+        const ew = (tx > 0 && IY.TILE_NAME[m.tiles[ty * m.w + tx - 1]] === 'turbo') || (tx < m.w - 1 && IY.TILE_NAME[m.tiles[ty * m.w + tx + 1]] === 'turbo');
+        const ox = tx * px, oy = (m.h - 1 - ty) * px;
+        c.strokeStyle = '#ffd640'; c.lineWidth = 2; c.beginPath();
+        if (ew) { c.moveTo(ox + 5, oy + 3); c.lineTo(ox + 11, oy + 8); c.lineTo(ox + 5, oy + 13); } else { c.moveTo(ox + 3, oy + 11); c.lineTo(ox + 8, oy + 5); c.lineTo(ox + 13, oy + 11); }
+        c.stroke();
+      }
+      if (id === 'smoke') { c.fillStyle = 'rgba(200,210,222,0.22)'; c.beginPath(); c.arc(tx * px + 8, (m.h - 1 - ty) * px + 8, 7, 0, 6.283); c.fill(); }
       if (id === 'pad') { c.fillStyle = '#6dffb0'; c.fillRect(tx * px + 6, (m.h - 1 - ty) * px + 2, 4, 12); c.fillRect(tx * px + 2, (m.h - 1 - ty) * px + 6, 12, 4); }
     }
   }

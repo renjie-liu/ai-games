@@ -131,6 +131,45 @@ Three things from the tuning are worth writing down, and each was only found by 
 
 Nothing was copied from Besiege: no levels, art, names or specific contraptions were taken, and there are no hinges or moving joints either (see below). All that was taken is the principle: parts should be linked by physical cause and effect.
 
+## Balance by bench, more ground, and arenas built of bricks (v0.6)
+
+**A bench for parts.** The ladder says which *bots* are strong, and a bot is a car and a driver at once. To ask about a part alone, `tools/weapon-bench.mjs` puts different loadouts on one hull with one plain controller (hold about 70% of the longest gun's range, face the enemy, lead the shot, stay out of holes) at the same price, and plays them against each other on every map and against the real entries. A weapon that wins everything in those hands is too strong; one that wins nothing is dead weight. What it found on 0.5.4:
+
+| Loadout (same hull, ~1180 credits) | Wins among bench cars, before → after | Wins against the seven agent entries, before → after |
+|---|---|---|
+| 3 missile pods | 87% → 62% | 82% → 47% |
+| 4 flamethrowers | 76% → 69% | 69% → 50% |
+| 4 cannons | 71% → 59% | 74% → 70% |
+| 3 mortars + 2 machine guns | 52% → 58% | 32% → 29% |
+| 5 machine guns | 42% → 38% | 31% → 27% |
+| 4 lasers | 24% → 31% | 8% → 38% |
+| 3 railguns | 2% → 59% | 7% → 53% |
+
+("Before" is 0.5.4 on its eight maps; "after" is 0.6.0 on all fourteen, one seed, both sides. The laser car also got a second reactor between the two runs; the laser itself is unchanged.)
+
+Three things it showed that the ladder could not:
+
+1. A car with three missile pods and no idea beat every entry on the board. Nobody had built one, so the ladder never saw it. A missile's burst hit up to five pieces at 60% and always arrived; now it is 28 damage, four pieces at 50%, 32 m instead of 40, and a pod reloads a little slower.
+2. The railgun was not a weapon: 64 damage every 4.4 s, less than half of it through a slope. It now does 90 every 4 s, goes through three pieces, and a slope does not turn its slug — the long gun that answers a wall of slopes.
+3. Fire did too much for a part that needs no aim. The stream now does 3.5 a second to each piece it washes (5), and a burning piece loses 5 hp/s for 5 s (6 for 6) and warms its neighbours at 0.4/s (0.45). At 0.3 a fire no longer walked from plate to plate at all, which is the whole point of fire; 0.4 keeps it walking.
+
+Defence was measured the same way: on a three-cannon car, a shield generator, a repair arm or five armor bricks at the same price all lost to simply fitting the fourth cannon, and the shield was the worst of the three. It now holds 240 (120) and recharges 16/s after 2.5 s. That makes it what the rulebook always said it was — the answer to missiles and mortars (24–4 against either on the bench) — while still losing to anything that shoots bullets.
+
+Lasers were left alone: weak in plain hands on the bench, and the entry at the top of the 1v1 ladder is a laser car, so the gap is the driver's.
+
+**More ground.** Eight arenas became fourteen, each asking for a different car: Scrap Cage (36 m across, the sides start 26 m apart, nowhere to run), Salt Flat (open, long sightlines, a speed strip down each flank), Causeway (a chasm with one broad bridge and two narrow ones behind crates), Rat Run (corridors and corners, crates in the short cuts), Fogbank (three banks of smoke) and Ring Road (a circuit round a lava infield). Two tiles are new. **Smoke** hides a car from every sensor further than 7 m away until it fires, and a missile loses its lock on it: it is the counterweight to the long guns the bench had just made worth carrying. A **speed strip** makes wheels, tracks and hover pads push half as hard again. Over the whole field the new maps play like the old ones — 97% of matches end in a kill, about 49 s on average, one unprovoked fall in 2280.
+
+The new maps found a bug the old ones had hidden. On Rat Run two cars could pass each other in parallel corridors without either sensor reaching, drive on to where the other had started, and stand there until the zone closed 90 s later: each still had a note saying the enemy was "last seen" on the very spot it was parked on. A note is now dropped once one of the team is standing on the spot and the enemy is not to be seen there, until it is seen again. It was found by a number added in the same release — seconds a car stood still by its own command with the enemy beyond every gun — which is the thing an agent tuning a controller most needs to be told and could not see before.
+
+**Built of bricks.** The cars were always bricks; the ground they fought on was concrete, sand and grass. Now every arena is a model built from the same kit, on a studded baseplate with a stud every 0.4 m — the cars' own stud.
+
+- *Walls* are laid in courses, half a brick over the one below, in two colours: a dark plinth and a coping course in the second colour, or hazard checks, or stripes, or an odd brick here and there, by map. Studs run along the top. Corners, ends and free-standing pillars carry a 2×2 post under a pyramid cap with a lamp on it; every fourth tile of a straight run carries a low one.
+- *The floor* is printed like the board of a game: two tones of plate in a 4 m chequer, each team's end in its colour with a row of chevrons pointing at the other side, a dashed halfway line, a centre circle, and a kerb line along the foot of everything that stands on it. Ice is smooth tile with no studs — smooth is why it is slippery — and mud is a patch of brown plates.
+- *Things on the floor*: barriers are two courses of hazard-checked brick, crates are 4×4 bricks with sixteen studs.
+- *Around the arena*, beyond the walls where no car can go, stand things built of the same bricks so that the board sits in a place: trees and bushes, snow-topped pines, cacti and rock piles, lamp posts, chimneys, stacks of tyres.
+
+Each map has its own handful of colours and its own way of laying them, and keeps its own sky and light. The style is a generic toy-brick one: no marks, sets or pieces of any real brand are reproduced. Stud patterns on the ground are drawn in the ground shader and fade with distance so they do not shimmer; studs on walls and crates are real geometry.
+
 ## Left out on purpose
 
 - No third layer, no overhangs, no hinges or moving joints. Add any more and an ASCII blueprint can no longer describe the car clearly.

@@ -10,7 +10,7 @@ import { WRAP_LINES } from './botwrap.js';
 import { compactTelemetry } from './telemetry.js';
 import { insightsFor } from './insights.js';
 
-export const ENGINE_VERSION = '0.5.4';
+export const ENGINE_VERSION = '0.6.0';
 
 export class MatchError extends Error {
   constructor(message, detail) { super(message); this.name = 'MatchError'; this.detail = detail; }
