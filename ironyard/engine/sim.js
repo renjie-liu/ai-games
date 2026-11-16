@@ -376,7 +376,7 @@ export class World {
       let scale = 1;
       if (opts.shieldable) {
         const pool = v.shield + v.overshield;
-        if (pool > 0) { const used = Math.min(pool, dmg); this.drainShield(v, used); scale = (dmg - used) / dmg; if (scale <= 0.01) continue; }
+        if (pool > 0) { const used = Math.min(pool, dmg); this.drainShield(v, used); scale = (dmg - used) / dmg; if (scale <= 0.01) scale = 0; }
       }
       const near = new Map(); // piece -> nearest distance
       for (const c of v.cols) {
@@ -401,7 +401,7 @@ export class World {
           }
         }
       }
-      for (let k = 0; k < hit.length && k < maxParts; k++) {
+      for (let k = 0; scale > 0 && k < hit.length && k < maxParts; k++) {
         const [p, d] = hit[k];
         const f = scale * (1 - (1 - fmin) * (d / r));
         if (this.damage(v, p, dmg * f, 'explosive', src, undefined, undefined, via) > 0 && src && src.team !== v.team) struck = true;
@@ -624,7 +624,8 @@ export class World {
     // an aim is either a world angle (number) or a world point {x, y}; points make every gun converge
     const ang = (a) => {
       if (typeof a === 'number' && Number.isFinite(a)) return a;
-      if (a && typeof a === 'object' && Number.isFinite(a.x) && Number.isFinite(a.y)) return { x: a.x, y: a.y };
+      // (a point a million metres off is no aim: squared, numbers that size overflow, and a mortar's minimum range with them)
+      if (a && typeof a === 'object' && Number.isFinite(a.x) && Number.isFinite(a.y) && Math.abs(a.x) <= 1e6 && Math.abs(a.y) <= 1e6) return { x: a.x, y: a.y };
       return null;
     };
     const c = {
@@ -690,8 +691,16 @@ export class World {
       this.collideWalls(v);
       // thrown hard enough at a thick wall, a car could end the tick with its centre inside it and stay there:
       // it is put back where it last stood clear, and stopped
-      if (!TILE_SOLID[tileCodeAt(this.map, v.x, v.y)]) { v.clearX = v.x; v.clearY = v.y; }
+      // (its centre and at least one of its pieces: the centre of a fork-shaped car may hang over a wall end it does not touch)
+      if (!TILE_SOLID[tileCodeAt(this.map, v.x, v.y)] || !v.cols.some((c) => TILE_SOLID[tileCodeAt(this.map, c.wx, c.wy)])) { v.clearX = v.x; v.clearY = v.y; }
       else if (v.clearX !== undefined) { v.x = v.clearX; v.y = v.clearY; v.vx = 0; v.vy = 0; this.updateCells(v); }
+      // nobody leaves the map: a hover craft drifting out over the edge would be out of reach of every shot
+      const W = this.map.width, H = this.map.height;
+      if (v.x < 0 || v.x > W || v.y < 0 || v.y > H) {
+        if (v.x < 0) { v.x = 0; if (v.vx < 0) v.vx = 0; } else if (v.x > W) { v.x = W; if (v.vx > 0) v.vx = 0; }
+        if (v.y < 0) { v.y = 0; if (v.vy < 0) v.vy = 0; } else if (v.y > H) { v.y = H; if (v.vy > 0) v.vy = 0; }
+        this.updateCells(v);
+      }
     }
     this.stepTethers(dt);
     this.settle();
@@ -1203,20 +1212,24 @@ export class World {
     let reached = false;
     for (const e of this.teams[1 - v.team]) {
       if (!e.alive || Math.hypot(e.x - mx, e.y - my) > d.range + e.radius) continue;
-      const done = new Set();   // a piece of several studs is washed once, not once per stud
+      // a piece of several studs is washed once, not once per stud — from as close as its nearest stud in the stream
+      const near = new Map();
+      let shielded = false;
       for (const c of e.cols) {
         const dx = c.wx - mx, dy = c.wy - my, dist = Math.hypot(dx, dy);
         if (dist > d.range || (dist > 0.3 && (dx * ca + dy * sa) / dist < cosCone)) continue;
         if (this.blocked(mx, my, c.wx, c.wy)) continue;   // this column is behind a wall; the next may not be
         // a shield that is up takes the whole stream, once, however many columns it would have reached
-        if (e.shield + e.overshield > 0) { this.drainShield(e, d.dps * 3 * dt * od); reached = true; break; }
+        if (e.shield + e.overshield > 0) { this.drainShield(e, d.dps * 3 * dt * od); reached = true; shielded = true; break; }
         const p = e.parts[c.top >= 0 ? c.top : c.bot];
-        if (!p.alive || done.has(p)) continue;
-        done.add(p);
+        if (p.alive && !(near.get(p) <= dist)) near.set(p, dist);
+      }
+      if (shielded) continue;
+      for (const [p, dist] of near) {
         reached = true;
-        const near = 1 - 0.5 * (dist / d.range);   // hotter up close
-        this.damage(e, p, d.dps * near * dt * od, d.dtype, v, undefined, undefined, gun);
-        if (p.alive) this.warm(e, p, d.heat * near * dt, v.id);
+        const k = 1 - 0.5 * (dist / d.range);   // hotter up close
+        this.damage(e, p, d.dps * k * dt * od, d.dtype, v, undefined, undefined, gun);
+        if (p.alive) this.warm(e, p, d.heat * k * dt, v.id);
       }
     }
     if (this.map.live) {   // three points along the stream
@@ -1310,7 +1323,7 @@ export class World {
         const tc = tileCodeAt(map, p.x, p.y);
         if (TILE_SHOTS[tc]) {
           if (TILE_HP[tc]) this.damageTile(Math.floor(p.x / TILE), Math.floor(p.y / TILE), p.dmg, this.vehicles[p.owner]);
-          if (p.splash) this.explode(p.x - sx, p.y - sy, p.splash.r, p.dmg * p.splash.f, 0.4, p.team, this.vehicles[p.owner], 4, { gun: this.vehicles[p.owner].parts[p.from], ang: Math.atan2(p.vy, p.vx) });
+          if (p.splash) this.explode(p.x - sx, p.y - sy, p.splash.r, p.dmg * p.splash.f, 0.4, p.team, this.vehicles[p.owner], 4, { shieldable: true, gun: this.vehicles[p.owner].parts[p.from], ang: Math.atan2(p.vy, p.vx) });
           dead = true; break;
         }
         for (const e of enemiesOf[1 - p.team]) {
@@ -1340,7 +1353,7 @@ export class World {
           }
           this.push(e, p.x, p.y, (p.vx / p.speed) * p.dmg * this.rules.hitPush, (p.vy / p.speed) * p.dmg * this.rules.hitPush);
           this.damage(e, part, p.dmg, p.dtype, src, Math.atan2(p.vy, p.vx), undefined, gun);
-          if (p.splash) this.explode(p.x, p.y, p.splash.r, p.dmg * p.splash.f, 0.4, p.team, src, p.splash.max || 5, { skip: part, gun, ang: Math.atan2(p.vy, p.vx) });
+          if (p.splash) this.explode(p.x, p.y, p.splash.r, p.dmg * p.splash.f, 0.4, p.team, src, p.splash.max || 5, { shieldable: true, skip: part, gun, ang: Math.atan2(p.vy, p.vx) });
           dead = true; break;
         }
       }
@@ -1492,7 +1505,7 @@ export class World {
       tile: TILE_NAME[tileCodeAt(this.map, v.x, v.y)],
       weapons: v.parts.filter((p) => p.def.weapon && p.def.weapon !== 'melee').map((p) => ({
         i: p.i, type: p.type, dir: p.dir, alive: p.alive,
-        ready: p.alive && p.cd <= 0 && v.energy >= (p.def.energyShot ?? p.def.energyUse * this.dt),
+        ready: p.alive && p.cd <= 0 && !p.hooked && v.energy >= (p.def.energyShot ?? p.def.energyUse * this.dt),
         cooldown: p.cd > 0 ? r2(p.cd) : 0,
         mountAngle: r3(wrap(v.th + DIR_ANGLE[p.dir])), angle: r3(wrap(v.th + DIR_ANGLE[p.dir] + p.ang)),
         arc: p.def.arc, range: p.def.range, minRange: p.def.minRange || 0, projSpeed: p.def.projSpeed || Infinity,
@@ -1652,7 +1665,7 @@ export class World {
       W[k++] = tileCodeAt(this.map, v.x, v.y); W[k++] = v.overdrive > 0 ? ITEMS.overdrive.mult : 1;
       for (const p of v.parts) {
         if (!p.def.weapon || p.def.weapon === 'melee') continue;
-        W[k++] = p.alive && p.cd <= 0 && v.energy >= (p.def.energyShot ?? p.def.energyUse * this.dt) ? 1 : 0;
+        W[k++] = p.alive && p.cd <= 0 && !p.hooked && v.energy >= (p.def.energyShot ?? p.def.energyUse * this.dt) ? 1 : 0;
         W[k++] = p.cd > 0 ? r2(p.cd) : 0;
         W[k++] = r3(wrap(v.th + DIR_ANGLE[p.dir])); W[k++] = r3(wrap(v.th + DIR_ANGLE[p.dir] + p.ang));
       }

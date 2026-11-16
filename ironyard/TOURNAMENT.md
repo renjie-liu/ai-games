@@ -1,5 +1,7 @@
 # Six-entry tournament — 2026-11-15
 
+> This is the record of one tournament, played on engine 0.5.0 with the sources listed by hash in `docs/tournaments/`. The engine and at least one entry (`grindstone`) have changed since, so these tables are not the current standings: see [LEADERBOARD.md](LEADERBOARD.md) and [docs/RANKING.md](docs/RANKING.md).
+
 Fable (Quillback), Opus (Grindstone), Sol, Astra, Carbon and Hydrogen played **1440 matches** across three separate round robins. All matches completed with no reported controller errors. The repository owner confirmed the Fable/Opus attribution; exact versions were not supplied.
 
 ## Format

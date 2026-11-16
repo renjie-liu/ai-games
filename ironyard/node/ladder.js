@@ -192,8 +192,10 @@ export async function ladder(pool, { queues = QUEUES, play = true, budgetMs = In
           try {
             const s = await pool.run({ map: m.map, mode: m.mode, seed: m.seed, swap: m.swap, teams: withSources(m.teams), want: 'score' });
             if (![0, 1, -1].includes(s.winner)) throw new Error('match did not finish');
-            if (s.errors?.length) throw new Error('controller errors: ' + s.errors.join(' | '));
-            store.results[m.key] = { checked: RESULT_CHECK, w: s.winner, h: [s.teams[0].hull, s.teams[1].hull] };
+            // A match the engine played to a result counts as played. A controller that throws is the engine's to deal
+            // with (it idles that tick, and is cut off if it keeps on): were its errors to void the match, a bot could
+            // throw once whenever it was losing and never have a loss on file. The errors are kept beside the result.
+            store.results[m.key] = { checked: RESULT_CHECK, w: s.winner, h: [s.teams[0].hull, s.teams[1].hull], ...(s.errors?.length ? { err: ('controller errors: ' + s.errors.join(' | ')).slice(0, 200) } : {}) };
           } catch (e) {
             // A reliably attributed controller failure is a forfeit. Unattributed
             // failures are unscored, visible, and retried on the next call.

@@ -193,7 +193,7 @@ export function makeNav(map) {
     return out;
   }
 
-  const follower = makeFollower(path);
+  const follower = makeFollower(path, clear);
 
   return {
     follower,

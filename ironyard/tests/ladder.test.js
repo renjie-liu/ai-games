@@ -145,7 +145,7 @@ test('model attribution and snapshot completion are explicit', () => {
 });
 
 
-test('the ladder reports and retries unattributed and runtime failures instead of counting draws', async () => {
+test('the ladder retries a match that could not be played, and scores one a controller threw in as the engine played it', async () => {
   const fs = await import('node:fs'); const os = await import('node:os'); const path = await import('node:path');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ironyard-score-check-'));
   const previous = process.env.IRONYARD_LADDER_DIR;
@@ -161,12 +161,14 @@ test('the ladder reports and retries unattributed and runtime failures instead o
     } }, { queues: ['1v1'] });
     const q = first.queues['1v1'];
     assert.equal(first.complete, false); assert.equal(q.errorCount, 2);
-    assert.equal(q.onFile, q.matches - 2);
+    // the match nobody could play is not on file; the one a controller threw in is, with the result the engine gave it:
+    // were it left out, a bot could throw once whenever it was losing and never have a loss recorded
+    assert.equal(q.onFile, q.matches - 1);
     assert.ok(q.standings.every(r => r.d === 0), 'failures were not draws');
     let retried = 0;
     const second = await ladder({ run: async () => { retried++; return good(); } }, { queues: ['1v1'] });
-    assert.equal(retried, 2); assert.equal(second.complete, true);
-    assert.equal(second.errors, undefined);
+    assert.equal(retried, 1); assert.equal(second.complete, true);
+    assert.equal(second.errors.length, 1); assert.match(second.errors[0], /bot tick threw/);
   } finally {
     if (previous === undefined) delete process.env.IRONYARD_LADDER_DIR; else process.env.IRONYARD_LADDER_DIR = previous;
     fs.rmSync(dir, { recursive: true, force: true });

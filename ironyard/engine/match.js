@@ -10,7 +10,7 @@ import { WRAP_LINES } from './botwrap.js';
 import { compactTelemetry } from './telemetry.js';
 import { insightsFor } from './insights.js';
 
-export const ENGINE_VERSION = '0.5.1';
+export const ENGINE_VERSION = '0.5.2';
 
 export class MatchError extends Error {
   constructor(message, detail) { super(message); this.name = 'MatchError'; this.detail = detail; }
@@ -61,11 +61,11 @@ function viewOf(buf) {
  * @param {number} [o.maxTime]      stop early (seconds) — used for smoke tests
  */
 export function runMatch(o) {
-  const base = typeof o.map === 'string' ? MAPS[o.map] : o.map;
+  const base = typeof o.map === 'string' ? (Object.hasOwn(MAPS, o.map) ? MAPS[o.map] : null) : o.map;
   if (!base) throw new MatchError(`unknown map "${o.map}". Valid: ${Object.keys(MAPS).join(', ')}`);
   const map = liveMap(base);   // this match's own copy when the map has crates or barrels to lose
   const mode = o.mode || '1v1';
-  const teamSize = MODES[mode];
+  const teamSize = typeof mode === 'string' && Object.hasOwn(MODES, mode) ? MODES[mode] : null;
   if (!teamSize) throw new MatchError(`unknown mode "${mode}". Valid: ${Object.keys(MODES).join(', ')}`);
   if (!Array.isArray(o.teams) || o.teams.length !== 2) throw new MatchError('teams must be [[...], [...]]');
   const seed = (o.seed ?? 0) >>> 0;
@@ -73,7 +73,9 @@ export function runMatch(o) {
   const record = o.record !== false;
   const strict = o.strict !== false;
   const now = o.now || null;
-  const trace = o.trace || null;   // optional Int32Array(1): id of the vehicle whose controller is running (watchdogs)
+  // optional Int32Array for watchdogs: [0] the id of the vehicle whose controller is running (-1: none), [1] (if there is
+  // room) a count of the calls made into controllers so far
+  const trace = o.trace || null;
   const rules = { ...RULES, ...(o.rules || {}) };
   const slots = SPAWN_SLOTS[teamSize];
   const mapInfo = deepFreeze(describeMap(map));
@@ -115,7 +117,7 @@ export function runMatch(o) {
       const c = { id, bot, logs, errors, port: null, cpuTotal: 0, cpuMax: 0, calls: 0, team: t, k };
       const fail = (msg, detail) => { throw new MatchError(`bot "${bot.id}" (team ${t}, slot ${k}): ${msg}`, { bot: bot.id, team: t, slot: k, ...detail }); };
       const boot = `{"ctx":${JSON.stringify({ mode, teamSize, team: t, slot: k, budget })},"file":${JSON.stringify(bot.file || '')},"lineOffset":${WRAP_LINES},${tables}}`;
-      if (trace) trace[0] = id;
+      if (trace) { trace[0] = id; if (trace.length > 1) trace[1]++; }
       try { c.port = bot.open ? bot.open(host, boot) : controllerRealm(bot.factory, host, boot, makeUtil, makeFollower); }
       catch (e) { fail(`threw while loading: ${thrown(e)}`, { phase: 'load' }); }
       if (typeof c.port.error === 'string') fail(c.port.error, { phase: 'load' });
@@ -133,7 +135,8 @@ export function runMatch(o) {
       }
       c.design = val.design; c.designStats = val.stats;
       const meta = plain(readJson(textOf(c.port.meta)));
-      c.name = String(bot.name || meta.name || bot.id).slice(0, 32);
+      // (a name is text or it is not a name: an object here could throw when turned into a string, for both sides)
+      c.name = String(typeof bot.name === 'string' && bot.name ? bot.name : typeof meta.name === 'string' && meta.name ? meta.name : bot.id).slice(0, 32);
       c.author = typeof meta.author === 'string' ? meta.author.slice(0, 40) : '';
       ctl.push(c);
       entries.push({ team: t, slot: k, spawn: slots[k], design: val.design, name: c.name, botId: bot.id });
@@ -145,7 +148,7 @@ export function runMatch(o) {
 
   for (const c of ctl) {
     const v = world.vehicles[c.id];
-    if (trace) trace[0] = c.id;
+    if (trace) { trace[0] = c.id; if (trace.length > 1) trace[1]++; }
     let said;
     try { said = textOf(c.port.init(JSON.stringify({ id: v.id, design: c.design, stats: c.designStats, x: v.x, y: v.y, heading: v.th }))); }
     catch (e) { said = '!' + thrown(e); }
@@ -166,7 +169,7 @@ export function runMatch(o) {
         if (v.cutOff) { world.setCommand(v, null); continue; }
         let said;
         const t0 = now ? now() : 0;
-        if (trace) trace[0] = c.id;
+        if (trace) { trace[0] = c.id; if (trace.length > 1) trace[1]++; }
         try { said = textOf(c.port.tick(obs[c.id].messages, obs[c.id].layouts)); } catch (e) { said = '!' + thrown(e); }
         let cmd = null;
         if (failed(said)) {

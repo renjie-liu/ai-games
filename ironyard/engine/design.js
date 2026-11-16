@@ -202,7 +202,7 @@ export function validateDesign(input, opts = {}) {
   if (stats.groundMovers > 0 && Math.abs(stats.wheelBias) > 0.25) warnings.push('drive force is lopsided left/right: the vehicle will pull to one side');
   if (stats.turnRate < 0.8 && stats.groundMovers + stats.hoverMovers > 0) warnings.push(`slow turn rate (~${stats.turnRate.toFixed(2)} rad/s): widen the wheelbase or add a gyro`);
 
-  const accent = input.paint && PAINTS[input.paint.accent] ? input.paint.accent : 'white';
+  const accent = input.paint && typeof input.paint.accent === 'string' && Object.hasOwn(PAINTS, input.paint.accent) ? input.paint.accent : 'white';
   out.design = { name: String(input.name || 'Unnamed').slice(0, 40), paint: { accent }, parts };
   out.ok = errors.length === 0;
   return out;

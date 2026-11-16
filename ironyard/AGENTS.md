@@ -1,4 +1,4 @@
-# Ironyard — rules and controller contract (engine 0.5.1)
+# Ironyard — rules and controller contract (engine 0.5.2)
 
 Ironyard is a deterministic vehicle-combat arena. **You build the car and you write its brain.**
 Before a match you hand in ONE JavaScript file containing a blueprint (which bricks go where, within a
@@ -218,7 +218,7 @@ One map tile is 2 m.
 | `floor` | `.` | Normal ground. |
 | `wall` | `#` | Blocks vehicles, shots and beams. Mortar shells fly over. |
 | `barrier` | `-` | Blocks vehicles only; shots fly over. |
-| `pit` | `_` | Centre of mass over a pit = elimination within a quarter of a second, unless hovering. |
+| `pit` | `_` | Centre of mass over a pit = instant elimination, unless hovering. |
 | `mud` | `m` | Wheels lose 60% traction (monster wheels 25%), tracks 15%. Hover ignores it. |
 | `ice` | `i` | Almost no side grip and 65% less traction for wheels (tracks cope better). |
 | `lava` | `L` | Every piece takes 12 hp/s (3 hp/s while hovering). |
@@ -235,7 +235,8 @@ Off the edge of the map counts as a pit.
 * **Friendly fire is off** for guns, flamethrowers, saws, pistons and hooks: shots and their splash pass through
   teammates. You can still bump into them. **Powder kegs and barrels are the exception**: their blasts hit everyone in
   reach, a teammate sets off a rolling keg by touching it, and nothing done to your own side counts as damage dealt.
-* **Timeout:** more vehicles alive wins; then more total hull fraction remaining; then more damage dealt; else a draw.
+* **Timeout:** more vehicles alive wins; then more total hull fraction remaining (a lead of less than half a percent of a hull
+  counts as level); then more damage dealt (by more than 1 hp); else a draw.
 * **Crates and barrels** are tiles with hit points. A crate is a wall until it is broken; a barrel explodes when it is,
   a tenth of a second later, so a row of them goes off one after another. Shots, beams, blasts, fire, pistons and
   collisions (x3, and more through a spike or plow) all damage them. `api.nav` always answers for the map as it is
@@ -243,13 +244,13 @@ Off the edge of the map counts as a pit.
 
 ### Items
 Pick-ups appear on the map's `*` spots at t=8s and again 14s after being taken. Drive over one to take it.
-Mirrored spots always hold the same item type.
+Mirrored spots start with the same item type; after that each spot moves on to its next item when its own is taken.
 
 | item | kind | effect |
 |---|---|---|
 | `repair` | instant | Instantly restores 35% of max HP to every damaged (not destroyed) piece. |
 | `shield` | instant | +100 temporary shield for 12 s, even without a generator. |
-| `overdrive` | instant | All your damage x1.5 for 8 s. |
+| `overdrive` | instant | Everything your guns, flamethrowers, saws and pistons deal x1.5 for 8 s. Not powder kegs, rams or fire once it has caught. |
 | `nitro` | instant | Drive and thruster force x1.6 for 6 s. |
 | `mine` | held | Held, 2 charges. `useItem` drops one behind you; it arms in 0.8 s and blasts the first enemy that drives over it (chassis first). |
 | `emp` | held | Held, 1 charge. `useItem` stuns every enemy within 7 m for 2.2 s, drops their shields and drains 40 energy. |
@@ -592,6 +593,8 @@ Missing or invalid fields count as 0 / off (for a number, `true` counts as full)
 when `tick` returns. If `tick` throws, the vehicle idles for that step and the match report quotes the
 message with the line of your file; after 40 exceptions the controller is cut off for the rest of
 the match. A tick should take well under 3 ms; one that never returns forfeits the match.
+Do not build on running out of stack or memory: how deep a call can nest is a property of the machine, not of the
+match, and a controller that measures it has given up the promise that the same files and seed play the same match.
 
 ### Helpers: `api`
 * `api.util.driveTo(self, point, { reverse, stopDist, speed })` → `{ throttle, steer, brake }` pursuit controller.
@@ -602,7 +605,7 @@ the match. A tick should take well under 3 ms; one that never returns forfeits t
 * `api.util.threat(state, margin = 1.2)` → `null`, or `{ x, y, r, in, away }` for the keg or mortar shell whose blast you are in or
   nearly in: where, how big, in how many seconds, and a point just outside it to drive to (`driveTo(self, t.away, { reverse: true })`).
 * `api.nav.follower()` → object with `next(self, goalX, goalY, state.tick)` returning the next waypoint of an A* route
-  (cached, re-planned twice a second, sized to your hull, backs out when wedged). Keep one per controller.
+  (cached, re-planned twice a second, sized to your hull, keeps to the way round an obstacle it has chosen, backs out when wedged). Keep one per controller.
 * `api.nav.path(x0, y0, x1, y1, { hover, margin, mudCost, iceCost, lavaCost })` → waypoints.
 * `api.nav.los(x0, y0, x1, y1)` (can a shot get through?), `api.nav.clear(x0, y0, x1, y1, { margin, hover })` (can I drive it?),
   `api.nav.tileAt(x, y)`, `api.nav.isOpen(x, y, hover)`, `api.nav.clearance(x, y)` → `{ wall, pit }` metres.

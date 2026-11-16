@@ -415,6 +415,11 @@ test('a design is made of our parts and our four facings, whatever else its JSON
     assert.equal(v.ok, false, `dir ${JSON.stringify(dir)}`);
     assert.match(v.errors.join(' '), /dir must be one of N, E, S, W/);
   }
+  // the same goes for a paint, a map and a mode: a name every object has is not one of ours
+  for (const accent of ['constructor', 'toString', ['red'], 5]) assert.equal(validateDesign({ parts: base, paint: { accent } }).design.paint.accent, 'white', `accent ${JSON.stringify(accent)}`);
+  assert.equal(validateDesign({ parts: base, paint: { accent: 'red' } }).design.paint.accent, 'red');
+  assert.throws(() => runMatch({ map: 'constructor', teams: [[loadBot('rookie')], [loadBot('rookie')]], record: false }), /unknown map "constructor"/);
+  assert.throws(() => runMatch({ map: 'proving', mode: 'toString', teams: [[loadBot('rookie')], [loadBot('rookie')]], record: false }), /unknown mode "toString"/);
   // and a bot that hands such a design over is refused before the match, by name, not allowed to break it for both sides
   const evil = makeBot('evil', `const meta = { name: 'Evil' }; const design = { parts: ${JSON.stringify(base)}.map((p) => (p.type === 'core' ? { ...p, type: ['core'] } : p)) }; function tick() { return {}; }`);
   assert.throws(() => runMatch({ map: 'proving', teams: [[evil], [loadBot('rookie')]], record: false }), /bot "evil".*invalid design/);
@@ -465,4 +470,56 @@ test('nobody ends a tick inside a wall, however hard they are thrown at it', () 
     }
   }
   assert.equal(inside, 0);
+});
+
+test('a shield that soaks a whole burst still lets the shove through, and soaks the splash of a shell beside it', () => {
+  const shielded = car([{ type: 'shieldgen', x: 1, y: -1, z: 1 }]);
+  const { w, p, q } = duel(car(), shielded, { gap: 8 });
+  const hp = q.hp;
+  w.explode(q.x - 1.4, q.y, 2, 46, 0.35, 0, p, 7, { shieldable: true });   // a mortar shell: all of it fits in a full bubble
+  assert.equal(q.hp, hp, 'nothing gets through');
+  assert.ok(q.vx > 1.5, `and it is thrown all the same (${q.vx.toFixed(2)} m/s)`);
+  // a cannon shell going off on the wall beside a shielded car: its splash is a burst like any other
+  const wall = duel(car([{ type: 'cannon', x: 0, y: 1, z: 1, dir: 'N' }]), shielded, { gap: 8 });
+  const s0 = wall.q.shield, h0 = wall.q.hp;
+  wall.w.explode(wall.q.x - wall.q.radius - 0.2, wall.q.y, 1.1, 30, 0.4, 0, wall.p, 5, { shieldable: true });
+  assert.ok(wall.q.shield < s0 && wall.q.hp === h0, 'the bubble pays for it, the hull does not');
+});
+
+test('a harpoon whose cable is out is not ready, and a mortar cannot be aimed at nowhere', () => {
+  const { w, p, q, run } = duel(car([{ type: 'harpoon', x: 0, y: 1, z: 1, dir: 'N' }]), car(), { gap: 5 });
+  const ready = () => w.observeAll()[p.id].self.weapons.find((x) => x.type === 'harpoon').ready;
+  assert.equal(ready(), true);
+  w.setCommand(p, { fire: true, aim: { x: q.x, y: q.y } });
+  run(0.5);
+  w.setCommand(p, {});
+  run(7);                                                                  // long past the 6 s reload: the cable (7 s) still holds
+  if (w.tethers.length) assert.equal(ready(), false, 'hooked: nothing to fire');
+  assert.ok(p.stats.hooks >= 1, 'it bit');
+
+  const m = duel(car([{ type: 'mortar', x: -1, y: 1, z: 1, dir: 'N' }]), car(), { gap: 2.5 });
+  m.w.setCommand(m.p, { fire: true, aim: { x: 1.7e308, y: 1.7e308 } });    // squared, this overflows: it used to slip under the minimum range
+  m.run(3);
+  assert.equal(m.q.stats.damageTaken, 0, 'no shell on a car 2.5 m away');
+  assert.equal(m.p.stats.damageTaken, 0);
+});
+
+test('nobody leaves the map, and a fork-shaped car is not stopped by a wall it does not touch', () => {
+  const hover = legal([
+    ...[-1, 0, 1].flatMap((x) => [-1, 0, 1].map((y) => ({ type: 'hover', x, y, z: 0 }))),
+    { type: 'core', x: 0, y: 0, z: 1 }, { type: 'reactor', x: 0, y: -1, z: 1 }, { type: 'reactor', x: 0, y: 1, z: 1 }]);
+  const { w, p, run } = duel(hover, car(), { gap: 20, map: MAPS.sumo, at: { x: 36, y: 20 }, heading: Math.PI });
+  p.vx = 30;                                                               // thrown east, out over the edge
+  run(1.5);
+  assert.ok(p.alive && p.x <= MAPS.sumo.width && p.x >= 0, `still over the map (x = ${p.x.toFixed(1)} of ${MAPS.sumo.width})`);
+
+  const fork = legal([
+    { type: 'track', x: -4, y: 0, z: 0 }, { type: 'track', x: -4, y: 3, z: 0 }, { type: 'track', x: 4, y: 0, z: 0 }, { type: 'track', x: 4, y: 3, z: 0 },
+    ...[-4, -3, -2, -1, 0, 1, 2, 3, 4].map((x) => ({ type: 'plate', x, y: -1, z: 0 })), { type: 'core', x: 0, y: -1, z: 1 }]);
+  // Canyon's rock wall at column 11 is one tile wide and ends at y = 34; the fork's centre of mass lies between its prongs
+  const f = duel(fork, car(), { gap: 30, map: MAPS.canyon, at: { x: 23, y: 29 }, heading: Math.PI / 2 });
+  f.q.x = 50; f.q.y = 50; f.w.updateCells(f.q);
+  let top = 0;
+  for (let i = 0; i < 90; i++) { f.w.setCommand(f.p, { throttle: 1 }); f.w.step(); top = Math.max(top, f.p.y); }
+  assert.ok(top > 34.3, `its centre goes in between the prongs until the cross-bar meets the wall (got to y = ${top.toFixed(2)})`);
 });

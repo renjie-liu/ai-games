@@ -43,7 +43,7 @@ Sort by **unrounded rating**, then raw win percentage, then bot id. Display rati
 
 ## Failure handling and cache
 
-Worker results are checked for controller exceptions and a finished match. A failure reliably attributed to one bot is a forfeit for that side and is prominently reported. An unattributed failure is **unscored**, not a draw, and is retried on the next call. `ladder --write` refuses an incomplete or error-containing season.
+Worker results are checked for controller exceptions and a finished match. A failure reliably attributed to one bot is a forfeit for that side and is prominently reported. An unattributed failure is **unscored**, not a draw, and is retried on the next call. A match that finished but in which a controller threw is scored as the engine played it (the rules let a controller throw: it idles for that tick) and is reported with its error — leaving it unscored would let a bot throw once whenever it was losing and never have a loss on file. `ladder --write` refuses an incomplete or error-containing season.
 
 Cache keys include engine version, map, mode, seed, spawn swap, ordered team members and source hashes. Changing the slot order therefore creates a distinct match. Cache records also carry a result-check version: older records that did not check controller exceptions are rerun once. If engine behavior changes without a version bump, its cache must be invalidated. Source metadata changes can also invalidate a bot's results because the full file is hashed.
 

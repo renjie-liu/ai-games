@@ -33,7 +33,7 @@ export class MatchPool {
       const job = this.queue.shift();
       const w = this.idle.pop() || this.spawn();
       const id = this.nextId++;
-      const sab = new SharedArrayBuffer(4);
+      const sab = new SharedArrayBuffer(8);   // [vehicle whose controller is running, calls made into controllers so far]
       const trace = new Int32Array(sab); trace[0] = -1;
       let done = false;
       const finish = (fn, reuse) => {
@@ -60,11 +60,17 @@ export class MatchPool {
           finish(() => job.reject(Object.assign(new Error(`match ran out of memory (${this.memoryMb} MB)${culprit ? `: controller "${culprit}" was running` : ''}`), { detail: { memory: true, bot: culprit } })), false);
         } else finish(() => job.reject(e), false);
       };
+      // Out of time. A controller is to blame only if one call of it is not coming back: the same call still running a
+      // quarter of a second later. A match that is merely slow — every call returns, there are just too many slow ones —
+      // would otherwise be pinned on whichever controller happened to be running at that instant.
       const timer = setTimeout(() => {
-        const culprit = running();
-        finish(() => job.reject(Object.assign(new Error(culprit
-          ? `match timed out after ${job.timeoutMs} ms: controller "${culprit}" did not return (infinite loop?)`
-          : `match timed out after ${job.timeoutMs} ms`), { detail: { timeout: true, bot: culprit } })), false);
+        const vid = trace[0], calls = trace[1];
+        setTimeout(() => {
+          const culprit = vid >= 0 && trace[0] === vid && trace[1] === calls ? running() : null;
+          finish(() => job.reject(Object.assign(new Error(culprit
+            ? `match timed out after ${job.timeoutMs} ms: controller "${culprit}" did not return (infinite loop?)`
+            : `match timed out after ${job.timeoutMs} ms: no single call was stuck, the match as a whole ran too long`), { detail: { timeout: true, bot: culprit } })), false);
+        }, 250);
       }, job.timeoutMs);
       w.on('message', onMsg); w.on('error', onErr);
       w.postMessage({ id, spec: job.spec, trace: sab });

@@ -223,7 +223,8 @@ Off the edge of the map counts as a pit.
 * **Friendly fire is off** for guns, flamethrowers, saws, pistons and hooks: shots and their splash pass through
   teammates. You can still bump into them. **Powder kegs and barrels are the exception**: their blasts hit everyone in
   reach, a teammate sets off a rolling keg by touching it, and nothing done to your own side counts as damage dealt.
-* **Timeout:** more vehicles alive wins; then more total hull fraction remaining; then more damage dealt; else a draw.
+* **Timeout:** more vehicles alive wins; then more total hull fraction remaining (a lead of less than half a percent of a hull
+  counts as level); then more damage dealt (by more than 1 hp); else a draw.
 * **Crates and barrels** are tiles with hit points. A crate is a wall until it is broken; a barrel explodes when it is,
   a tenth of a second later, so a row of them goes off one after another. Shots, beams, blasts, fire, pistons and
   collisions (x${R.ramTile}, and more through a spike or plow) all damage them. \`api.nav\` always answers for the map as it is
@@ -231,7 +232,7 @@ Off the edge of the map counts as a pit.
 
 ### Items
 Pick-ups appear on the map's \`*\` spots at t=${R.itemFirstSpawn}s and again ${R.itemRespawn}s after being taken. Drive over one to take it.
-Mirrored spots always hold the same item type.
+Mirrored spots start with the same item type; after that each spot moves on to its next item when its own is taken.
 
 | item | kind | effect |
 |---|---|---|
@@ -309,6 +310,8 @@ Missing or invalid fields count as 0 / off (for a number, \`true\` counts as ful
 when \`tick\` returns. If \`tick\` throws, the vehicle idles for that step and the match report quotes the
 message with the line of your file; after ${R.maxViolations} exceptions the controller is cut off for the rest of
 the match. A tick should take well under ${R.tickBudgetMs} ms; one that never returns forfeits the match.
+Do not build on running out of stack or memory: how deep a call can nest is a property of the machine, not of the
+match, and a controller that measures it has given up the promise that the same files and seed play the same match.
 
 ### Helpers: \`api\`
 * \`api.util.driveTo(self, point, { reverse, stopDist, speed })\` → \`{ throttle, steer, brake }\` pursuit controller.
@@ -319,7 +322,7 @@ the match. A tick should take well under ${R.tickBudgetMs} ms; one that never re
 * \`api.util.threat(state, margin = 1.2)\` → \`null\`, or \`{ x, y, r, in, away }\` for the keg or mortar shell whose blast you are in or
   nearly in: where, how big, in how many seconds, and a point just outside it to drive to (\`driveTo(self, t.away, { reverse: true })\`).
 * \`api.nav.follower()\` → object with \`next(self, goalX, goalY, state.tick)\` returning the next waypoint of an A* route
-  (cached, re-planned twice a second, sized to your hull, backs out when wedged). Keep one per controller.
+  (cached, re-planned twice a second, sized to your hull, keeps to the way round an obstacle it has chosen, backs out when wedged). Keep one per controller.
 * \`api.nav.path(x0, y0, x1, y1, { hover, margin, mudCost, iceCost, lavaCost })\` → waypoints.
 * \`api.nav.los(x0, y0, x1, y1)\` (can a shot get through?), \`api.nav.clear(x0, y0, x1, y1, { margin, hover })\` (can I drive it?),
   \`api.nav.tileAt(x, y)\`, \`api.nav.isOpen(x, y, hover)\`, \`api.nav.clearance(x, y)\` → \`{ wall, pit }\` metres.

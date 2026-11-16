@@ -155,3 +155,47 @@ test('a controller that eats memory takes its match down, not the process', asyn
     assert.ok(ok.winner !== undefined, 'the pool carries on with a fresh worker');
   } finally { await pool.close(); }
 });
+
+test('driveTo steers a reversing car the way its tail has to go, and the follower keeps to one way round a hole', () => {
+  const util = makeUtil();
+  // facing east, goal behind and a little to the north: the tail points west, and has to swing towards north — the
+  // heading has to turn clockwise, which is a negative steer whichever way the car is rolling
+  const back = util.driveTo({ x: 0, y: 0, heading: 0, speed: 0, angVel: 0 }, { x: -8, y: 2 }, { reverse: true });
+  assert.ok(back.throttle < 0 && back.steer < 0, `reverse, steering clockwise (throttle ${back.throttle}, steer ${back.steer})`);
+  const fwd = util.driveTo({ x: 0, y: 0, heading: 0, speed: 0, angVel: 0 }, { x: 8, y: 2 });
+  assert.ok(fwd.throttle > 0 && fwd.steer > 0);
+
+  // a follower whose planner answers left, right, left, right for the same trip: while the car can still drive straight
+  // to the corner it was given, the first answer stands
+  let n = 0, drivable = true;
+  const follower = makeFollower(
+    () => (n++ % 2 === 0 ? [{ x: 14, y: 20 }, { x: 20, y: 35 }] : [{ x: 26, y: 20 }, { x: 20, y: 35 }]),
+    () => drivable)();
+  const first = follower.next({ x: 20, y: 5, radius: 1.5 }, 20, 35, 0);
+  const later = follower.next({ x: 19.4, y: 7, radius: 1.5 }, 20, 35, 30);
+  assert.deepEqual([first.x, later.x], [14, 14]);
+  assert.equal(n, 2, 'it did look again');
+  // thrown to where that corner can no longer be driven to, it takes the fresh plan
+  drivable = false;
+  const thrown = follower.next({ x: 27, y: 9, radius: 1.5 }, 20, 35, 60);
+  assert.equal(thrown.x, 14, 'the third plan (left again) is taken as it comes');
+  assert.equal(follower.next({ x: 27, y: 10, radius: 1.5 }, 20, 35, 90).x, 26, 'and so is the fourth');
+});
+
+test('a name that is not text is not a name, and a slow match is nobody\'s forfeit', async () => {
+  const src = ROOKIE.replace("name: 'Rookie'", 'name: { toString: 0 }');
+  assert.notEqual(src, ROOKIE);
+  const res = runMatch({ map: 'proving', teams: [[makeBot('odd', src)], [loadBot('rookie')]], seed: 1, record: false, maxTime: 0.2 });
+  assert.equal(res.vehicles[0].name, 'odd');
+  // both controllers return every time; together they are too slow for the limit. Nobody is named.
+  const slow = rookieWith('for (let i = 0, x = 0; i < 3e6; i++) x += i % 7;');
+  const pool = new MatchPool({ size: 1, timeoutMs: 1500 });
+  try {
+    await assert.rejects(
+      pool.run({ map: 'proving', mode: '1v1', seed: 1, teams: [[{ id: 'slow-a', source: slow }], [{ id: 'slow-b', source: slow }]], want: 'score' }),
+      (e) => e.detail?.timeout === true && e.detail.bot === null && /as a whole/.test(e.message));
+    await assert.rejects(
+      pool.run({ map: 'proving', mode: '1v1', seed: 1, teams: [[{ id: 'stuck', source: rookieWith('for (;;) {}') }], [{ id: 'rookie', source: ROOKIE }]], want: 'score' }),
+      (e) => e.detail?.bot === 'stuck');
+  } finally { await pool.close(); }
+});
