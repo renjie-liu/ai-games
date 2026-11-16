@@ -61,6 +61,7 @@ const botLabel = (id) => {
   return (m ? m[2] : id) + (builtin[id] ? '' : ' ★');
 };
 const host = new SimHost(IY, $('engine-src').textContent, $('runner-src').textContent);
+const leagueHost = new SimHost(IY, $('engine-src').textContent, $('runner-src').textContent);
 const kit = typeof THREE !== 'undefined' ? new Kit(IY) : null;
 
 function persist() {
@@ -150,19 +151,21 @@ function makeRenderer() {
   if ($('camera').value && $('camera').value[0] !== 'f') renderer.setPreset($('camera').value);
 }
 
-async function runMatch(extra = {}) {
+let matchRequest = 0;
+async function runMatch(extra = {}, sources = allSources()) {
+  const request = ++matchRequest;
   const st = S.setup;
   st.seed = Math.max(0, Math.floor(Number($('seed').value) || 0)); st.swap = $('swap').checked; st.budget = Number($('budget').value); st.map = $('map').value;
   persist();
   $('busy').hidden = false; $('banner').hidden = true; msg($('setup-msg'), '', '');
   $('run').disabled = true;
   try {
-    host.setBots(allSources());
+    host.setBots(sources);
     const res = await host.match({ map: st.map, mode: st.mode, seed: st.seed, swap: st.swap, budget: st.budget, teams: st.teams, ...extra });
-    loadReplay(res);
+    if (request === matchRequest) loadReplay(res);
   } catch (e) {
-    msg($('setup-msg'), 'bad', 'Could not start the match: ' + e.message);
-  } finally { $('busy').hidden = true; $('run').disabled = false; }
+    if (request === matchRequest) msg($('setup-msg'), 'bad', 'Could not start the match: ' + e.message);
+  } finally { if (request === matchRequest) { $('busy').hidden = true; $('run').disabled = false; } }
 }
 
 function loadReplay(res) {
@@ -290,7 +293,13 @@ function bindArena() {
     S.playing = !S.playing; $('play').textContent = S.playing ? '❚❚' : '▶'; $('banner').hidden = true;
   });
   $('speed').addEventListener('change', (e) => { S.speed = Number(e.target.value); });
-  $('scrub').addEventListener('input', (e) => { if (rp) { S.time = Number(e.target.value) / 30; $('banner').hidden = true; } });
+  $('scrub').addEventListener('input', (e) => {
+    if (!rp) return;
+    const atEnd = Number(e.target.value) >= Number(e.target.max);
+    S.time = atEnd ? rp.duration : Math.max(0, Math.min(rp.duration, Number(e.target.value) / 30));
+    if (atEnd) { S.playing = false; $('play').textContent = '▶'; showBanner(); }
+    else $('banner').hidden = true;
+  });
   $('view3d').addEventListener('click', () => { S.view = '3d'; makeRenderer(); });
   $('view2d').addEventListener('click', () => { S.view = '2d'; makeRenderer(); });
   $('camera').addEventListener('change', (e) => {
@@ -617,46 +626,62 @@ function renderLeagueSetup() {
   const n = L.bots.size, matches = (n * (n - 1)) / 2 * L.maps.size * L.seeds * 2;
   $('lg-count').textContent = n < 2 || !L.maps.size ? 'Pick at least 2 bots and 1 map' : `${count(matches, 'match', 'matches')} (${n} bots × ${count(L.maps.size, 'map')} × ${count(L.seeds, 'seed')} × both spawn sides)`;
   $('lg-run').disabled = L.running || n < 2 || !L.maps.size;
+  $('lg-stop').hidden = !L.running;
+  $('lg-seeds').disabled = L.running;
+  for (const node of ['lg-bots', 'lg-maps', 'lg-mode']) $(node).querySelectorAll('button').forEach(b => { b.disabled = L.running; });
 }
 async function runLeague() {
-  const ids = botIds().filter((id) => L.bots.has(id)), maps = IY.MAP_IDS.filter((id) => L.maps.has(id));
+  if (L.running) return;
+  const ids = botIds().filter(id => L.bots.has(id)), maps = IY.MAP_IDS.filter(id => L.maps.has(id));
+  if (ids.length < 2 || !maps.length) return;
   const seeds = Array.from({ length: L.seeds }, (_, i) => i + 1);
-  const entrants = ids.map((id) => ({ id, bots: [id] }));
+  const mode = L.mode, budget = S.setup.budget, sources = allSources();
+  const names = Object.fromEntries(ids.map(id => [id, botLabel(id)]));
+  const entrants = ids.map(id => ({ id, bots: [id] }));
   const schedule = IY.makeSchedule({ entrants, maps, seeds });
   L.running = true; renderLeagueSetup(); msg($('lg-msg'), '', '');
+  $('lg-result').hidden = true; $('lg-bar').style.width = '0%';
   const results = [];
-  let done = 0;
   const t0 = performance.now();
+  let failure = null;
   try {
-    host.setBots(allSources());
-    await host.tournament(schedule, L.mode, S.setup.budget, (r) => {
-      results.push({ ...schedule[r.i], ...r }); done++;
-      $('lg-bar').style.width = (done / schedule.length) * 100 + '%';
+    leagueHost.setBots(sources);
+    await leagueHost.tournament(schedule, mode, budget, r => {
+      results.push({ ...schedule[r.i], ...r });
+      $('lg-bar').style.width = (results.length / schedule.length) * 100 + '%';
     });
+  } catch (e) { failure = e; }
+  const status = IY.tournamentStatus(results, schedule.length);
+  try {
     const table = IY.standings(entrants, results);
-    const dur = results.reduce((s, r) => s + (r.duration || 0), 0) / results.length;
-    $('lg-meta').textContent = `${L.mode} · ${count(results.length, 'match', 'matches')} · avg ${dur.toFixed(0)}s`;
-    $('lg-table').replaceChildren(el('table', {}, el('thead', {}, el('tr', {}, ...['#', 'bot', 'Pts', 'W', 'D', 'L', 'Win %', 'Hull diff'].map((h, i) => el('th', { class: i >= 2 ? 'n' : '', text: h })))),
-      el('tbody', {}, ...table.map((r, i) => el('tr', {}, el('td', { class: 'n', text: i + 1 }), el('td', {}, el('b', { text: botLabel(r.id) }), el('div', { class: 'note', text: r.id })),
+    const scored = results.filter(IY.scoredResult);
+    const dur = scored.reduce((s, r) => s + (r.duration || 0), 0) / Math.max(1, scored.length);
+    $('lg-meta').textContent = `${mode} · ${status.scoredMatches}/${schedule.length} scored · ${status.unscoredMatches} unscored · avg ${dur.toFixed(0)}s`;
+    $('lg-table').replaceChildren(el('table', {}, el('thead', {}, el('tr', {}, ...['#', 'bot', 'Pts', 'W', 'D', 'L', 'Win %', 'Hull diff', 'Unscored'].map((h, i) => el('th', { class: i >= 2 ? 'n' : '', text: h })))),
+      el('tbody', {}, ...table.map((r, i) => el('tr', {}, el('td', { class: 'n', text: r.played ? i + 1 : "—" }), el('td', {}, el('b', { text: names[r.id] }), el('div', { class: 'note', text: r.id })),
         el('td', { class: 'n', text: r.points }), el('td', { class: 'n', text: r.w }), el('td', { class: 'n', text: r.d }), el('td', { class: 'n', text: r.l }),
-        el('td', { class: 'n', text: Math.round(r.winRate * 100) + '%' }), el('td', { class: 'n', text: (r.hullDiff > 0 ? '+' : '') + r.hullDiff.toFixed(1) }))))));
+        el('td', { class: 'n', text: Math.round(r.winRate * 100) + '%' }), el('td', { class: 'n', text: (r.hullDiff > 0 ? '+' : '') + r.hullDiff.toFixed(1) }), el('td', { class: 'n', text: r.unscored }))))));
     $('lg-h2h').replaceChildren(el('table', {}, el('thead', {}, el('tr', {}, el('th', {}), ...table.map((c) => el('th', { text: c.id.slice(0, 7) })))),
       el('tbody', {}, ...table.map((r) => el('tr', {}, el('th', { text: r.id }), ...table.map((c) => {
         if (c.id === r.id) return el('td', { class: 'h2h', text: '·' });
         const v = r.vs[c.id] || { w: 0, d: 0, l: 0 };
+        const played = results.find(m => IY.scoredResult(m) && !m.forfeit && ((m.a === r.id && m.b === c.id) || (m.a === c.id && m.b === r.id)));
         return el('td', { class: 'h2h', style: v.w > v.l ? 'color:var(--ok)' : v.w < v.l ? 'color:var(--bad)' : '' },
-          el('button', { type: 'button', title: `Watch ${r.id} vs ${c.id}`, text: `${v.w}-${v.d}-${v.l}`, onclick: () => watch(r.id, c.id, maps) }));
+          played ? el('button', { type: 'button', title: `Watch ${played.map}, seed ${played.seed}${played.swap ? ', sides swapped' : ''}`, text: `${v.w}-${v.d}-${v.l}`, onclick: () => watch(played, mode, budget, sources) }) : `${v.w}-${v.d}-${v.l}`);
       }))))));
     $('lg-result').hidden = false;
-    const errs = results.filter((r) => r.error);
-    msg($('lg-msg'), errs.length ? 'warn' : 'ok', `Done in ${((performance.now() - t0) / 1000).toFixed(1)}s.` + (errs.length ? ` ${count(errs.length, 'match', 'matches')} failed, for example: ${errs[0].error}` : ''));
-  } catch (e) { msg($('lg-msg'), 'bad', e.message); }
-  finally { L.running = false; renderLeagueSetup(); }
+    const errs = results.filter(r => r.error);
+    const label = failure ? (failure.name === 'AbortError' ? 'Stopped' : 'Interrupted') : status.complete ? 'Complete' : 'Provisional';
+    msg($('lg-msg'), failure && failure.name !== 'AbortError' ? 'bad' : errs.length || !status.complete ? 'warn' : 'ok',
+      `${label} in ${((performance.now() - t0) / 1000).toFixed(1)}s. ${status.scoredMatches}/${schedule.length} scored; ${status.unscoredMatches} unscored; ${status.remainingMatches} remaining.`
+      + (failure && failure.name !== 'AbortError' ? ` ${failure.message}` : '')
+      + (errs.length ? ` ${errs.length} match errors, for example: ${errs[0].error}` : ''));
+  } finally { L.running = false; renderLeagueSetup(); }
 }
-function watch(a, b, maps) {
-  const st = S.setup;
-  st.mode = L.mode; st.map = maps[Math.floor(Math.random() * maps.length)]; st.teams = [[a], [b]];
-  renderSetup(); showTab('arena'); runMatch();
+function watch(match, mode, budget, sources) {
+  Object.assign(S.setup, { mode, budget, map: match.map, seed: match.seed, swap: match.swap, teams: match.teams.map(t => [...t]) });
+  renderSetup(); showTab('arena');
+  runMatch({ mode, budget, map: match.map, seed: match.seed, swap: match.swap, teams: match.teams }, sources);
 }
 
 // ── rules + MCP pages ───────────────────────────────────────────────────
@@ -721,6 +746,7 @@ function start(data) {
   window.addEventListener('hashchange', () => showTab(location.hash.slice(1), false));
   renderSetup(); bindArena(); renderPalette(); bindGarage(); bindLab(); renderRules(); renderMcp();
   $('lg-run').addEventListener('click', runLeague);
+  $('lg-stop').addEventListener('click', () => leagueHost.cancel());
   $('lg-seeds').addEventListener('change', renderLeagueSetup);
   showPartInfo(G.tool);
   openInLab('rookie');

@@ -4,15 +4,15 @@
 export class SimHost {
   constructor(IY, engineSrc, runnerSrc) {
     this.IY = IY; this.engineSrc = engineSrc; this.runnerSrc = runnerSrc;
-    this.worker = null; this.key = ''; this.jobs = new Map(); this.nextId = 1; this.sources = {};
+    this.worker = null; this.key = ''; this.jobs = new Map(); this.activeId = null; this.nextId = 1; this.sources = {};
   }
 
-  setBots(sources) { this.sources = sources; }
+  setBots(sources) { this.sources = { ...sources }; }
 
   build() {
     const key = Object.keys(this.sources).sort().map((id) => id + ':' + this.sources[id].length + ':' + hash(this.sources[id])).join('|');
     if (this.worker && key === this.key) return;
-    this.dispose();
+    this.dispose(new Error('Controllers changed; the previous simulation was stopped'));
     const parts = [this.engineSrc, '\nvar __BOTS = {};\n'];
     for (const [id, src] of Object.entries(this.sources)) {
       let wrapped;
@@ -21,48 +21,63 @@ export class SimHost {
     }
     parts.push(this.runnerSrc);
     this.url = URL.createObjectURL(new Blob(parts, { type: 'text/javascript' }));
-    this.worker = new Worker(this.url);
+    const worker = this.worker = new Worker(this.url);
     this.key = key;
-    this.worker.onmessage = (ev) => {
+    worker.onmessage = (ev) => {
+      if (this.worker !== worker) return;
       const m = ev.data;
       if (m.ready) return;
       const job = this.jobs.get(m.id);
-      if (!job) return;
-      if (m.progress) { job.touch(); job.onProgress && job.onProgress(m.progress); return; }
-      this.jobs.delete(m.id); clearTimeout(job.timer);
+      if (!job || m.id !== this.activeId) return;
+      if (m.progress) {
+        job.touch();
+        try { job.onProgress?.(m.progress); } catch (e) { this.dispose(e); }
+        return;
+      }
+      this.jobs.delete(m.id); clearTimeout(job.timer); this.activeId = null;
       if (m.ok) job.resolve(m.result); else job.reject(Object.assign(new Error(m.error), { detail: m.detail }));
+      this.pump();
     };
-    this.worker.onerror = (ev) => {
-      ev.preventDefault && ev.preventDefault();
-      this.failAll(new Error('The simulation worker failed: ' + (ev.message || 'unknown error')));
-      this.dispose();
+    worker.onerror = (ev) => {
+      ev.preventDefault?.();
+      if (this.worker === worker) this.dispose(new Error('The simulation worker failed: ' + (ev.message || 'unknown error')));
     };
   }
 
-  failAll(err) { for (const job of this.jobs.values()) { clearTimeout(job.timer); job.reject(err); } this.jobs.clear(); }
+  failAll(err) {
+    for (const job of this.jobs.values()) { clearTimeout(job.timer); job.reject(err); }
+    this.jobs.clear(); this.activeId = null;
+  }
 
-  dispose() {
+  dispose(err = new Error('The simulation was stopped')) {
+    this.failAll(err);
     if (this.worker) { this.worker.terminate(); this.worker = null; }
     if (this.url) { URL.revokeObjectURL(this.url); this.url = null; }
     this.key = '';
   }
 
+  cancel() { this.dispose(Object.assign(new Error('Tournament stopped'), { name: 'AbortError' })); }
+
+  pump() {
+    if (this.activeId !== null || !this.worker || !this.jobs.size) return;
+    const [id, job] = this.jobs.entries().next().value;
+    this.activeId = id; job.touch();
+    try { this.worker.postMessage({ ...job.msg, id }); }
+    catch (e) { this.dispose(e); }
+  }
+
   call(msg, { timeout = 20000, onProgress } = {}) {
-    this.build();
+    try { this.build(); } catch (e) { this.dispose(e); return Promise.reject(e); }
     return new Promise((resolve, reject) => {
       const id = this.nextId++;
-      const job = { resolve, reject, onProgress, timer: null };
+      const job = { msg, resolve, reject, onProgress, timer: null };
       job.touch = () => {
         clearTimeout(job.timer);
-        job.timer = setTimeout(() => {
-          this.jobs.delete(id);
-          this.dispose(); // kills the runaway controller along with the worker
-          reject(new Error(`The simulation timed out (no answer for ${timeout / 1000}s): most likely a controller's tick() is stuck in an infinite loop`));
-        }, timeout);
+        job.timer = setTimeout(() => this.dispose(new Error(`The simulation timed out (no answer for ${timeout / 1000}s): most likely a controller's tick() is stuck in an infinite loop`)), timeout);
       };
-      job.touch();
       this.jobs.set(id, job);
-      this.worker.postMessage({ ...msg, id });
+      // A queued job's watchdog starts only when the worker begins that job.
+      this.pump();
     });
   }
 
