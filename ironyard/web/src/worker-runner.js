@@ -23,8 +23,8 @@
           var r;
           try {
             var res = IY.runMatch({ map: s.map, mode: m.mode, seed: s.seed, swap: s.swap, budget: m.budget, teams: s.teams.map(function (t) { return t.map(mk); }), record: false, now: now });
-            r = { i: i, winner: res.winner, hull: [res.teams[0].hull, res.teams[1].hull], reason: res.reason, duration: res.duration };
-          } catch (e) { r = { i: i, winner: -1, error: e && e.message ? e.message : String(e) }; }
+            r = Object.assign({ i: i }, IY.tournamentResult(s, res));
+          } catch (e) { r = Object.assign({ i: i }, IY.tournamentResult(s, null, e)); }
           self.postMessage({ id: m.id, progress: r });
         });
         self.postMessage({ id: m.id, ok: true, result: true });
