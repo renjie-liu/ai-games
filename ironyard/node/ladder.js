@@ -21,7 +21,7 @@ export const LADDER_METHOD = 'mixed-slot-rotation-v2';
 const SEED = 1, START = 1500, PRIOR = 2;
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const storeFile = () => path.join(LADDER_DIR, 'results.json');
-const RESULT_CHECK = 2; // Older cache entries did not inspect controller runtime errors.
+const RESULT_CHECK = 3; // v2 did not freeze source files to the hashes used for cache keys.
 const rankedResult = (r) => r && !r.void && [-1, 0, 1].includes(r.w);
 
 /** Who wrote a bot: the `author` its `meta` gives, read from the source (a plain string literal). */
@@ -36,9 +36,16 @@ export function modelOf(source) {
   return m ? m[2] : null;
 }
 
-export function entrantsNow() {
-  return listBots().map((b) => { const source = readBotSource(b.id); return { id: b.id, kind: b.kind, author: authorOf(source), model: modelOf(source), hash: sha(source).slice(0, 12) }; });
+function fieldNow() {
+  const sources = {};
+  const entrants = listBots().map((b) => {
+    const source = sources[b.id] = readBotSource(b.id);
+    return { id: b.id, kind: b.kind, author: authorOf(source), model: modelOf(source), hash: sha(source).slice(0, 12) };
+  });
+  return { entrants, sources };
 }
+
+export function entrantsNow() { return fieldNow().entrants; }
 
 /**
  * One round's teams for a team queue. A fixed scramble of (queue, round, bot id) decides who
@@ -176,7 +183,7 @@ function load() {
  */
 export async function ladder(pool, { queues = QUEUES, play = true, budgetMs = Infinity } = {}) {
   const t0 = Date.now();
-  const entrants = entrantsNow();
+  const { entrants, sources } = fieldNow();
   const hashOf = Object.fromEntries(entrants.map((e) => [e.id, e.hash]));
   const store = load();
   const seasons = Object.fromEntries(QUEUES.map((q) => [q, schedule(q, entrants).map((m) => ({ ...m, key: keyOf(m, hashOf) }))]));
@@ -190,7 +197,7 @@ export async function ladder(pool, { queues = QUEUES, play = true, budgetMs = In
         ran += batch.length;
         await Promise.all(batch.map(async (m) => {
           try {
-            const s = await pool.run({ map: m.map, mode: m.mode, seed: m.seed, swap: m.swap, teams: withSources(m.teams), want: 'score' });
+            const s = await pool.run({ map: m.map, mode: m.mode, seed: m.seed, swap: m.swap, teams: withSources(m.teams, sources), want: 'score' });
             if (![0, 1, -1].includes(s.winner)) throw new Error('match did not finish');
             if (s.errors?.length) throw new Error('controller errors: ' + s.errors.join(' | '));
             store.results[m.key] = { checked: RESULT_CHECK, w: s.winner, h: [s.teams[0].hull, s.teams[1].hull] };

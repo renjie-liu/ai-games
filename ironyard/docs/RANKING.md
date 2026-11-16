@@ -49,7 +49,7 @@ Custom browser, CLI and MCP tournaments use the same failure policy: returned co
 
 Per-decision wall-clock timing is telemetry only. Engine 0.5.1 removes the old 250 ms penalty that could cut off a healthy controller when the host was busy. Worker watchdogs and memory limits still protect the host; a triggered watchdog is reported as a failure, rather than silently changing the simulated battle. See the [0.5.1 review](REVIEW-2026-11-16.md).
 
-Cache keys include engine version, map, mode, seed, spawn swap, ordered team members and source hashes. Changing the slot order therefore creates a distinct match. Cache records also carry a result-check version: older records that did not check controller exceptions are rerun once. If engine behavior changes without a version bump, its cache must be invalidated. Source metadata changes can also invalidate a bot's results because the full file is hashed.
+Cache keys include engine version, map, mode, seed, spawn swap, ordered team members and source hashes. Changing the slot order therefore creates a distinct match. Each ladder call reads every source once and uses those exact bytes for metadata, hashes and all games in the call; an edit takes effect on the next call. Cache records also carry a result-check version: older records that did not check controller exceptions or freeze sources to their hashes are rerun once. If engine behavior changes without a version bump, its cache must be invalidated. Source metadata changes can also invalidate a bot's results because the full file is hashed.
 
 ## Issues found and corrected
 
