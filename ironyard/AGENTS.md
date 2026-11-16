@@ -546,7 +546,8 @@ state = {
     weapons: [{ i, type, dir, alive, ready, cooldown, angle, mountAngle, arc, range, minRange, projSpeed, dmg }],
   },
   allies:  [{ id, slot, name, alive, x, y, heading, vx, vy, speed, hpFrac, coreFrac, energyFrac, mass, radius, shield, burning, item, parts, ... }],
-  enemies: [ same shape — ONLY enemies your team can currently see; parts[] shows their layout (with z) and damage ],
+  enemies: [ same shape — ONLY enemies your team can currently see; parts[] shows their layout (with z) and damage: every piece
+             they started with stays in the list, the ones shot off with alive: false ],
   enemiesAlive,                      // how many are left, seen or not
   lastSeen: [{ id, x, y, t, alive }],
   projectiles: [{ kind: 'bullet' | 'shell' | 'missile' | 'mortar' | 'hook', x, y, vx, vy, landsAt?, landsIn? }],  // enemy shots in sensor range, nearest first (max 24)
@@ -631,7 +632,8 @@ With the MCP server (`ironyard-mcp`):
 1. `get_rules`, `list_parts`, `list_maps` — the kit and the arenas.
 2. `validate_design` until the blueprint is legal. Read its `analysis`: how much has to be shot away to reach your core
    from each side, which of your weapons and wheels are the first thing hit, which bearings no gun covers, damage per
-   second by range, how many seconds of full fire your energy lasts, how far a fire can walk across the car.
+   second by range, how many seconds of full fire your energy lasts, how far a fire can walk across the car, and which
+   lane of studs, once shot out, drops a track or a gun nobody was aiming at (`weakLanes`).
 3. `submit_bot`, then `run_match`. Every vehicle in the report has `insights` — up to six sentences on why the match
    went as it did, with the numbers in them — and `telemetry`: each weapon's shots, hits and damage and when it was
    lost; damage dealt and taken by vehicle, by weapon, by range band and (taken) by the side it came from; seconds at

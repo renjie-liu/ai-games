@@ -35,6 +35,8 @@ const pool = new MatchPool({ timeoutMs: Number(process.env.IRONYARD_MATCH_TIMEOU
 const log = (...a) => process.stderr.write(`[ironyard-mcp] ${a.join(' ')}\n`);
 
 const modeEnum = Object.keys(MODES);
+/** `seeds` as a tool takes it: a count n means seeds 1..n, a list is the seeds themselves. */
+const seedList = (s) => (Array.isArray(s) ? [...new Set(s)] : Array.from({ length: s || 1 }, (_, i) => i + 1));
 const budgetSchema = { type: 'integer', minimum: 100, maximum: 5000, description: `Credits per vehicle. Default ${DEFAULT_BUDGET} (light ${BUDGETS.light}, standard ${BUDGETS.standard}, heavy ${BUDGETS.heavy}).` };
 const teamSchema = (who) => ({
   type: 'array', minItems: 1, maxItems: 3, items: { type: 'string' },
@@ -116,7 +118,7 @@ const TOOLS = [
   {
     name: 'validate_design',
     title: 'Check a blueprint',
-    description: 'Validates a vehicle blueprint against the building rules and budget WITHOUT saving anything. Returns errors, warnings, derived stats (cost, mass and weight class, top speed, turn rate, dps, energy balance, hp…) and ASCII pictures of both layers. A valid design also gets `analysis`, worked out from the hit rules before any match: `coreProtection` (what a straight shot from the front / rear / left / right must destroy before it reaches the core: pieces, hp, and hp counting armor and slopes against a 4-damage bullet and a 30-damage shell), `exposed` (guns, movers, reactors, batteries and kegs that are the first piece hit from a side), `weapons` (facing, arc, range, dps and the bearings each can reach; `i` is the index to fire it by), `dpsByRange` / `dpsByRangeRear` (dps on a target dead ahead / astern at 2-22 m), `blindArcsDeg`, `energy` (seconds of everything firing before the store is empty), `fire` (how much burns and what the largest touching cluster reaches), `mass`, and up to 6 `insights`, most important first. Bearings are degrees clockwise from dead ahead (90 = right, 180 = astern). Give either `design` (JSON) or `blueprint` (ASCII).',
+    description: 'Validates a vehicle blueprint against the building rules and budget WITHOUT saving anything. Returns errors, warnings, derived stats (cost, mass and weight class, top speed, turn rate, dps, energy balance, hp…) and ASCII pictures of both layers. A valid design also gets `analysis`, worked out from the hit rules before any match: `coreProtection` (what a straight shot from the front / rear / left / right must destroy before it reaches the core: pieces, hp, and hp counting armor and slopes against a 4-damage bullet and a 30-damage shell), `exposed` (guns, movers, reactors, batteries and kegs that are the first piece hit from a side), `weapons` (facing, arc, range, dps and the bearings each can reach; `i` is the index to fire it by), `dpsByRange` / `dpsByRangeRear` (dps on a target dead ahead / astern at 2-22 m), `blindArcsDeg`, `energy` (seconds of everything firing before the store is empty), `fire` (how much burns and what the largest touching cluster reaches), `mass`, `weakLanes` (the lanes of studs on which the least has to be shot away before running gear or guns fall off untouched, because everything tying them to the core lies on that lane: `from` a side, its stud `x` or `y`, `shotAway` pieces worth `hp`, `thenFallOff`), and up to 6 `insights`, most important first. Bearings are degrees clockwise from dead ahead (90 = right, 180 = astern). Give either `design` (JSON) or `blueprint` (ASCII).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -237,7 +239,7 @@ const TOOLS = [
   {
     name: 'evaluate_bot',
     title: 'Benchmark a bot',
-    description: 'Plays one bot against a field of opponents on several maps and seeds, both spawn sides, and returns its win rate overall, per opponent and per map, how its vehicles died, the worst losses to replay with run_match, and a `diagnosis`: the telemetry of all its matches added up, apart for wins and for losses — mean hull left and duration, death causes, the share of damage taken by weapon and by side hit, mean range and share of time per range band, fire-discipline totals (seconds with an enemy in gun range: firing, no line of sight, out of arc, energy-starved), the pieces it loses first, and `commonInsights`: each kind of finding with the number of matches it came up in and one example. What differs between the losses and the wins is what to fix. Use this to decide whether a change actually helped, then run_match one of the worst losses to see that match\'s own insights and telemetry.',
+    description: 'Plays one bot against a field of opponents on several maps and seeds, both spawn sides, and returns its win rate overall, per opponent and per map, how its vehicles died, the worst losses to replay with run_match (each with `damageDealt` and `opponentDealt`: a loss with next to no damage dealt is a car that never got to fight — look there first), and a `diagnosis`: the telemetry of all its matches added up, apart for wins and for losses — mean hull left and duration, death causes, the share of damage taken by weapon and by side hit, mean range and share of time per range band, fire-discipline totals (seconds with an enemy in gun range: firing, no line of sight, out of arc, energy-starved), the pieces it loses first, and `commonInsights`: each kind of finding with the number of matches it came up in and one example. What differs between the losses and the wins is what to fix. Use this to decide whether a change actually helped, then run_match one of the worst losses to see that match\'s own insights and telemetry.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -245,8 +247,9 @@ const TOOLS = [
         mode: { type: 'string', enum: modeEnum, description: 'Default 1v1.' },
         opponents: { type: 'array', items: { type: 'string' }, description: 'Default: every built-in bot.' },
         maps: { type: 'array', items: { type: 'string', enum: MAP_IDS }, description: 'Default: all maps.' },
-        seeds: { type: 'integer', minimum: 1, maximum: 5, description: 'Seeds per pairing and map. Default 1.' },
-        baseline: { type: 'string', description: 'Another bot to play through exactly the same matches — for instance the version you are trying to improve on. Adds `comparedWith`: its record next to yours per opponent, and the matches whose result changed.' },
+        seeds: { oneOf: [{ type: 'integer', minimum: 1, maximum: 5 }, { type: 'array', items: { type: 'integer', minimum: 1, maximum: 9999 }, minItems: 1, maxItems: 5, uniqueItems: true }],
+          description: 'Seeds per pairing and map: a count n (seeds 1..n), or the seeds themselves, e.g. [3] to play only seed 3 after 1 and 2 were used to tune. Default 1.' },
+        baseline: { type: 'string', description: 'Another bot to play through exactly the same matches — for instance the version you are trying to improve on. Adds `comparedWith`: its record next to yours per opponent (`vsOpponent` as text, `byOpponent` as numbers), and the matches whose result changed (`gained`, `lost`).' },
         budget: budgetSchema,
       },
       required: ['name'], additionalProperties: false,
@@ -260,7 +263,7 @@ const TOOLS = [
       const baseSource = base === null ? null : readBotSource(base);
       const opp = (a.opponents && a.opponents.length ? a.opponents.map(String) : listBots().filter((b) => b.kind === 'builtin').map((b) => b.id)).filter((id) => id !== name);
       const maps = a.maps && a.maps.length ? a.maps : MAP_IDS;
-      const seeds = Array.from({ length: a.seeds || 1 }, (_, i) => i + 1);
+      const seeds = seedList(a.seeds);
       const entrants = [name, ...opp].map((id) => ({ id, bots: [id] }));
       const schedule = makeSchedule({ entrants, maps, seeds, focus: name });
       const sources = Object.fromEntries([name, ...opp].map((id) => [id, readBotSource(id)]));
@@ -276,7 +279,7 @@ const TOOLS = [
           row[won ? 'w' : draw ? 'd' : 'l']++;
           for (const v of s.vehicles) if (v.team === mine && v.death) deaths[v.death.cause] = (deaths[v.death.cause] || 0) + 1;
           if (!won && !draw) losses.push({ opponent: m.a === name ? m.b : m.a, map: m.map, seed: m.seed, swap: m.swap, reason: s.reason, duration: s.duration,
-            hullLeft: [s.teams[mine].hull, s.teams[1 - mine].hull] });
+            hullLeft: [s.teams[mine].hull, s.teams[1 - mine].hull], damageDealt: s.teams[mine].damage, opponentDealt: s.teams[1 - mine].damage });
           if (s.vehicles.some((v) => v.team === mine && v.errors.length)) errors++;
           return { ...m, winner: s.winner, hull: [s.teams[0].hull, s.teams[1].hull],
             digest: { outcome: won ? 'win' : draw ? 'draw' : 'loss', duration: s.duration, vehicles: s.vehicles.filter((v) => v.team === mine) } };
@@ -315,15 +318,17 @@ const TOOLS = [
         comparedWith = {
           baseline: base, baselineRecord: `${bw}W ${bd}D ${bl}L`,
           vsOpponent: Object.fromEntries(Object.entries(per).map(([o, r]) => [o, `now ${r.now[0]}-${r.now[1]}, baseline ${r.baseline[0]}-${r.baseline[1]} (${r.now[0] - r.baseline[0] >= 0 ? '+' : ''}${r.now[0] - r.baseline[0]})`])),
+          byOpponent: Object.fromEntries(Object.entries(per).map(([o, r]) => [o, { wins: r.now[0], losses: r.now[1], baselineWins: r.baseline[0], baselineLosses: r.baseline[1], winsGained: r.now[0] - r.baseline[0] }])),
           matchesGained: gained.length, matchesLost: lost.length,
           lost: lost.slice(0, 12), gained: gained.slice(0, 12),
           note: lost.length > 12 || gained.length > 12 ? 'lists are cut at 12; replay any of them with run_match (team_a: you or the baseline, team_b: the opponent, same map, seed and swap)' : 'replay any of these with run_match (team_a: you or the baseline, team_b: the opponent, same map, seed and swap)',
         };
       }
-      losses.sort((x, y) => (y.hullLeft[1] - y.hullLeft[0]) - (x.hullLeft[1] - x.hullLeft[0]));
+      // the most one-sided first; among those, the ones in which this bot hurt nobody: something in it is broken, not outgunned
+      losses.sort((x, y) => (y.hullLeft[1] - y.hullLeft[0]) - (x.hullLeft[1] - x.hullLeft[0]) || x.damageDealt - y.damageDealt);
       const failed = results.filter((r) => r.error);
       return {
-        bot: name, mode, matches: me.played, wins: me.w, draws: me.d, losses: me.l, winRate: me.winRate,
+        bot: name, mode, seeds, matches: me.played, wins: me.w, draws: me.d, losses: me.l, winRate: me.winRate,
         vsOpponent: Object.fromEntries(Object.entries(me.vs).map(([k, v]) => [k, `${v.w}W ${v.d}D ${v.l}L`])),
         byMap: Object.fromEntries(Object.entries(byMap).map(([k, v]) => [k, `${v.w}W ${v.d}D ${v.l}L`])),
         howMyVehiclesDied: deaths,
@@ -522,6 +527,10 @@ function pretty(v, indent = '', width = 120) {
 // says what was expected, so the next call can be right.
 function fit(name, schema, v) {
   const say = (what) => { throw new Error(`argument "${name}" ${what}, got ${JSON.stringify(v) === undefined ? typeof v : JSON.stringify(v).slice(0, 80)}`); };
+  if (schema.oneOf) {   // the first form it fits
+    for (const form of schema.oneOf) { try { return fit(name, form, v); } catch { /* try the next */ } }
+    say(`must be ${schema.oneOf.map((f) => (f.type === 'integer' ? `a whole number ${f.minimum ?? ''}..${f.maximum ?? ''}` : f.type === 'array' ? `a list of ${f.minItems ?? 0}..${f.maxItems ?? 'any number of'} of them` : `a ${f.type}`)).join(' or ')}`);
+  }
   if (typeof v === 'string' && (schema.type === 'object' || schema.type === 'array' || schema.type === 'integer' || schema.type === 'boolean')) {
     const t = v.trim();
     if (schema.type === 'array' && !t.startsWith('[')) v = [v];

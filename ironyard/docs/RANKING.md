@@ -15,7 +15,7 @@ The website is a build-time snapshot. Adding a source file or running a custom t
 
 ## Season and fairness
 
-The standard budget is 1200 credits per vehicle; engine 0.5.2 uses eight maps.
+The standard budget is 1200 credits per vehicle; engine 0.5.3 uses eight maps.
 
 - **1v1:** every unordered pair plays all eight maps with seed 1, from both spawn sides. For 19 bots: `19 × 18 / 2 × 8 × 2 = 2736` matches; each bot plays 288.
 - **Teams:** 40 deterministic rounds. A hash of the round and bot id determines participation; entrants who cannot fill an even number of full teams sit out. Bots from the same author are distributed across teams where possible, then opponents are scrambled.
@@ -80,15 +80,21 @@ Carbon (`gemini-4-carbon-medium`) and Hydrogen (`gemini-4-hydrogen-medium`) are 
 
 | Bot | Recorded model | 1v1 | 2v2 | 3v3 |
 |---|---|---:|---:|---:|
-| quillback | Fable | 1 | 2 | 2 |
-| grindstone | Opus | 4 | 4 | 7 |
+| grindstone | Opus | 1 | 3 | 4 |
+| quillback | Fable | 2 | 4 | 2 |
+| astra | gpt-6-astra | 3 | 1 | 1 |
+| carbon | gemini-4-carbon-medium | 4 | 2 | 3 |
 | sol | gpt-6-sol | 5 | 5 | 5 |
-| astra | gpt-6-astra | 2 | 1 | 1 |
-| carbon | gemini-4-carbon-medium | 3 | 3 | 3 |
-| hydrogen | gemini-4-hydrogen-medium | 6 | 7 | 14 |
+| hydrogen | gemini-4-hydrogen-medium | 6 | 6 | 14 |
 
 Grindstone's source was revised after the season above was first published: its author reworked the car and the controller through the MCP loop (match insights, telemetry, replays, `evaluate_bot` against the other entries). On the engine it was reworked on (0.5.0) that took it from 4th to 2nd in 1v1, while on mixed teams it lost ground (3v3 from 4th to 8th).
 
 The whole season was then replayed on engine 0.5.1, which fixes four things a bug hunt found: a flamethrower burnt a piece of several studs once per stud (so a 2x2 plate caught fire four times too fast), a repair kit did not put fires out as the rules say it does, a car thrown at a thick wall at about 40 m/s could end up inside it for good, and a design could smuggle a part type or facing that was not a string past validation. The largest move in that replay was `pyro`, the flamethrower car, from 7th to 9th in 1v1. The six-entry tournament file under `docs/tournaments/` is the record of the earlier source, identified there by its hash, and has not been re-run.
 
-It was replayed once more on engine 0.5.2, and the table above is that replay. 0.5.2 fixes what a second bug hunt found, and several of those fixes change how every car drives and what a shield stops: `driveTo` steered a reversing car the wrong way; the route follower could swap between two equally long ways round a hole on every re-plan; a shield that soaked a whole burst also soaked its shove, and did not soak the splash of a shell going off beside it; a hover craft could leave the map; a mortar could be aimed under its minimum range. Places 2 to 4 in 1v1 are now one win apart over 288 matches (`astra` and `carbon` 240, `grindstone` 239), so their order there carries little weight. `grindstone` was tuned on the earlier engine and gave back ten wins; it has not been re-tuned since.
+It was replayed once more on engine 0.5.2 (then: `quillback` 1 / 2 / 2, `astra` 2 / 1 / 1, `carbon` 3 / 3 / 3, `grindstone` 4 / 4 / 7). 0.5.2 fixes what a second bug hunt found, and several of those fixes change how every car drives and what a shield stops: `driveTo` steered a reversing car the wrong way; the route follower could swap between two equally long ways round a hole on every re-plan; a shield that soaked a whole burst also soaked its shove, and did not soak the splash of a shell going off beside it; a hover craft could leave the map; a mortar could be aimed under its minimum range. Places 2 to 4 in 1v1 were then one win apart over 288 matches (`astra` and `carbon` 240, `grindstone` 239). `grindstone` had been tuned on the earlier engine and gave back ten wins.
+
+The table above is the season on engine 0.5.3, with `grindstone` revised once more. 0.5.3 changes one rule: a shield now soaks the blast of a powder keg, a barrel or a mine from outside it as it soaks a shell's (the shove still arrives, and a keg that goes off while bolted to the car it is on goes straight through). With no entry changed that moved little: `carbon` lost two 1v1 wins and `grindstone` rose from 4th to 3rd by them.
+
+`grindstone` was then reworked on 0.5.3 by its author through the MCP loop again, from replays of its most one-sided losses. The car gave up one of three reactors for armor behind the cockpit and a rear chassis row that ties each track to the core a second way: in the replays a gun car shot out one lane of studs and a whole side of the car, track, laser and slope, fell off untouched. The controller stopped freezing in front of lava and barriers (it takes the route round), stopped fighting its own mine-dodging for the wheel, goes further for an item when no enemy is near, and in teams every car names the enemy it is shooting and prefers one a team-mate already shoots. Over the season that is 263 wins of 288 in 1v1 (from 239), first place; 2v2 from 4th to 3rd; 3v3 from 7th to 4th. In 1v1 it still only splits its matches with `carbon`, which out-ranges its lasers. The numbers it was tuned against were seeds 1 and 2 of the head-to-head with the five other entries; the ladder's own season uses a different seed and the whole field.
+
+Two things the tuning asked of the tools were added afterwards. `validate_design` and `scout_bot` now list `weakLanes`: the lanes of studs on which the least has to be shot away before a mover, or two guns, fall off without being hit, checked in the tests against what the engine drops when that lane is shot out. `evaluate_bot` takes the seeds themselves as well as a count, gives the comparison with a baseline as numbers as well as text, and says for each of the worst losses how much damage went each way.

@@ -131,6 +131,62 @@ function engineCover(design, side) {
   return { pieces, hp, first };
 }
 
+// The same for any lane: shoot `shots` pieces out of it and name what fell off without being hit.
+function engineLane(design, side, at, shots) {
+  const w = new World({ map: MAPS.proving, seed: 1, entries: [{ team: 0, slot: 0, design }, { team: 1, slot: 0, design }] });
+  const v = w.vehicles[0], cells = [];
+  if (side === 'front') for (let y = GRID_HY; y >= -GRID_HY; y--) cells.push([at, y]);
+  if (side === 'rear') for (let y = -GRID_HY; y <= GRID_HY; y++) cells.push([at, y]);
+  if (side === 'right') for (let x = GRID_HX; x >= -GRID_HX; x--) cells.push([x, at]);
+  if (side === 'left') for (let x = -GRID_HX; x <= GRID_HX; x++) cells.push([x, at]);
+  const world = ([bx, by]) => { const u = by * CELL - v.comU, l = -bx * CELL - v.comV; return [v.x + v.fx * u - v.fy * l, v.y + v.fy * u + v.fx * l]; };
+  const shot = new Set();
+  let hp = 0;
+  for (let k = 0; k < shots; k++) {
+    let hit = null;
+    for (const c of cells) { hit = w.partAt(v, ...world(c)); if (hit) break; }
+    assert.ok(hit && hit !== v.core, `shot ${k + 1} down lane ${at} from the ${side} meets a piece that is not the core`);
+    shot.add(hit); hp += hit.maxHp;
+    w.destroy(v, hit, null, 'jettisoned');
+    w.settle();
+  }
+  return { hp, fell: v.parts.filter((p) => !p.alive && !p.decor && !shot.has(p)).map((p) => p.type).sort() };
+}
+const uncounted = (list) => list.flatMap((s) => { const m = /^(.*) x(\d+)$/.exec(s); return m ? Array(Number(m[2])).fill(m[1]) : [s]; }).sort();
+
+test('weak lanes: what falls off untouched once a lane is shot out, as the engine drops it', () => {
+  // each wheel hangs on one plate beside the core: one plate gone and its wheel goes with it
+  const thin = [P('core', 0, 0), P('armor', 0, 1), P('plate', -1, 0), P('wheel', -2, 0), P('plate', 1, 0), P('wheel', 2, 0)];
+  const a = check(thin);
+  assert.deepEqual(a.weakLanes, [{ from: 'front', x: -1, shotAway: 1, hp: 45, thenFallOff: ['wheel'] }, { from: 'front', x: 1, shotAway: 1, hp: 45, thenFallOff: ['wheel'] }]);
+  assert.ok(a.insights.some((s) => /^Shooting out lane x -1 from the front \(1 piece, 45 hp\) drops wheel untouched/.test(s)), a.insights.join(' | '));
+  // armor on that lane, ahead of the plate and behind it: the wheel now costs 245 hp, and from the front the rear brick goes too
+  const ends = [P('armor', -1, 1), P('armor', -1, -1), P('armor', 1, 1), P('armor', 1, -1)];
+  const thick = check([...thin, ...ends]);
+  assert.deepEqual(thick.weakLanes[0], { from: 'front', x: -1, shotAway: 2, hp: 245, thenFallOff: ['wheel', 'armor'] });
+  assert.ok(thick.insights.some((s) => /^Shooting out lane/.test(s)), 'half the running gear for less than the core: still said');
+  const thicker = check([...thin, ...ends, ...[2, 3, -2, -3].flatMap((y) => [P('armor', -1, y), P('armor', 1, y)])]);
+  assert.equal(thicker.weakLanes[0].hp, 645);
+  assert.ok(!thicker.insights.some((s) => /^Shooting out lane/.test(s)), 'dearer than the core: listed, not preached');
+  // nothing hangs on anything: a core with a wheel on each side of it
+  assert.equal(check([P('core', 0, 0), P('wheel', -1, 0), P('wheel', 1, 0)]).weakLanes, undefined);
+
+  // every vehicle on file: the engine, shot down that lane, drops what the analysis says and no sooner
+  for (const { id } of listBots().filter((b) => b.kind === 'builtin')) {
+    const v = runMatch({ map: 'proving', mode: '1v1', teams: [[loadBot(id)], [loadBot(id)]], seed: 1, maxTime: 0, record: false }).vehicles[0];
+    if (v.design.parts.some((p) => PARTS[p.type].blast)) continue;   // a keg that falls off goes off and takes more with it
+    const lanes = analyzeDesign({ design: v.design, stats: v.designStats }).weakLanes || [];
+    assert.ok(lanes.length <= 2);
+    for (const l of lanes) {
+      const at = l.x ?? l.y, got = engineLane(v.design, l.from, at, l.shotAway);
+      assert.deepEqual({ hp: got.hp, fell: got.fell }, { hp: l.hp, fell: uncounted(l.thenFallOff) }, `${id}: lane ${at} from the ${l.from}`);
+      const before = l.shotAway > 1 ? engineLane(v.design, l.from, at, l.shotAway - 1).fell : [];
+      const vital = before.filter((t) => { const d = PARTS[t]; return d.weapon || d.mover || d.thrust || d.blast || t === 'reactor' || t === 'battery'; });
+      assert.ok(vital.length < 2 && !vital.some((t) => PARTS[t].mover || PARTS[t].thrust), `${id}: nothing that counts had fallen one shot earlier`);
+    }
+  }
+});
+
 test('every built-in bot: the analysis is small, and its core cover is what the engine does along that lane', () => {
   const bots = listBots().filter((b) => b.kind === 'builtin');
   assert.ok(bots.length >= 13);

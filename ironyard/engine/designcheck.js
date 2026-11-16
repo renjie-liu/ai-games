@@ -21,7 +21,7 @@ const BULLET = PARTS.mg.dmg, SHELL = PARTS.cannon.dmg;
 const SIDES = { front: 'N', rear: 'S', left: 'W', right: 'E' };   // the blueprint direction a shot from that side comes from
 const SIDE_OF = { N: 'front', S: 'rear', W: 'left', E: 'right' };
 const NEIGH = Object.values(DIRS);
-const MAX_WEAPONS = 8, MAX_INSIGHTS = 6, MAX_BYTES = 2900;   // the whole analysis stays under 3 kB of JSON
+const MAX_WEAPONS = 8, MAX_INSIGHTS = 6, MAX_WEAK_LANES = 2, MAX_BYTES = 2900;   // the whole analysis stays under 3 kB of JSON
 
 const r1 = (x) => Math.round(x * 10) / 10;
 const r2 = (x) => Math.round(x * 100) / 100;
@@ -58,6 +58,14 @@ function touching(parts, grid, i) {
     }
   }
   return out;
+}
+
+/** Whatever has no way left to the core falls off (World.settle): marks those pieces gone in `alive` and returns their indexes. */
+function shed(parts, alive, coreI) {
+  const grid = gridOf(parts, alive), held = new Set([coreI]), stack = [coreI], gone = [];
+  while (stack.length) for (const j of touching(parts, grid, stack.pop())) if (!held.has(j)) { held.add(j); stack.push(j); }
+  alive.forEach((a, j) => { if (a && !held.has(j)) { alive[j] = false; gone.push(j); } });
+  return gone;
 }
 
 /** The studs of one lane, in the order a shot from `side` enters them. `at` is the lane's x (front / rear) or y (left / right). */
@@ -99,12 +107,29 @@ function coreCover(parts, coreI, side) {
     bullet += (d.hp * BULLET) / getsThrough(p, BULLET, side);
     shell += (d.hp * SHELL) / getsThrough(p, SHELL, side);
     alive[i] = false;
-    // whatever that piece alone was holding on falls off with it
-    const left = gridOf(parts, alive), seen = new Set([coreI]), stack = [coreI];
-    while (stack.length) for (const j of touching(parts, left, stack.pop())) if (!seen.has(j)) { seen.add(j); stack.push(j); }
-    alive.forEach((a, j) => { if (a && !seen.has(j)) alive[j] = false; });
+    shed(parts, alive, coreI);
   }
   return { hp, hpVsBullet: Math.round(bullet), hpVsShell: Math.round(shell), pieces, first };
+}
+
+/**
+ * What a shot drilling one lane from `side` takes off the car WITHOUT hitting it: the first moment at which what
+ * has fallen off for want of a way to the core includes a mover, or two of the pieces `isVital` names.
+ * @returns {null | { pieces, hp, dropped: number[] }} how many pieces had to be shot away, their hp, and what fell.
+ */
+function laneLoss(parts, coreI, side, at) {
+  const alive = parts.map((p) => !PARTS[p.type].decor), cells = lane(side, at), dropped = [];
+  let hp = 0;
+  for (let pieces = 1; pieces <= parts.length; pieces++) {
+    const i = firstHit(gridOf(parts, alive), cells);
+    if (i < 0 || i === coreI) return null;
+    hp += PARTS[parts[i].type].hp;
+    alive[i] = false;
+    dropped.push(...shed(parts, alive, coreI));
+    const vital = dropped.filter((j) => isVital(PARTS[parts[j].type]));
+    if (vital.length > 1 || vital.some((j) => isMover(PARTS[parts[j].type]))) return { pieces, hp, dropped };
+  }
+  return null;
 }
 
 /** Bearings (degrees clockwise from dead ahead) no interval of `covers` reaches. covers: [{ from, width }]. */
@@ -136,7 +161,10 @@ const arcHolds = ([from, to], deg) => arcWidth([from, to]) === 360 || mod360(deg
  * @param {object} validated  what validateDesign returns ({ design, stats }), or a normalised design ({ parts })
  * @param {object} [stats]    its stats, when `validated` is a bare design (computed if left out)
  * @returns {object} { coreProtection, exposed, weapons, otherWeapons?, dpsByRange, dpsByRangeRear, blindArcsDeg, energy, fire,
- *   mass, insights }. Sides are front / rear / left / right; bearings are degrees clockwise from dead ahead
+ *   mass, weakLanes?, insights }. `weakLanes`: the (at most two) lanes on which the least hp has to be shot away before a
+ *   mover, or two guns / reactors / batteries / kegs, fall off without being hit — `{ from, x | y, shotAway, hp, thenFallOff }`,
+ *   the lane named by its stud x (shots from the front or rear) or y (from the left or right).
+ *   Sides are front / rear / left / right; bearings are degrees clockwise from dead ahead
  *   (90 = right, 180 = astern); `weapons[].i` is the piece index a controller fires it by. Empty entries are left out.
  */
 export function analyzeDesign(validated, stats) {
@@ -218,6 +246,23 @@ export function analyzeDesign(validated, stats) {
   }
   const mass = { total: st.mass, frontShare: agg.mass ? r2(ahead / agg.mass) : 0 };
 
+  // ── what a shot down one lane takes with it ─────────────────────────────
+  // pieces tied to the core only by what lies on one lane fall off when that lane has been shot out, untouched themselves
+  const moversAll = solidIdx.filter((j) => isMover(PARTS[parts[j].type])).length;
+  const losses = [];
+  for (const side of Object.keys(SIDES)) {
+    const half = side === 'front' || side === 'rear' ? GRID_HX : GRID_HY;
+    for (let at = -half; at <= half; at++) {
+      const l = laneLoss(parts, coreI, side, at);
+      if (!l) continue;
+      const movers = l.dropped.filter((j) => isMover(PARTS[parts[j].type])).length, vital = l.dropped.filter((j) => isVital(PARTS[parts[j].type])).length;
+      losses.push({ side, at, ...l, movers, vital, worth: (vital + (moversAll ? (2 * movers) / moversAll : 0)) / l.hp });
+    }
+  }
+  losses.sort((a, b) => b.worth - a.worth || a.hp - b.hp || a.side.localeCompare(b.side) || a.at - b.at);
+  const weakLanes = losses.slice(0, MAX_WEAK_LANES).map((l) => ({ from: l.side, [l.side === 'front' || l.side === 'rear' ? 'x' : 'y']: l.at, shotAway: l.pieces, hp: l.hp,
+    thenFallOff: counted(l.dropped.map((j) => parts[j].type).sort((a, b) => gravity(a) - gravity(b))) }));
+
   // ── what to do about it ─────────────────────────────────────────────────
   const notes = [];
   const say = (weight, text) => notes.push({ weight, text });
@@ -254,6 +299,18 @@ export function analyzeDesign(validated, stats) {
   const kegSides = sidesWith('keg'), reactorSides = sidesWith('reactor');
   if (kegSides.length) say(72, `A keg is the first piece hit from the ${listOf(kegSides)}: shot off (${PARTS.keg.hp} hp) it goes off on you for ${PARTS.keg.blast.dmg}. Cover it with a slope or plate, or throw it early.`);
   if (reactorSides.length) say(62, `A reactor is the first piece hit from the ${listOf(reactorSides)} (${PARTS.reactor.hp} hp): when it dies it blasts every piece touching it for ${PARTS.reactor.volatile} and ${PARTS.reactor.energyRegen} energy/s is gone. Bury it.`);
+
+  // a lane that, shot out, drops guns or running gear nobody aimed at. Every lane beside the core cuts the car in two in the
+  // end: it is worth a sentence when that costs less than the core itself (550 hp) and takes half the running gear or
+  // two vital pieces along, or when it costs next to nothing
+  if (losses.length) {
+    const l = losses[0], w = weakLanes[0], axis = l.side === 'front' || l.side === 'rear' ? 'x' : 'y', many = l.dropped.length > 1;
+    const half = l.movers > 0 && l.movers * 2 >= moversAll;
+    if (l.hp <= 150 || (l.hp <= 500 && (half || l.vital > 1))) {
+      say((half ? 66 : l.vital > 1 ? 56 : 46) - (l.hp > 300 ? 8 : 0), `Shooting out lane ${axis} ${l.at} from the ${l.side} (${l.pieces} piece${l.pieces > 1 ? 's' : ''}, ${l.hp} hp) drops ${listOf(w.thenFallOff.length > 4 ? [...w.thenFallOff.slice(0, 3), 'more'] : w.thenFallOff)} `
+        + `untouched: all that ties ${many ? 'them' : 'it'} to the core lies on that lane. Put more or tougher pieces along it.`);
+    }
+  }
 
   // a flank whose every mover takes the first hit from that side
   const flank = (side) => {
@@ -297,7 +354,7 @@ export function analyzeDesign(validated, stats) {
   const out = {
     coreProtection, exposed, weapons, ...(guns.length > MAX_WEAPONS ? { weaponsNotListed: guns.length - MAX_WEAPONS } : {}),
     ...(others.length ? { otherWeapons: counted(others) } : {}),
-    dpsByRange, dpsByRangeRear, blindArcsDeg, energy, fire, mass, insights,
+    dpsByRange, dpsByRangeRear, blindArcsDeg, energy, fire, mass, ...(weakLanes.length ? { weakLanes } : {}), insights,
   };
   while (insights.length > 3 && JSON.stringify(out).length > MAX_BYTES) insights.pop();   // the least important go first
   return out;

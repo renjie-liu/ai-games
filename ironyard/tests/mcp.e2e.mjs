@@ -187,6 +187,21 @@ async function exercise(client, label) {
   assert.match(cmp.vsOpponent.hornet, /^now \d+-\d+, baseline \d+-\d+ \([+-]\d+\)$/);
   assert.equal(cmp.matchesGained, cmp.gained.length); assert.equal(cmp.matchesLost, cmp.lost.length);
   assert.ok(cmp.gained.concat(cmp.lost).every((m) => m.opponent && m.map && m.seed));
+  // the same record as numbers, for a caller that would rather not parse a sentence
+  assert.deepEqual(Object.keys(cmp.byOpponent).sort(), ['bulldozer', 'hornet']);
+  for (const [o, r] of Object.entries(cmp.byOpponent)) {
+    assert.equal(cmp.vsOpponent[o], `now ${r.wins}-${r.losses}, baseline ${r.baselineWins}-${r.baselineLosses} (${r.winsGained >= 0 ? '+' : ''}${r.winsGained})`);
+    assert.equal(r.winsGained, r.wins - r.baselineWins);
+  }
+  // a loss says how much damage went each way: one with none dealt is a car that never fought
+  assert.deepEqual(ev.seeds, [1]);
+  assert.ok(ev.worstLosses.every((l) => typeof l.damageDealt === 'number' && typeof l.opponentDealt === 'number'));
+  // seeds as a list are the seeds played, so a held-back seed can be checked without playing the tuning seeds again
+  const held = JSON.parse(text(await client.callTool({ name: 'evaluate_bot', arguments: { name, maps: ['proving'], opponents: ['hornet'], seeds: [3] } })));
+  assert.deepEqual(held.seeds, [3]); assert.equal(held.matches, 2);
+  assert.ok(held.worstLosses.every((l) => l.seed === 3));
+  const lots = await client.callTool({ name: 'evaluate_bot', arguments: { name, seeds: 'lots' } });
+  assert.equal(lots.isError, true); assert.match(text(lots), /"seeds" must be a whole number 1\.\.5 or a list of 1\.\.5 of them/);
   const self = await client.callTool({ name: 'evaluate_bot', arguments: { name, maps: ['proving'], opponents: ['hornet'], baseline: name } });
   assert.equal(self.isError, true);
   // a baseline nobody has heard of is refused before a single match is played
