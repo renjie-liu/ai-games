@@ -254,6 +254,10 @@ const TOOLS = [
     run: async (a) => {
       const name = String(a.name);
       const mode = a.mode || '1v1';
+      // a baseline that cannot be played is refused now, not after the whole field has been played
+      const base = a.baseline !== undefined ? String(a.baseline) : null;
+      if (base === name) throw new Error('baseline must be a different bot from the one being evaluated');
+      const baseSource = base === null ? null : readBotSource(base);
       const opp = (a.opponents && a.opponents.length ? a.opponents.map(String) : listBots().filter((b) => b.kind === 'builtin').map((b) => b.id)).filter((id) => id !== name);
       const maps = a.maps && a.maps.length ? a.maps : MAP_IDS;
       const seeds = Array.from({ length: a.seeds || 1 }, (_, i) => i + 1);
@@ -285,10 +289,7 @@ const TOOLS = [
       const me = table.find((r) => r.id === name);
       // the same matches with another bot in this one's place: what changed, opponent by opponent and match by match
       let comparedWith;
-      if (a.baseline !== undefined) {
-        const base = String(a.baseline);
-        if (base === name) throw new Error('baseline must be a different bot from the one being evaluated');
-        const baseSource = readBotSource(base);
+      if (base !== null) {
         const key = (m) => `${m.b}|${m.map}|${m.seed}|${m.swap ? 1 : 0}`;
         const mark = (w, mine) => (w === mine ? 'win' : w < 0 ? 'draw' : 'loss');
         const now = new Map(results.map((m) => [key(m), mark(m.winner, 0)]));
@@ -461,14 +462,15 @@ const TOOLS = [
           const state = !(r[6] & FLAG.alive) ? 'dead' : [r[6] & FLAG.fire && 'burning', r[6] & FLAG.stun && 'stunned', r[6] & FLAG.boost && 'boosting', r[6] & FLAG.hover && 'hovering'].filter(Boolean).join('+');
           const row = [r[0], r[1], Math.round((r[2] * 180) / Math.PI), Math.round(r[5] * 100), Math.round(r[3] * 100), state];
           // what its controller was asking for, and what it stood on, at the nearest half second
-          const k = tracks[vi], n = k ? Math.round(f.t / k.step) : -1;
-          if (k && n < k.throttle.length) row.push(k.throttle[n], k.steer[n], k.fire[n], k.tile[n]);
+          // (sample n of the track was taken at (n + 1) steps: there is none for the instant the match starts)
+          const k = tracks[vi], n = k ? Math.round(f.t / k.step) - 1 : -1;
+          if (k && n >= 0 && n < k.throttle.length) row.push(k.throttle[n], k.steer[n], k.fire[n], k.tile[n]);
           return row;
         })]);
       }
       return { file: name, window: [from, to], step, vehicles, tilesAreMetres: TILE,
         legend: 'each row: [t, then one entry per vehicle in the order of `vehicles`: [x m, y m, heading deg, hull %, energy %, state'
-          + (tracks.some(Boolean) ? ', throttle asked -1..1, steer asked -1..1, fire asked 0/1, tile underneath]]. The last four are absent once the vehicle is dead. Tile (col, row) = floor(x / ' + TILE + '), floor(y / ' + TILE + '); list_maps gives the rows.' : ']]'), rows };
+          + (tracks.some(Boolean) ? ', throttle asked -1..1, steer asked -1..1, fire asked 0/1, tile underneath]]. The last four are absent before the first half second and once the vehicle is dead. In the pictures list_maps gives, a tile is in column floor(x / ' + TILE + ') counted from the left and in row floor(y / ' + TILE + ') counted from the BOTTOM: y grows northwards and the first row listed is the far north.' : ']]'), rows };
     },
   },
 ];

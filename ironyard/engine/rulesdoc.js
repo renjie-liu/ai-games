@@ -1,7 +1,7 @@
 // The rulebook, generated from the same tables the simulator runs on, so it
 // can never drift from the engine. Served as AGENTS.md, by the MCP `get_rules`
 // tool and on the web Rules tab.
-import { PARTS, ITEMS, TILES, RULES, CELL, GRID_HX, GRID_HY, GRID_W, GRID_L, BUDGETS, TILE, DECOR_LIMIT, PAINT_IDS } from './parts.js';
+import { PARTS, ITEMS, TILES, RULES, CELL, GRID_HX, GRID_HY, GRID_W, GRID_L, BUDGETS, TILE, DECOR_LIMIT, PAINT_IDS, hitOn } from './parts.js';
 import { PHYS } from './design.js';
 import { MAPS, MAP_IDS } from './maps.js';
 import { ENGINE_VERSION } from './match.js';
@@ -51,10 +51,10 @@ function partRow(p) {
 export function rulesMarkdown() {
   const cats = { structure: 'Structure & defence', mobility: 'Mobility & steering', weapon: 'Weapons', utility: 'Utility', decor: 'Decor (free)' };
   // what one hit of each gun is worth on the three kinds of surface, by the same arithmetic the engine uses
-  const after = (d, def, faced) => { let x = faced && def.deflect ? d * def.deflect : d; if (def.armor) x = Math.max(x * 0.25, x - def.armor); return Math.round(x * 10) / 10; };
+  const after = (d, def, faced) => Math.round(hitOn(def, d, 'kinetic', faced) * 10) / 10;
   const hitTable = ['| weapon | one hit | on a plain piece | on armor | on a slope, face on | on a slope, from elsewhere |', '|---|---|---:|---:|---:|---:|',
     ...Object.values(PARTS).filter((p) => p.weapon && p.weapon !== 'hook' && p.dmg && (p.dtype === 'kinetic' || p.dtype === 'explosive')).map((p) =>
-      `| ${p.id} | ${p.dmg}${p.salvo ? ' x' + p.salvo : ''} ${p.dtype} | ${p.dmg} | ${after(p.dmg, PARTS.armor, false)} | ${after(p.dmg, PARTS.slope, true)} | ${after(p.dmg, PARTS.slope, false)} |`)].join('\n');
+      `| ${p.id} | ${p.dmg}${p.salvo ? ' x' + p.salvo : ''} ${p.dtype} | ${p.dmg} | ${after(p.dmg, PARTS.armor, false)} | ${after(p.dmg, PARTS.slope, p.weapon !== 'lob')} | ${after(p.dmg, PARTS.slope, false)} |`)].join('\n');
   const partTables = Object.entries(cats).map(([cat, title]) =>
     `**${title}**\n\n| type | glyph | studs | cost | mass kg | hp | placement | numbers | notes |\n|---|---|---|---|---|---|---|---|---|\n` +
     Object.values(PARTS).filter((p) => p.cat === cat).map(partRow).join('\n')).join('\n\n');
@@ -143,7 +143,8 @@ What happens under fire:
   gun shoots over a low deck piece in front of it. To an incoming shot a low piece is a piece like any other.)
 * Slopes: a kinetic or explosive hit arriving against the slope's facing (within 60°) only does ${Math.round(PARTS.slope.deflect * 100)}%.
 * **What a hit is worth** after the piece it lands on has had its say (armor takes ${PARTS.armor.armor} off every kinetic or explosive hit, never
-  more than three quarters of it; a slope struck on its face lets ${Math.round(PARTS.slope.deflect * 100)}% through and then takes ${PARTS.slope.armor} off). Lasers, flame and saws are not reduced by either:
+  more than three quarters of it; a slope struck on its face lets ${Math.round(PARTS.slope.deflect * 100)}% through and then takes ${PARTS.slope.armor} off). Lasers, flame and saws are not reduced by either.
+  A mortar round comes down from above and the splash of any burst has no direction: a slope's face deflects neither:
 
 ${hitTable}
 

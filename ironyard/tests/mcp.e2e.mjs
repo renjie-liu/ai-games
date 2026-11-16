@@ -189,6 +189,11 @@ async function exercise(client, label) {
   assert.ok(cmp.gained.concat(cmp.lost).every((m) => m.opponent && m.map && m.seed));
   const self = await client.callTool({ name: 'evaluate_bot', arguments: { name, maps: ['proving'], opponents: ['hornet'], baseline: name } });
   assert.equal(self.isError, true);
+  // a baseline nobody has heard of is refused before a single match is played
+  const t0 = Date.now();
+  const nobody = await client.callTool({ name: 'evaluate_bot', arguments: { name, baseline: 'no-such-bot' } });
+  assert.equal(nobody.isError, true); assert.match(text(nobody), /unknown bot "no-such-bot"/);
+  assert.ok(Date.now() - t0 < 3000, 'refused at once');
   // a design that is only over budget still gets its analysis
   const rich = JSON.parse(text(await client.callTool({ name: 'validate_design', arguments: { design: { parts: [{ type: 'core', x: 0, y: 0, z: 1 },
     ...[-2, -1, 0, 1, 2].flatMap((x) => [-3, -2, -1, 0, 1, 2, 3].map((y) => ({ type: 'armor', x, y, z: 0 }))),

@@ -95,7 +95,7 @@ export function insightList(res, id) {
     const g = gone[0];
     const by = g.lostBy ?? null;
     const to = g.lostTo === 'detached' ? (by === null || by === v.id ? 'when what held it came off' : `when ${who(by)} shot away what held it`)
-      : by === v.id && (g.lostTo === 'jettisoned' || g.lostTo === 'detonated') ? `(${g.lostTo})` : `to ${blame(who, v.id, by, g.lostTo)}`;
+      : g.lostTo === 'jettisoned' || g.lostTo === 'detonated' ? `(${g.lostTo} by its own controller)` : `to ${blame(who, v.id, by, g.lostTo)}`;
     if (guns.length === 1) say('weapons_lost', `lost its only weapon (${g.type}) at ${f1(g.lostAt)} s ${to}, ${f1(life - g.lostAt)} s before the end`);
     else say('weapons_lost', `lost ${gone.length} of ${guns.length} weapons by ${f1(gone[gone.length - 1].lostAt)} s (first: ${g.type} at ${f1(g.lostAt)} s ${to})`);
   }

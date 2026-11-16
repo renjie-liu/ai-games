@@ -8,17 +8,13 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { runMatch, analyzeDesign, MODES, MAP_IDS, DEFAULT_BUDGET, ENGINE_VERSION } from '../engine/index.js';
 import { ROOT, listBots, readBotSource, loadBot } from './loader.js';
-import { LADDER_DIR, entrantsNow, schedule, rate, authorOf, modelOf } from './ladder.js';
+import { LADDER_DIR, entrantsNow, schedule, rate, authorOf, modelOf, keyOf, RESULT_CHECK } from './ladder.js';
 import { withSources } from './runner.js';
 
 const HOME_MAP = 'proving';
-const RESULT_CHECK = 2;       // as in ladder.js: results filed without this mark are replayed by the ladder, so they do not count
 const MAX_OPPONENTS = 12;
-const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
-// The key the ladder files a result under (keyOf in ladder.js): the match, then a hash of the engine version
-// and of the source of every bot in it. tests/scout.test.js holds the two to the same answer.
-const keyOf = (m, hashOf) => `${m.mode}|${m.map}|${m.seed}|${m.swap ? 1 : 0}|${m.teams[0].join('+')}|${m.teams[1].join('+')}|`
-  + sha(ENGINE_VERSION + [...m.teams[0], ...m.teams[1]].map((id) => hashOf[id]).join('')).slice(0, 10);
+/** The opponents a hint names: at most two, each beating it in at least six games out of ten. */
+const worstOpponents = (record) => (record.byOpponent || []).filter((o) => o.l > o.w && o.l / (o.w + (o.d || 0) + o.l) >= 0.6).slice(0, 2);
 const matchOf = (key) => key.slice(0, key.lastIndexOf('|'));
 const scored = (r) => r && r.checked === RESULT_CHECK && !r.void && [-1, 0, 1].includes(r.w);
 const listOf = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
@@ -168,7 +164,7 @@ function hintsOf(id, record, main, styleOfBot) {
   const hints = [];
   if (record.onFile >= 8) {
     const games = (o) => o.w + (o.d || 0) + o.l;
-    const bad = record.byOpponent.filter((o) => o.l > o.w && o.l / games(o) >= 0.6).slice(0, 2);
+    const bad = worstOpponents(record);
     if (bad.length) {
       const styles = bad.map((o) => styleOfBot(o.vs));
       const who = listOf(bad.map((o) => `${o.l} of ${games(o)} to ${o.vs}`));
@@ -242,7 +238,7 @@ export async function scoutBot(id, { pool = null, ladderDir = LADDER_DIR } = {})
   }
   out.record = ladderRecord(id, { ladderDir });
   const seen = new Map();
-  for (const o of (out.record.byOpponent || []).filter((o) => o.l > o.w).slice(0, 2)) {
+  for (const o of worstOpponents(out.record)) {
     try { const [v] = await fielded(o.vs, { mode: '1v1', map: HOME_MAP }, pool); seen.set(o.vs, { style: styleOf(v.stats, analyzeDesign({ design: v.design, stats: v.stats })), carries: carries(v.stats) }); } catch { /* its style stays unsaid */ }
   }
   out.hints = hintsOf(id, out.record, main, (name) => seen.get(name));

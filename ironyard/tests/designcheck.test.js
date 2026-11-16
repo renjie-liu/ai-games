@@ -167,3 +167,12 @@ test('damage that gets through a piece is what the engine deals', () => {
   assert.equal(a.coreProtection.front.hpVsBullet, Math.round(bullet));
   assert.equal(a.coreProtection.front.hpVsShell, Math.round(shell));
 });
+
+test('a harpoon is not a gun: it adds no bearings, no dps and no reach', () => {
+  const base = [P('plate', 0, 0), P('plate', 0, 1), P('plate', 0, 2), P('plate', 0, -1), P('wheel', -1, 0), P('wheel', 1, 0), P('wheel', -1, 2), P('wheel', 1, 2), P('core', 0, 0, 1), P('reactor', 0, -1, 1)];
+  const hookOnly = analyzeDesign(validateDesign({ parts: base.concat([P('harpoon', 0, 1, 1, 'N')]) }));
+  assert.equal(hookOnly.weapons.length, 0);
+  assert.ok(Object.values(hookOnly.dpsByRange).every((x) => x === 0));
+  assert.ok(hookOnly.otherWeapons.some((x) => /^harpoon/.test(x)), JSON.stringify(hookOnly.otherWeapons));
+  assert.ok(hookOnly.insights.some((x) => /no gun/i.test(x)), hookOnly.insights.join(' | '));
+});

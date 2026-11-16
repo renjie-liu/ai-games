@@ -295,6 +295,19 @@ export const ITEMS = {
 export const ITEM_IDS = Object.keys(ITEMS);
 
 // Tile types. `ch` is the character used in ASCII maps.
+/**
+ * What one hit is worth once the piece it lands on has had its say: a slope struck on its face lets
+ * `deflect` of it through, armor takes `armor` off but never more than three quarters. Only kinetic
+ * and explosive hits are reduced. This is the arithmetic of World.damage (sim.js), stated once for
+ * the design analysis and the rulebook; tests/contraptions.test.js holds the two to the same answer.
+ */
+export function hitOn(def, amount, dtype = 'kinetic', faced = false) {
+  if (dtype !== 'kinetic' && dtype !== 'explosive') return amount;
+  if (faced && def.deflect) amount *= def.deflect;
+  if (def.armor) amount = Math.max(amount * 0.25, amount - def.armor);
+  return amount;
+}
+
 export const TILE = 2; // metres per map tile
 export const TILES = {
   floor:   { ch: '.', name: 'Floor' },

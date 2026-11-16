@@ -12,7 +12,7 @@
 //     kegs that die on the way (those only help the attacker, so the numbers err on the safe side).
 //   * Fire: pieces with a `burn` value can burn; a cluster is burnable pieces that touch. Pieces that
 //     burn slowly may need two burning neighbours to catch, so a cluster is the most a fire can take.
-import { PARTS, CELL, GRID_HX, GRID_HY, GRID_W, GRID_L, DIRS, DIR_ANGLE, cellsOf } from './parts.js';
+import { PARTS, CELL, GRID_HX, GRID_HY, GRID_W, GRID_L, DIRS, DIR_ANGLE, cellsOf, hitOn } from './parts.js';
 import { aggregate, centerOf, cellIndex, inGrid, computeStats } from './design.js';
 
 /** Distances (m, from the centre of mass) at which `dpsByRange` is sampled. */
@@ -78,13 +78,9 @@ function firstHit(grid, cells) {
   return -1;
 }
 
-/** Damage that gets through to a piece from one kinetic hit of `dmg` (World.damage). */
+/** Damage that gets through to a piece from one kinetic hit of `dmg` arriving from `side`. */
 function getsThrough(p, dmg, side) {
-  const d = PARTS[p.type];
-  let a = dmg;
-  if (d.deflect && p.dir === SIDES[side]) a *= d.deflect;
-  if (d.armor) a = Math.max(a * 0.25, a - d.armor);
-  return a;
+  return hitOn(PARTS[p.type], dmg, 'kinetic', p.dir === SIDES[side]);
 }
 
 /** What stands between a shot from `side` along the core's own lane and the core. */
@@ -170,7 +166,7 @@ export function analyzeDesign(validated, stats) {
   const guns = [], others = [];   // guns reach out; saws, spikes, plows, pistons and kegs do not
   parts.forEach((p, i) => {
     const d = PARTS[p.type];
-    if (d.weapon && d.range) guns.push({ i, p, d, dps: d.dps ?? (d.dmg * (d.salvo || 1)) / d.cooldown, facingDeg: mod360(Math.round((-DIR_ANGLE[p.dir] * 180) / Math.PI)), arcDeg: Math.round((d.arc * 180) / Math.PI) });
+    if (d.weapon && d.range && d.weapon !== 'hook') guns.push({ i, p, d, dps: d.dps ?? (d.dmg * (d.salvo || 1)) / d.cooldown, facingDeg: mod360(Math.round((-DIR_ANGLE[p.dir] * 180) / Math.PI)), arcDeg: Math.round((d.arc * 180) / Math.PI) });
     else if (d.weapon || d.ramOut > 1 || d.punch || d.blast) others.push(`${p.type} ${p.dir}`);
   });
   const weapons = guns.slice(0, MAX_WEAPONS).map((g) => ({

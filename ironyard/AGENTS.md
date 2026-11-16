@@ -77,7 +77,8 @@ What happens under fire:
   gun shoots over a low deck piece in front of it. To an incoming shot a low piece is a piece like any other.)
 * Slopes: a kinetic or explosive hit arriving against the slope's facing (within 60°) only does 45%.
 * **What a hit is worth** after the piece it lands on has had its say (armor takes 2 off every kinetic or explosive hit, never
-  more than three quarters of it; a slope struck on its face lets 45% through and then takes 1 off). Lasers, flame and saws are not reduced by either:
+  more than three quarters of it; a slope struck on its face lets 45% through and then takes 1 off). Lasers, flame and saws are not reduced by either.
+  A mortar round comes down from above and the splash of any burst has no direction: a slope's face deflects neither:
 
 | weapon | one hit | on a plain piece | on armor | on a slope, face on | on a slope, from elsewhere |
 |---|---|---:|---:|---:|---:|
@@ -85,7 +86,7 @@ What happens under fire:
 | cannon | 30 kinetic | 30 | 28 | 12.5 | 29 |
 | railgun | 64 kinetic | 64 | 62 | 27.8 | 63 |
 | missile | 30 x2 explosive | 30 | 28 | 12.5 | 29 |
-| mortar | 46 explosive | 46 | 44 | 19.7 | 45 |
+| mortar | 46 explosive | 46 | 44 | 45 | 45 |
 
 * Decor is not solid: shots pass through it, and it is shaken off when the piece under it takes 20 damage.
 * **Fire.** Every piece has heat. Flamethrowers and lava raise it steadily. Every blast raises it too: the burst of a cannon shell, a missile or a

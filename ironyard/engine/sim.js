@@ -1023,7 +1023,8 @@ export class World {
       const d = w.def;
       if (w.cd > 0) {
         w.cd -= dt;
-        if (w.cd > 0) { w.tw.firingTime += dt; fired = true; }   // telemetry: a gun between two shots is a gun firing
+        // telemetry: a gun between two shots is a gun firing — while its trigger is still held. A harpoon winding back is not.
+        if (w.cd > 0 && d.weapon !== 'hook' && (cmd.fire === true || (Array.isArray(cmd.fire) && cmd.fire.includes(w.i)))) { w.tw.firingTime += dt; fired = true; }
       }
       const mount = v.th + DIR_ANGLE[w.dir];
       const raw = cmd.aims && cmd.aims[w.i] !== undefined ? cmd.aims[w.i] : cmd.aim;

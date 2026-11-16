@@ -21,7 +21,7 @@ export const LADDER_METHOD = 'mixed-slot-rotation-v2';
 const SEED = 1, START = 1500, PRIOR = 2;
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const storeFile = () => path.join(LADDER_DIR, 'results.json');
-const RESULT_CHECK = 2; // Older cache entries did not inspect controller runtime errors.
+export const RESULT_CHECK = 2; // Older cache entries did not inspect controller runtime errors.
 const rankedResult = (r) => r && !r.void && [-1, 0, 1].includes(r.w);
 
 /** Who wrote a bot: the `author` its `meta` gives, read from the source (a plain string literal). */
@@ -84,7 +84,7 @@ export function schedule(queue, entrants) {
   return out;
 }
 
-const keyOf = (m, hashOf) => `${m.mode}|${m.map}|${m.seed}|${m.swap ? 1 : 0}|${m.teams[0].join('+')}|${m.teams[1].join('+')}|`
+export const keyOf = (m, hashOf) => `${m.mode}|${m.map}|${m.seed}|${m.swap ? 1 : 0}|${m.teams[0].join('+')}|${m.teams[1].join('+')}|`
   + sha(ENGINE_VERSION + [...m.teams[0], ...m.teams[1]].map((id) => hashOf[id]).join('')).slice(0, 10);
 
 /**

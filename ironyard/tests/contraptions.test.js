@@ -2,7 +2,7 @@
 // and the crates and barrels a map can be built from.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAPS, PARTS, RULES, TILES, World, validateDesign, runMatch, makeNav, liveMap } from '../engine/index.js';
+import { MAPS, PARTS, RULES, TILES, DIR_ANGLE, World, validateDesign, runMatch, makeNav, liveMap, hitOn } from '../engine/index.js';
 import { loadBot, makeBot, readBotSource } from '../node/loader.js';
 
 const legal = (parts) => { const v = validateDesign({ parts }); assert.equal(v.ok, true, v.errors.join('; ')); return v.design; };
@@ -378,4 +378,26 @@ test('the new commands reach the engine from a controller', () => {
   assert.deepEqual(v.errors, []);
   const gone = res.events.filter((e) => e.k === 'part' && e.v === 0 && e.c === 'jettisoned').map((e) => e.i).sort();
   assert.deepEqual(gone, [0, 2], 'pieces 0 and 2 were let go of; the nonsense entries were ignored');
+});
+
+test('armor and slopes: the engine and the published arithmetic give the same answer', () => {
+  // hitOn (parts.js) is what the design analysis and the rulebook's table use; World.damage is what a match does
+  const armored = car([{ type: 'armor', x: 0, y: 3, z: 0 }, { type: 'slope', x: 1, y: 3, z: 0, dir: 'N' }]);
+  for (const dmg of [4, 30, 64]) for (const dtype of ['kinetic', 'explosive', 'energy']) {
+    const { w, p, q } = duel(car(), armored, { gap: 6 });
+    const plate = piece(q, 'plate'), armor = piece(q, 'armor'), slope = piece(q, 'slope');
+    const face = q.th + DIR_ANGLE[slope.dir];          // the way the slope looks; a shot going the other way strikes its face
+    // each hit takes what the arithmetic says, or whatever the piece still had
+    const hit = (part, ang, faced, what) => {
+      const before = part.hp, want = Math.min(before, hitOn(part.def, dmg, dtype, faced));
+      w.damage(q, part, dmg, dtype, p, ang);
+      assert.ok(Math.abs((before - Math.max(0, part.hp)) - want) < 1e-9, `${dmg} ${dtype} ${what}: took ${before - part.hp}, the arithmetic says ${want}`);
+    };
+    hit(plate, face + Math.PI, true, 'on a plate');
+    hit(armor, face + Math.PI, true, 'on armor');
+    hit(slope, face + Math.PI, true, 'on a slope, face on');
+    hit(slope, face, false, 'on a slope, from behind');
+    hit(slope, undefined, false, 'on a slope with no direction (a blast)');
+  }
+  assert.equal(hitOn(PARTS.armor, 4), 2); assert.equal(hitOn(PARTS.armor, 1), 0.25); assert.equal(hitOn(PARTS.armor, 22, 'energy'), 22);
 });

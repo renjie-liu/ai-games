@@ -339,3 +339,26 @@ test('a real match: the summary carries telemetry and at most six insights per v
   assert.ok(dx.losses.commonInsights.length > 0 && dx.losses.commonInsights.every((x) => x.matches === 2 && x.kind !== 'outcome' && typeof x.example === 'string'));
   assert.deepEqual(diagnose([]).losses, { matches: 0 });
 });
+
+test('firing time is time with the trigger held: a gun that only cools down, or a harpoon winding back, is not firing', () => {
+  // one shell, then the trigger is let go: the cannon's 1.4 s reload is not counted as firing
+  const one = duel(car([{ type: 'cannon', x: 0, y: 1, z: 1, dir: 'N' }]), car(), { gap: 8 });
+  one.w.setCommand(one.p, { fire: true, aim: { x: one.q.x, y: one.q.y } });
+  one.run(0.05);
+  one.w.setCommand(one.p, { fire: false });
+  one.run(2);
+  const cannon = one.p.tel.weapons.find((g) => g.type === 'cannon');
+  assert.equal(cannon.shots, 1);
+  assert.ok(cannon.firingTime < 0.1, `one shot and nothing more is ${cannon.firingTime.toFixed(2)} s of firing`);
+  // held down, the same gun is firing the whole time, reload included
+  const held = duel(car([{ type: 'cannon', x: 0, y: 1, z: 1, dir: 'N' }]), car(), { gap: 8 });
+  held.w.setCommand(held.p, { fire: true, aim: { x: held.q.x, y: held.q.y } });
+  held.run(2);
+  assert.ok(held.p.tel.weapons.find((g) => g.type === 'cannon').firingTime > 1.5);
+  // a harpoon that missed winds back for six seconds: none of that is firing, trigger held or not
+  const hook = duel(car([{ type: 'harpoon', x: 0, y: 1, z: 1, dir: 'N' }]), car(), { gap: 30 });
+  hook.w.setCommand(hook.p, { fire: true, aim: { x: hook.q.x, y: hook.q.y } });
+  hook.run(3);
+  const h = hook.p.tel.weapons.find((g) => g.type === 'harpoon');
+  assert.ok(h.shots >= 1 && h.firingTime < 0.1, `${h.shots} shot, ${h.firingTime.toFixed(2)} s`);
+});
