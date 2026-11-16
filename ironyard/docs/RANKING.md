@@ -15,15 +15,15 @@ The website is a build-time snapshot. Adding a source file or running a custom t
 
 ## Season and fairness
 
-The standard budget is 1200 credits per vehicle; engine 0.5.4 uses eight maps.
+The standard budget is 1200 credits per vehicle; engine 0.6.0 uses fourteen maps.
 
-- **1v1:** every unordered pair plays all eight maps with seed 1, from both spawn sides. For 20 bots: `20 × 19 / 2 × 8 × 2 = 3040` matches; each bot plays 304.
-- **Teams:** 40 deterministic rounds. A hash of the round and bot id determines participation; entrants who cannot fill an even number of full teams sit out. Bots from the same author are distributed across teams where possible, then opponents are scrambled.
+- **1v1:** every unordered pair plays all fourteen maps with seed 1, from both spawn sides. For 20 bots: `20 × 19 / 2 × 14 × 2 = 5320` matches; each bot plays 532.
+- **Teams:** 42 deterministic rounds — at least 40, and a whole number of times round the maps (three here), so every map is played equally often. A hash of the round and bot id determines participation; entrants who cannot fill an even number of full teams sit out. Bots from the same author are distributed across teams where possible, then opponents are scrambled.
 - **Slots:** for each pairing, cyclically rotate both teams through all positions and play each rotation from both spawn sides, holding map and seed fixed. Every selected bot gets exactly equal exposure to each slot. Relative lineup permutations are not exhaustive.
-- **2v2:** 20 bots form ten teams per round (none sit out): `40 × 5 pairings × 2 slots × 2 sides = 800` matches.
-- **3v3:** 20 bots form six teams per round (two sit out): `40 × 3 pairings × 3 slots × 2 sides = 720` matches.
+- **2v2:** 20 bots form ten teams per round (none sit out): `42 × 5 pairings × 2 slots × 2 sides = 840` matches.
+- **3v3:** 20 bots form six teams per round (two sit out): `42 × 3 pairings × 3 slots × 2 sides = 756` matches.
 
-Total: **4560 matches**. Participation, opponents and map exposure are not perfectly equal in team modes. The author grouping and additive rating estimate do not eliminate every source of variance. More independent seeds, rounds and balanced map sampling would improve confidence; a narrow score gap is not proof of superiority.
+Total: **6916 matches**. Participation and opponents are not perfectly equal in team modes. The author grouping and additive rating estimate do not eliminate every source of variance. More independent seeds, rounds and balanced map sampling would improve confidence; a narrow score gap is not proof of superiority.
 
 ## Rating formula
 
@@ -120,9 +120,9 @@ While the seasons above were being played on `main`, a branch took the 19-bot fi
 
 Ranks are 1v1 / 2v2 / 3v3. On 0.5.2, places 2 to 4 in 1v1 were one win apart over 288 matches (`astra` and `carbon` 240, `grindstone` 239): `grindstone` had first been reworked on 0.5.0, where that took it from 4th to 2nd in 1v1, and gave ten wins back when the steering and route-following fixes of 0.5.2 changed what it had been tuned against. The shield rule of 0.5.3, with no entry changed, moved little (`carbon` lost two 1v1 wins). After its second rework `grindstone` won 263 of 288 in 1v1.
 
-## Current 20-bot season (engine 0.5.4)
+## 20-bot season on engine 0.5.4
 
-Two lines of work ran side by side under overlapping version numbers. `main` went from 0.5.0 to the 0.5.1 described above (timing is telemetry, tournaments score failures properly, the ladder freezes its sources). A branch went from 0.5.0 through its own 0.5.1, 0.5.2 and 0.5.3 — fixes from two bug hunts in the game itself, one rule change, and a `grindstone` its author revised twice. Engine **0.5.4** is the two merged, and the table below is the whole 4560-match season replayed on it, with no controller errors.
+Two lines of work ran side by side under overlapping version numbers. `main` went from 0.5.0 to the 0.5.1 described above (timing is telemetry, tournaments score failures properly, the ladder freezes its sources). A branch went from 0.5.0 through its own 0.5.1, 0.5.2 and 0.5.3 — fixes from two bug hunts in the game itself, one rule change, and a `grindstone` its author revised twice. Engine **0.5.4** is the two merged, and the table below is the whole 4560-match season replayed on it (eight maps), with no controller errors.
 
 | Bot | Recorded model | 1v1 | 2v2 | 3v3 |
 |---|---|---:|---:|---:|

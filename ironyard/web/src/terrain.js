@@ -224,6 +224,24 @@ const BUILD = {
     }
     return finish(N, N, C, R, H, null, 5);
   },
+  // a wall of toy bricks, 4 m x 4 m: courses 0.4 m high, bricks 0.8 m long, laid half a brick over the one below
+  brick(pr = 160, pg = 165, pb = 169) {
+    const N = 512, { C, R, H } = fields(N), course = N / 10, len = N / 5, gap = 2.2;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const i = y * N + x, row = Math.floor(y / course), bx = (x + (row & 1) * len / 2) % N, col = Math.floor(bx / len);
+      const dy = Math.min(y - row * course, (row + 1) * course - y), dx = Math.min(bx - col * len, (col + 1) * len - bx);
+      const edge = Math.min(dx, dy), seam = sm(gap, 0, edge), bevel = sm(gap * 3, gap, edge);
+      const tone = 0.96 + 0.08 * hash2(row, col, 7), l = tone * (1 - 0.5 * seam) * (1 - 0.08 * bevel);
+      put(C, i, pr * l, pg * l, pb * l); H[i] = 1 - seam; R[i] = 0.4;
+    }
+    return finish(N, N, C, R, H, null, 2.5);
+  },
+  // one flat colour: the top of a brick, under its studs
+  plain(pr = 160, pg = 165, pb = 169) {
+    const N = 8, { C, R, H } = fields(N);
+    for (let i = 0; i < N * N; i++) { put(C, i, pr, pg, pb); H[i] = 0.5; R[i] = 0.4; }
+    return finish(N, N, C, R, H, null, 1);
+  },
 };
 const CACHE = {};
 const detail = (kind, ...args) => (CACHE[kind + ':' + args.join(',')] ||= BUILD[kind](...args));
@@ -251,9 +269,34 @@ export const THEMES = {
     rut: 'rgba(52,40,26,0.45)', patch: ['rgba(40,34,22,0.2)', 'rgba(130,140,70,0.10)'],
     sky: [0x76909a, 0xc6d2c8, 0x55603f], sun: [0xfff2d2, 1.3, 0.9, 0.7], hemi: [0xcfe0d6, 0x3f4a30, 0.4], fog: [90, 460], tint: [0.9, 0.9, 0.9], apron: [0.82, 0.84, 0.8], exposure: 0.95 },
 };
-// the newer arenas borrow the look of an older one
+// the newer arenas borrow the sky and light of an older one
 const THEME_OF = { cage: 'depot', saltflat: 'canyon', causeway: 'proving', labyrinth: 'proving', fogbank: 'bog', ringroad: 'foundry' };
-export const themeOf = (map) => THEMES[map.id] || THEMES[THEME_OF[map.id]] || THEMES.proving;
+// Every arena is built of toy bricks on a studded baseplate. Per map: the baseplate, the walls, the low barriers,
+// and the plates that stand for mud. Plain plastic colours; the theme keeps its sky, sun and haze.
+const BRICKS = {
+  proving:   { plate: 0xa0a5a9, wall: 0x6c6e68, low: 0xf2cd37, mud: 0x6b4226 },
+  sumo:      { plate: 0x6074a1, wall: 0x0a3463, low: 0xf2cd37, mud: 0x6b4226 },
+  canyon:    { plate: 0xe4cd9e, wall: 0xaa7d55, low: 0x958a73, mud: 0x7a4a2a },
+  frostbite: { plate: 0xf2f3f2, wall: 0x6074a1, low: 0x36aebf, mud: 0x6b4226 },
+  foundry:   { plate: 0x55595e, wall: 0x1b2a34, low: 0xfe8a18, mud: 0x3a2a20 },
+  skybridge: { plate: 0xa0a5a9, wall: 0x36aebf, low: 0xf2cd37, mud: 0x6b4226 },
+  bog:       { plate: 0x4b9f4a, wall: 0x958a73, low: 0x237841, mud: 0x6b4226 },
+  depot:     { plate: 0x958a73, wall: 0xc91a09, low: 0xf2cd37, mud: 0x6b4226 },
+  cage:      { plate: 0x6c6e68, wall: 0xf2cd37, low: 0x1b2a34, mud: 0x6b4226 },
+  saltflat:  { plate: 0xece6d4, wall: 0xaa7d55, low: 0xc91a09, mud: 0x8a6a48 },
+  causeway:  { plate: 0xa0a5a9, wall: 0x0055bf, low: 0xf2cd37, mud: 0x6b4226 },
+  labyrinth: { plate: 0xe4cd9e, wall: 0x237841, low: 0xf2cd37, mud: 0x6b4226 },
+  fogbank:   { plate: 0x3f8f45, wall: 0x6c6e68, low: 0x958a73, mud: 0x6b4226 },
+  ringroad:  { plate: 0x55595e, wall: 0xc91a09, low: 0xf2f3f2, mud: 0x3a2a20 },
+};
+const rgb = (h, k = 1) => [((h >> 16) & 255) * k, ((h >> 8) & 255) * k, (h & 255) * k];
+/** Size of the kit the arenas are built from: a stud every 0.4 m (the cars' own), a course of bricks 0.4 m high. */
+export const STUD = 0.4, COURSE = 0.4;
+export const themeOf = (map) => {
+  const base = THEMES[map.id] || THEMES[THEME_OF[map.id]] || THEMES.proving, b = BRICKS[map.id] || BRICKS.proving;
+  return { ...base, bricks: b, rock: false, wallH: 6 * COURSE, wallMetal: 0, marks: 'yard', props: false,
+    wall: ['brick', ...rgb(b.wall)], wallTop: ['plain', ...rgb(b.wall)], barrier: ['brick', ...rgb(b.low)], slab: ['brick', ...rgb(b.plate, 0.72)] };
+};
 
 // ── per-map control map: R mud, G ice, B lava light, A contact shadow ────
 function blur(a, w, h, r, passes) {
@@ -294,7 +337,10 @@ function paintDecals(IY, map, th) {
   const label = (text, color, size = 90) => { g.save(); g.scale(0.01, -0.01); g.font = `900 ${size}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = color; g.fillText(text, 0, 0); g.restore(); };
   g.lineCap = 'round'; g.lineJoin = 'round';
 
-  if (built) {
+  if (th.bricks) {
+    // a baseplate is clean plastic: the studs and the plate seams are drawn by the ground shader, and only the
+    // markings below (hazard edges, speed strips, pads, item and spawn marks) are printed on it
+  } else if (built) {
     // slabs: a patchwork of pours with expansion joints (deck plates on steel)
     const step = th.marks === 'deck' ? 2 : 4;
     for (let y = 0; y < H; y += step) for (let x = 0; x < W; x += step) { const r = R(); if (r < 0.3) { g.fillStyle = `rgba(0,0,0,${rr(0.03, 0.09)})`; g.fillRect(x, y, step, step); } else if (r > 0.88) { g.fillStyle = `rgba(255,255,255,${rr(0.015, 0.035)})`; g.fillRect(x, y, step, step); } }
@@ -413,7 +459,7 @@ const G_HEAD = `
 uniform sampler2D tCtl; uniform sampler2D tDecal; uniform sampler2D tBaseA; uniform sampler2D tBaseN;
 uniform sampler2D tMudA; uniform sampler2D tMudN; uniform sampler2D tIceN; uniform sampler2D tNoise;
 uniform vec2 uMapSize; uniform vec3 uScale; uniform float uTime; uniform float uBaseMetal;
-uniform vec3 uLavaCol; uniform vec3 uIceDeep; uniform vec3 uIceFrost; uniform vec3 uTint; uniform vec3 uApron;
+uniform vec3 uLavaCol; uniform vec3 uIceDeep; uniform vec3 uIceFrost; uniform vec3 uTint; uniform vec3 uApron; uniform vec3 uPlate; uniform vec3 uPlateMud;
 varying vec3 vGWorld;
 vec3 gLin(vec3 c) { return pow(c, vec3(2.2)); }
 `;
@@ -451,9 +497,29 @@ vec3 iceC = mix(uIceDeep, uIceFrost, smoothstep(0.35, 0.75, nzA.b * 0.5 + nzB.g 
 iceC = mix(iceC, vec3(0.86, 0.93, 0.97), iN.a * 0.75);
 alb = mix(alb, iceC, ice); rgh = mix(rgh, mix(0.1, 0.38, iN.a), ice); nxy = mix(nxy, (iN.xy * 2.0 - 1.0) * 0.6, ice);
 metal *= (1.0 - mud) * (1.0 - ice);
-// paint, joints, stains and tracks, worn through where the surface stands proud
+// built of bricks: a baseplate of flat plastic with a stud every 0.4 m, laid as plates one map tile across with a hairline
+// between them. Mud is a patch of brown plates; ice is smooth clear tile with no studs on it, which is why it is slippery
+vec2 sc = fract(gp / 0.4) - 0.5;
+float sr = length(sc);
+vec2 sdir = sc / max(sr, 0.0001);
+vec2 tl = fract(gp / 2.0);
+float seam = 1.0 - smoothstep(0.0, 0.016, min(min(tl.x, 1.0 - tl.x), min(tl.y, 1.0 - tl.y)));
+vec2 tid = floor(gp / 2.0);
+float tone = 0.95 + 0.07 * fract(sin(dot(tid, vec2(12.9898, 78.233))) * 43758.5453);
+vec3 plastic = mix(uPlate * 0.8, uPlate, gin) * tone;
+plastic = mix(plastic, uPlateMud * tone, mud);
+plastic = mix(plastic, iceC, ice);
+// far away a stud is smaller than a pixel: let the pattern fade into the plate's own colour instead of shimmering
+float studded = (1.0 - ice) * (1.0 - smoothstep(0.22, 0.55, max(fwidth(gp.x), fwidth(gp.y)) / 0.4));
+float sTop = (1.0 - smoothstep(0.26, 0.31, sr)) * studded;
+float sRing = smoothstep(0.19, 0.29, sr) * (1.0 - smoothstep(0.29, 0.37, sr)) * studded;
+alb = plastic * (1.0 + 0.06 * sTop + 0.34 * sRing * dot(sdir, vec2(-0.6, 0.8))) * (1.0 - 0.3 * seam * studded);
+rgh = mix(mix(0.42, 0.55, mud), 0.12, ice);
+nxy = mix(sdir * sRing * 0.7, nxy * 0.5, ice);
+metal = 0.0;
+// printed markings
 vec4 dc = texture2D(tDecal, guv) * gin;
-float wear = mix(1.0, smoothstep(0.30, 0.55, bN.a), 0.55);
+float wear = 1.0;
 float da = dc.a * wear * (1.0 - 0.75 * ice) * (1.0 - 0.85 * mud);
 alb = mix(alb, gLin(dc.rgb / max(dc.a, 0.004)), da);
 metal *= (1.0 - da);
@@ -471,7 +537,7 @@ function groundMaterial(IY, map, th, env, U) {
     tCtl: { value: controlMap(IY, map) }, tDecal: { value: paintDecals(IY, map, th) }, tBaseA: { value: base.a }, tBaseN: { value: base.n },
     tMudA: { value: mud.a }, tMudN: { value: mud.n }, tIceN: { value: ice.n }, tNoise: { value: detail('noise') },
     uMapSize: { value: new THREE.Vector2(map.width, map.height) }, uScale: { value: new THREE.Vector3(1 / 4, 1 / 3, 1 / 5) }, uTime: { value: 0 }, uBaseMetal: { value: th.metal || 0 },
-    uLavaCol: { value: new THREE.Color(1, 0.3, 0.05).multiplyScalar(th.lava || 2) }, uIceDeep: { value: lin(0x4f86ac) }, uIceFrost: { value: lin(0xb4d2e4) }, uTint: { value: new THREE.Vector3(...th.tint) }, uApron: { value: new THREE.Vector3(...(th.apron || th.tint)) },
+    uPlate: { value: lin(th.bricks.plate) }, uPlateMud: { value: lin(th.bricks.mud) }, uLavaCol: { value: new THREE.Color(1, 0.3, 0.05).multiplyScalar(th.lava || 2) }, uIceDeep: { value: lin(0x4f86ac) }, uIceFrost: { value: lin(0xb4d2e4) }, uTint: { value: new THREE.Vector3(...th.tint) }, uApron: { value: new THREE.Vector3(...(th.apron || th.tint)) },
   });
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, metalness: 0, envMap: env, envMapIntensity: 0.34 });
   m.onBeforeCompile = (sh) => {
@@ -586,7 +652,7 @@ export function buildArena(IY, map, env) {
         else { cliff.face(A, B, -3, 0, ua, ub, 0.3, 0.85); cliff.face(A, B, -D, -3, ua, ub, 0.0, 0.3); } // fades to black with depth
       }
     }
-    if (!cliff.empty) add(cliff.build(), std(th.void ? detail(...th.slab) : th.rock ? detail(...th.wall) : detail('wallConcrete')), { receive: true });
+    if (!cliff.empty) add(cliff.build(), std(detail(...th.slab), { roughness: 0.5 }), { receive: true });
     if (!floor.empty) add(floor.build(), new THREE.MeshBasicMaterial({ color: 0x000000, fog: false }), { receive: false });
     if (th.void) { // legs under the deck, fading into the haze below
       const spots = [];
@@ -633,14 +699,14 @@ export function buildArena(IY, map, env) {
       }
     }
     if (!side.empty) {
-      add(side.build(), std(detail(...th.wall), { metalness: th.wallMetal || 0, roughness: th.wallMetal ? 0.6 : 0.9 }), { cast: true });
-      add(top.build(), std(detail(...th.wallTop), { color: th.wallMetal ? lin(0x9aa0a6) : 0xffffff }), { cast: true });
+      add(side.build(), std(detail(...th.wall), { roughness: 0.45 }), { cast: true });
+      add(top.build(), std(detail(...th.wallTop), { roughness: 0.45 }), { cast: true });
     }
   }
 
   // barriers: low blocks with battered sides (shots pass over them)
   {
-    const side = new Mesher(), top = new Mesher(), HB = 0.8, IB = 0.05, IT = 0.3;
+    const side = new Mesher(), top = new Mesher(), HB = 2 * COURSE, IB = 0.04, IT = 0.04;   // two courses of brick
     for (let ty = 0; ty < map.h; ty++) for (let tx = 0; tx < map.w; tx++) {
       if (code(tx, ty) !== C.barrier) continue;
       const ex = SIDES.map(([dx, dy]) => code(tx + dx, ty + dy) !== C.barrier), x0 = tx * T, x1 = x0 + T, y0 = ty * T, y1 = y0 + T;
@@ -650,14 +716,33 @@ export function buildArena(IY, map, env) {
       [[3, 0, 0], [1, 2, 1], [0, 1, 2], [2, 3, 3]].forEach(([i, j, s]) => { // west, east, south, north
         if (!ex[s]) return;
         const ua = (s < 2 ? b[i][1] : b[i][0]) / 2, ub = (s < 2 ? b[j][1] : b[j][0]) / 2;
-        side.quad(P3(b[i], 0), P3(b[j], 0), P3(t[j], HB), P3(t[i], HB), [ua, 0], [ub, 0], [ub, HB], [ua, HB], 0.6, 0.6, 1, 1);
+        side.quad(P3(b[i], 0), P3(b[j], 0), P3(t[j], HB), P3(t[i], HB), [ua / 2, 0], [ub / 2, 0], [ub / 2, HB / 4], [ua / 2, HB / 4], 0.6, 0.6, 1, 1);
       });
     }
     if (!side.empty) {
       const bag = th.barrier[0] === 'sandbag';
-      add(side.build(), std(detail(...th.barrier)), { cast: true });
-      add(top.build(), std(bag ? detail(...th.barrier) : detail('concrete')), { cast: true });
+      add(side.build(), std(detail(...th.barrier), { roughness: 0.45 }), { cast: true });
+      add(top.build(), std(bag ? detail(...th.barrier) : detail('plain', ...rgb(th.bricks.low)), { roughness: 0.45 }), { cast: true });
     }
+  }
+
+  // studs: every brick has them — one every 0.4 m on top of the walls and of the barriers
+  {
+    const studs = (kind, h, hex) => {
+      const at = [];
+      for (let ty = 0; ty < map.h; ty++) for (let tx = 0; tx < map.w; tx++) if (code(tx, ty) === kind) at.push([tx, ty]);
+      if (!at.length) return;
+      const per = Math.round(T / STUD), g = new THREE.CylinderGeometry(STUD * 0.3, STUD * 0.3, STUD * 0.21, 10);
+      const m = new THREE.MeshStandardMaterial({ color: lin(hex), roughness: 0.4, envMap: env, envMapIntensity: 0.3 });
+      const im = new THREE.InstancedMesh(g, m, at.length * per * per), d = new THREE.Object3D();
+      let k = 0;
+      for (const [tx, ty] of at) for (let j = 0; j < per; j++) for (let i = 0; i < per; i++) {
+        d.position.set(tx * T + (i + 0.5) * STUD, h + STUD * 0.105, -(ty * T + (j + 0.5) * STUD)); d.updateMatrix(); im.setMatrixAt(k++, d.matrix);
+      }
+      im.receiveShadow = true; im.frustumCulled = false; group.add(im); owned.push(g, m);
+    };
+    studs(C.wall, th.wallH, th.bricks.wall);
+    studs(C.barrier, 2 * COURSE, th.bricks.low);
   }
 
   // repair pads: four bollards with a green lamp each
