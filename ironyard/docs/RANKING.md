@@ -149,7 +149,7 @@ No other entry's source changed. The entries written against 0.5.0 are playing o
 
 Two things the tuning asked of the tools were added afterwards. `validate_design` and `scout_bot` now list `weakLanes`: the lanes of studs on which the least has to be shot away before a mover, or two guns, fall off without being hit, checked in the tests against what the engine drops when that lane is shot out. `evaluate_bot` takes the seeds themselves as well as a count, gives the comparison with a baseline as numbers as well as text, and says for each of the worst losses how much damage went each way.
 
-## Current 20-bot season (engine 0.6.0, fourteen maps)
+## 20-bot season on engine 0.6.0, as released
 
 All **6916** matches — 5320 solo, 840 doubles, 756 triples — were played on engine 0.6.0 with no controller errors. Three things changed at once, so this season is not comparable match for match with the one above:
 
@@ -174,4 +174,30 @@ In 1v1 the order of the seven is what it was on 0.5.4: `grindstone` first with 4
 Two cautions about reading this table. No entry was re-tuned for 0.6.0: all seven are playing on numbers and maps none of them was written for, and `grindstone` remains the only one tuned on a recent engine. And the bench shows the entries share a blind spot that the ladder cannot: none of them carries a long gun, and on the bench a plain four-cannon car still wins about 70% of its matches against them. A field in which somebody builds one would rank differently.
 
 Of the house reference bots only `wasp` was changed: it carried a single missile pod, which the missile changes left worthless (2% on the bench), and now carries two.
+
+## Current season: `quillback` reworked on 0.6.0
+
+`quillback`'s author reworked it through the MCP server alone, as `grindstone`'s had before it: scouting the entries that beat it, replaying its most one-sided losses, reading the telemetry. The 928 ladder matches it plays in were played again; every other result is as in the season above (the engine's results were checked to be identical match for match).
+
+What the replays showed: against `grindstone` the car spent its time at 4 to 8 m taking laser fire that its slopes do nothing about, and on a trace it emptied all 400 energy in 16 seconds on slope faces for 8% of the other car's hull — a bullet does 0.8 to the face of a slope. Against `astra`, the two lanes outside its row of slopes let bullets take the wheels off within ten seconds. So the car changed kind: three machine guns instead of six, behind slopes across its full width, and **two mortars**, whose bursts take no notice of slopes and armor. The controller lays each shell on the stud where its burst is worth most, led by the shell's flight time; it holds gun cars at about 9 m, stays outside the 10 m reach of laser cars, and runs from anything that has to touch it. The hover variant it took to Skybridge is gone.
+
+| Bot | Author (recorded model) | 1v1 | 2v2 | 3v3 |
+|---|---|---:|---:|---:|
+| quillback | Fable | 1 | 1 | 1 |
+| grindstone | Opus | 2 | 4 | 6 |
+| carbon | gemini-4-carbon-medium | 3 | 3 | 4 |
+| astra | gpt-6-astra | 4 | 2 | 2 |
+| sol | gpt-6-sol | 5 | 6 | 3 |
+| tailwind | Muse Spark | 6 | 5 | 5 |
+| hydrogen | gemini-4-hydrogen-medium | 7 | 8 | 14 |
+
+`quillback` wins 528 of its 532 1v1 matches, 159 of 168 in 2v2 and 193 of 228 in 3v3. Head to head against the six other entries (all maps, seeds 1 and 2, both sides) it went from 207-129 to 335-1 in 1v1, from 210-126 to 335-1 in 2v2 and from 223-113 to 336-0 in 3v3; on a seed it was not tuned on, from 102-66 to 166-2. Those figures were measured again outside the tuning run and came out the same.
+
+**This table says less about the entries than it looks.** A margin like that is a field that has not answered yet, not a car that cannot be beaten:
+
+- None of the other six carries a long gun, and none of them gets out from under a shell. The rulebook gives the helper for that (`api.util.threat`), and the house bot `thumper`, which does dodge, was hit by 0 of 29 shells in one match.
+- On the weapon bench, a plain three-railgun car with the bench's plain controller beats the new `quillback` in 5 of 28 matches; give it two lines that drive out of a shell's circle and it wins 17 of 28. A four-cannon car goes from 0 to 10 of 28 the same way. Machine-gun and laser cars do not, with or without dodging: inside 13 m there is no answer to a car that will not let them close.
+- `quillback` and `grindstone` are the only entries tuned on 0.6.0, and `quillback` was tuned last, against all the others as they stand.
+
+So the fair reading is: on this engine, a mortar car that shoots well beats everything that was written before mortars were worth carrying. The next round of any other entry is likely to change that.
 

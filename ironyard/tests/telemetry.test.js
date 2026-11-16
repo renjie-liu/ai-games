@@ -210,8 +210,8 @@ test('fire discipline: how long an enemy was in reach, and what the guns were do
   lobbed.run(6);
   const lt = lobbed.w.telemetry(lobbed.p);
   assert.equal(lt.fire.timeNoLineOfSight, 0); close(lt.fire.timeTargetInReach, 6);
-  assert.deepEqual([lt.weapons[0].shots, lt.weapons[0].hits], [2, 2], 'a shell whose blast hurt somebody is a hit, though stats.hits never counted mortars');
-  assert.equal(lobbed.p.stats.hits, 0);
+  assert.deepEqual([lt.weapons[0].shots, lt.weapons[0].hits], [2, 2], 'a shell whose blast hurt somebody is a hit');
+  assert.equal(lobbed.p.stats.hits, 2, 'and the vehicle\'s own count agrees with its weapons\' (it used to leave mortars out)');
   close(lt.weapons[0].damage, lobbed.p.stats.damageDealt); assert.ok(lt.weapons[0].damage > 40);
 });
 

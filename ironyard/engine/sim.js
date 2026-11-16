@@ -414,7 +414,8 @@ export class World {
         if (p.alive) this.warm(v, p, heat * f, src ? src.id : -1);
       }
     }
-    if (struck && opts.count && via.tw) via.tw.hits++;   // a mortar shell that hurt somebody was a hit
+    // a mortar shell that hurt somebody was a hit: for the gun that fired it and for the vehicle's own count
+    if (struck && opts.count) { if (via.tw) via.tw.hits++; if (src && src.stats) src.stats.hits++; }
   }
 
   /**

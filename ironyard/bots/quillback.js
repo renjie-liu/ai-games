@@ -1,92 +1,82 @@
-// QUILLBACK — a fast wheeled gun car that fights facing AWAY from its target.
-// Every turret points over the tail, behind a glacis of slopes. Driving forward is
-// therefore running away at full power with the whole battery bearing on whoever
-// follows: saws, pistons, flamers and rams never get to touch it, and they are the
-// first things it shoots off. Against gun cars it backs in to short range instead.
-//
-// The hull: the glacis is a separate row hung on two armor bricks, one stud clear of
-// the turrets, so a shell bursting on it reaches nothing that burns. The cockpit sits
-// in the floor between an armor keystone and two long plates, so losing the batteries
-// or the reactor does not cut the car in half.
+// QUILLBACK — a fast wheeled car that fights facing AWAY from its target, with two mortars on its back.
+// The three machine guns point over the tail behind a glacis of slopes that runs the full width of the
+// car, wheels included; the mortars sit ahead of them and lob over the lot. Driving forward is therefore
+// running away at full power with everything bearing on whoever follows.
+// The mortar is the main weapon: its burst takes no notice of the slopes and armour every other gun
+// car hides behind, and a shell costs 14 energy where the same damage in bullets on a slope face costs
+// hundreds. So the car keeps the fight in the band where shells land (beyond 6 m) and bullets still
+// reach: it backs in to 9.5 m on gun cars (7.6 m on maps with holes, where ground given is a rim
+// reached), stays outside the beams of laser cars (they reach 10 m, the shells 24 m), and runs from
+// anything that has to touch it, shelling it as it follows.
+// (Until engine 0.6.0 this was a six-machine-gun car with a hover skiff for the Skybridge. Slopes turn
+// four fifths of a bullet; the six guns emptied the batteries on other cars' glacis and lost to lasers.)
 const meta = {
   name: 'Quillback',
   author: 'Fable',
   model: 'Fable',
-  notes: 'Rear-facing battery of 6 MGs behind slopes on monster wheels: flees forward from brawlers while stripping their saws, pistons and wheels; backs in on gun cars and drills the core.',
+  notes: 'Rear-facing: 3 MGs behind a full-width glacis and 2 mortars that lob over it, laid on the stud where a burst is worth most. Holds 9.5 m on gun cars, kites laser cars from outside their beams, flees brawlers while shelling them; says and follows { focus }.',
 };
 
 const E = '.  .  .  .  .  .  .  .  .';
+// Deck, front to rear: the two mortars over the reactors, three turrets, then seven slopes across the full width.
+// Chassis: reactors, the cockpit between two long plates, an armour keystone under the middle turret, and the rear
+// wheels and floor that carry the glacis. Every lane a shot from astern can take starts with a slope: the wheels and
+// the mortars are behind it too, not only the guns.
 const HULL = {
-  deck: [
-    E, E, E,
-    '.  .  .  b  w  b  .  .  .',
-    E,
-    '.  mv mv mv /v mv mv mv .',
-    E,
-    '.  .  /v /v /v /v /v .  .',
-    E, E, E,
-  ],
-  chassis: [
-    E, E, E,
-    '.  :  .  e  r  e  .  :  .',
+  deck: [ E, E, E,
+    '.  .  :  :  .  :  :  .  .',
+    '.  .  N  :  .  N  :  .  .',
+    '.  .  .  mv mv mv .  .  .',
+    '.  /v /v /v /v /v /v /v .',
+    E, E, E, E ],
+  chassis: [ E, E, E,
+    '.  :  .  r  .  r  .  :  .',
     '.  O  q> :  @  q> :  O  .',
     '.  :  q> :  a  q> :  :  .',
-    '.  O  a  .  .  .  a  O  .',
-    '.  .  q> :  p  q> :  .  .',
-    E, E, E,
-  ],
+    '.  O  q> :  p  q> :  O  .',
+    E, E, E, E ],
 };
 
-// Over the Skybridge the same battery rides on six hover pads tucked under the turrets and the
-// glacis: holes mean nothing to it, and nothing on wheels or tracks can follow it out over one.
-const SKIFF = {
-  deck: [
-    E, E, E,
-    '.  .  .  b  b  b  .  .  .',
-    E,
-    '.  mv mv mv /v mv mv b  .',
-    E,
-    '.  .  /v /v /v /v /v .  .',
-    E, E, E,
-  ],
-  chassis: [
-    E, E, E,
-    '.  .  .  r  r  r  .  .  .',
-    '.  .  q> :  @  q> :  .  .',
-    '.  h  h  p  p  p  h  h  .',
-    '.  .  .  a  .  a  .  .  .',
-    '.  .  h  q> :  p  h  .  .',
-    E, E, E,
-  ],
-};
-
-const design = (ctx, api) => {
-  const skiff = ctx && ctx.map && ctx.map.id === 'skybridge';
-  return api.util.blueprint(skiff ? 'Quillback Skiff' : 'Quillback', skiff ? SKIFF : HULL, { paint: { accent: 'azure' } });
-};
+// The same car on every map and in every team slot. (The hover skiff the old Quillback took to the Skybridge is gone:
+// shells cross the void, and on wheels this car won there where the skiff lost.)
+const design = (ctx, api) => api.util.blueprint('Quillback', HULL, { paint: { accent: 'azure' } });
 
 // ── controller state ────────────────────────────────────────────────────
 const PI = Math.PI;
 const DIRA = { N: 0, W: PI / 2, S: PI, E: -PI / 2 };
 const VAL = {
   saw: 220, piston: 200, flamer: 130, keg: 320, spike: 90, harpoon: 90, hover: 70, wheel: 45, bigwheel: 60,
-  mg: 50, cannon: 75, railgun: 80, laser: 60, missile: 120, mortar: 110, repairer: 70, thruster: 25,
+  mg: 50, cannon: 75, railgun: 80, laser: 60, missile: 120, mortar: 110, repairer: 70, thruster: 25, track: 60,
+};
+// against a car of beams: how much more its legs are worth, and the range to hold; the range to hold on a gun car
+// (room for the shells, and for the ones that rush in under them), and the shorter one on maps with holes, where
+// every metre given is a metre nearer a rim
+const BM = 4, BH = 13.5, GH = 9.5, GP = 7.6;
+// what a shell is worth on each kind of piece (times the share of the piece it takes away)
+const SV = {
+  core: 6, mg: 1, laser: 1.6, cannon: 1.3, railgun: 1.4, missile: 1.5, mortar: 1.6, flamer: 1.3, harpoon: 1, saw: 1.2, piston: 1, spike: 0.3, plow: 0.3, keg: 2.2,
+  wheel: 0.5, bigwheel: 0.6, track: 0.6, hover: 0.9, thruster: 0.2, gyro: 0.1, blower: 0.2,
+  reactor: 0.7, battery: 0.2, shieldgen: 0.8, repairer: 0.8, radar: 0.1,
+  plate: 0.12, plate2: 0.15, plate4: 0.2, brick: 0.1, brick2: 0.12, armor: 0.08, armor2: 0.1, slope: 0.25,
 };
 const SPREAD = [-0.052, -0.026, 0, 0.026, 0.052];
 let route = null, M = null, foeId = -1, markI = -1, markT = -99;
 let runH = null, runFree = 0, runT = -99, anchor = null, fleeUntil = -1;
 let unstickUntil = -1, unstickThr = 0, chkT = 0, chkX = 0, chkY = 0, wantMove = 0, jams = 0, planUntil = -1;
-let waitT = -1, blindT = 0, fly = false, perch = null, perchT = -9, flankA = null, flankT = -9, flankGo = 0, flankOff = -9;   // floating with lift to spare; the spot over the void we are holding
+let waitT = -1, blindT = 0, flankA = null, flankT = -9, flankGo = 0, flankOff = -9;
 
 function clamp(x, lo, hi) { return x < lo ? lo : x > hi ? hi : x; }
 function angDiff(a, b) { let d = (a - b) % (2 * PI); if (d > PI) d -= 2 * PI; else if (d < -PI) d += 2 * PI; return d; }
 
 function tick(state, api) {
-  try { return think(state, api); } catch (err) {
-    const cmd = { throttle: 0, steer: 0, fire: false };
+  let cmd;
+  try { cmd = think(state, api); } catch (err) {
+    cmd = { throttle: 0, steer: 0, fire: false };
     try { const e = state.enemies[0]; if (e) { cmd.aim = { x: e.x, y: e.y }; cmd.fire = true; } } catch (e2) { /* idle */ }
-    return cmd;
   }
+  // the common team convention: everybody names the enemy it is on
+  if (cmd && foeId >= 0 && state.allies && state.allies.length) cmd.say = { focus: foeId };
+  return cmd;
 }
 
 // what the map is made of, and a handful of places to run to
@@ -95,10 +85,7 @@ function mapFacts(api) {
   const pts = [];
   for (const s of api.map.itemSpawns) pts.push({ x: s.x, y: s.y });
   for (const t of api.map.spawns) for (const s of t) pts.push({ x: s.x, y: s.y });
-  // places out over the void, well clear of any floor (and still on the map, where shots count)
-  const W = api.map.width, H = api.map.height;
-  const perches = api.map.id === 'skybridge' ? [{ x: 5, y: H - 1.5 }, { x: W - 5, y: H - 1.5 }, { x: 5, y: 1.5 }, { x: W - 5, y: 1.5 }] : [];
-  return { lava: all.includes('L'), pit: all.includes('_'), ice: all.includes('i'), mud: all.includes('m'), crates: all.includes('x'), maze: api.map.id === 'skybridge', pts, perches };
+  return { lava: all.includes('L'), pit: all.includes('_'), ice: all.includes('i'), mud: all.includes('m'), crates: all.includes('x'), maze: api.map.id === 'skybridge', pts };
 }
 
 // ── reading the other car ───────────────────────────────────────────────
@@ -117,9 +104,11 @@ function gridOf(foe, api) {
     }
   }
   if (!core) return null;
+  const cols = [];
+  for (let k = 0; k < 99; k++) { const p = top[k] || bot[k]; if (p) cols.push({ bx: (k % 9) - 4, by: ((k / 9) | 0) - 5, p }); }
   const fx = Math.cos(foe.heading), fy = Math.sin(foe.heading);
   const cu = core.y * 0.4, cv = -core.x * 0.4;
-  return { top, bot, core, fx, fy, ox: core.wx - (fx * cu - fy * cv), oy: core.wy - (fy * cu + fx * cv), h: foe.heading, hitT: 0 };
+  return { top, bot, cols, core, fx, fy, ox: core.wx - (fx * cu - fy * cv), oy: core.wy - (fy * cu + fx * cv), h: foe.heading, hitT: 0 };
 }
 function cellAt(g, px, py) {
   const dx = px - g.ox, dy = py - g.oy;
@@ -164,6 +153,74 @@ function drill(g, sx, sy, api) {
   return total + bulletsFor(g, g.core, a, api);
 }
 
+// What a burst at (lx, ly) — in the target's own stud coordinates — is worth. A burst takes the top piece of the
+// seven nearest stud columns: 46 at its centre, falling to a third of that at 2 m.
+const near7 = [];
+function burstWorth(g, lx, ly, api) {
+  near7.length = 0;
+  for (const c of g.cols) {
+    const dd = Math.hypot((c.bx - lx) * 0.4, (c.by - ly) * 0.4);
+    if (dd > 2) continue;
+    let seen = false;
+    for (const q of near7) if (q.p === c.p) { if (dd < q.d) q.d = dd; seen = true; break; }
+    if (!seen) near7.push({ p: c.p, d: dd });
+  }
+  near7.sort((a, b) => a.d - b.d);
+  let v = 0;
+  for (let i = 0; i < near7.length && i < 7; i++) {
+    const p = near7[i].p, def = api.parts[p.type];
+    let dmg = 46 * (1 - 0.325 * near7[i].d) - (def.armor || 0);
+    const hp = p.hpFrac * def.hp;
+    v += (SV[p.type] || 0.1) * (dmg >= hp ? 1.25 : dmg / hp);
+  }
+  return v;
+}
+
+// Lay the mortars: for each, the stud of the target whose burst is worth most where the target will be when the
+// shell comes down. Inside the 6 m minimum the shell lands 6 m out along the bearing, so that is where it is judged.
+function shell(state, api, cmd, foe, g, mortars, byI) {
+  const self = state.self;
+  let fired = false;
+  for (const w of mortars) {
+    const mp = byI[w.i];
+    if (!mp) continue;
+    // flight time to where its centre will be
+    let t = 0.5, px = foe.x, py = foe.y;
+    for (let k = 0; k < 3; k++) {
+      px = foe.x + foe.vx * t; py = foe.y + foe.vy * t;
+      t = Math.max(6, Math.hypot(px - mp.wx, py - mp.wy)) / 15;
+    }
+    const rot = (foe.angVel || 0) * t, cr = Math.cos(rot), sr = Math.sin(rot);
+    const hp = g.h + rot, fxp = Math.cos(hp), fyp = Math.sin(hp);
+    let best = -1, bx = px, by = py;
+    for (const c of g.cols) {
+      // this stud now, then when the shell lands
+      const wx0 = g.ox + g.fx * c.by * 0.4 + g.fy * c.bx * 0.4, wy0 = g.oy + g.fy * c.by * 0.4 - g.fx * c.bx * 0.4;
+      const rx = wx0 - foe.x, ry = wy0 - foe.y;
+      const qx = foe.x + foe.vx * t + rx * cr - ry * sr, qy = foe.y + foe.vy * t + rx * sr + ry * cr;
+      const dq = Math.hypot(qx - mp.wx, qy - mp.wy);
+      if (dq > 23.8) continue;
+      let lx = c.bx, ly = c.by, ex = qx, ey = qy;
+      if (dq < 6.05) {
+        const k = 6.05 / (dq || 1);
+        ex = mp.wx + (qx - mp.wx) * k; ey = mp.wy + (qy - mp.wy) * k;
+        const ddx = ex - qx, ddy = ey - qy;
+        ly += (ddx * fxp + ddy * fyp) / 0.4; lx -= (-ddx * fyp + ddy * fxp) / 0.4;
+      }
+      const v = burstWorth(g, lx, ly, api);
+      if (v > best) { best = v; bx = ex; by = ey; }
+    }
+    cmd.aims = cmd.aims || {};
+    cmd.aims[w.i] = { x: bx, y: by };
+    if (best > 0.2 && w.ready && self.energy >= 14) {
+      if (!Array.isArray(cmd.fire)) cmd.fire = [];
+      cmd.fire.push(w.i);
+      fired = true;
+    }
+  }
+  return fired;
+}
+
 // how far a car can run from (x, y) along angle a before something is in the way
 function freeRun(nav, x, y, a, maxD, step) {
   const c = Math.cos(a), s = Math.sin(a);
@@ -172,45 +229,13 @@ function freeRun(nav, x, y, a, maxD, step) {
   for (; d <= maxD; d += step) {
     const px = x + c * d, py = y + s * d;
     const cl = nav.clearance(px, py);
-    if (cl.wall < 0.6 || (!fly && cl.pit < 1.0)) break;
+    if (cl.wall < 0.6 || cl.pit < 1.0) break;
     if (cl.wall < 1.5 && cl.wall < pw - 0.05) break;      // near a wall and closing on it
-    if (!fly && cl.pit < 1.8 && cl.pit < pp - 0.05) break;
+    if (cl.pit < 1.8 && cl.pit < pp - 0.05) break;
     if (M.lava && nav.tileAt(px, py) === 'lava') break;
     pw = cl.wall; pp = cl.pit;
   }
   return d - step;
-}
-
-// out over the void with no floor within `depth` metres, and still where shots count?
-function overVoid(api, x, y, depth) {
-  const nav = api.nav;
-  if (x < -1 || y < -1 || x > api.map.width + 1 || y > api.map.height + 1 || nav.tileAt(x, y) !== 'pit') return false;
-  for (let i = 0; i < 8; i++) {
-    const a = i * (PI / 4), b = a + 0.39;
-    if (nav.tileAt(x + Math.cos(a) * depth, y + Math.sin(a) * depth) !== 'pit') return false;
-    if (nav.tileAt(x + Math.cos(b) * depth * 0.55, y + Math.sin(b) * depth * 0.55) !== 'pit') return false;
-  }
-  return true;
-}
-
-// float to a spot and stay on it, nose along `face` once there
-function hover(state, cmd, spot, face) {
-  const self = state.self;
-  const dq = Math.hypot(spot.x - self.x, spot.y - self.y), aq = Math.atan2(spot.y - self.y, spot.x - self.x);
-  const c = Math.cos(self.heading), sn = Math.sin(self.heading), vf = self.vx * c + self.vy * sn;
-  if (dq > 2.2) {
-    // nose first while it is far, either end first when it is near
-    const fwd = Math.cos(aq - self.heading) >= -0.3 || dq > 8;
-    const err = angDiff(fwd ? aq : aq + PI, self.heading);
-    cmd.steer = clamp(err * 2.4 - self.angVel * 0.5, -1, 1);
-    const want = Math.min(6.5, dq * 0.9);
-    cmd.throttle = Math.abs(err) < 1.0 ? clamp((want - Math.abs(vf)) * 0.8, -0.3, 1) * (fwd ? 1 : -1) : 0;
-  } else {
-    const err = angDiff(face, self.heading);
-    cmd.steer = clamp(err * 2.4 - self.angVel * 0.5, -1, 1);
-    const along = (spot.x - self.x) * c + (spot.y - self.y) * sn;
-    cmd.throttle = clamp(along * 0.5 - vf * 0.6, -1, 1);
-  }
 }
 
 function think(state, api) {
@@ -218,16 +243,12 @@ function think(state, api) {
   if (!route) { route = nav.follower({ lavaCost: 60, mudCost: 2.2, iceCost: 3 }); M = mapFacts(api); }
   const cmd = { throttle: 0, steer: 0, brake: 0, fire: false };
 
-  // floating, and able to lose a pad or a reactor and still float?
-  let pads = 0;
-  for (const p of self.parts) if (p.alive && p.type === 'hover') pads++;
-  const canFly = self.hovering && (pads - 2) * 75 >= self.mass - 10 && (self.energyRegen >= pads * 1.2 + 0.5 || self.energy > 80);
-  fly = false;
-
   // ── who ──
   let foe = null, bs = Infinity;
   for (const e of state.enemies) {
-    const s = U.dist(self, e) + e.hpFrac * 3 + (e.id === foeId ? -2.5 : 0) + (nav.los(self.x, self.y, e.x, e.y) ? 0 : 9);
+    let s = U.dist(self, e) + e.hpFrac * 3 + (e.id === foeId ? -2.5 : 0) + (nav.los(self.x, self.y, e.x, e.y) ? 0 : 9);
+    // one a teammate has named is worth a few metres of driving
+    for (const m of state.messages) if (m.data && m.data.focus === e.id) { s -= 3.5; break; }
     if (s < bs) { bs = s; foe = e; }
   }
   if (!foe || foe.id !== foeId) { markI = -1; }
@@ -235,8 +256,9 @@ function think(state, api) {
 
   // battery position (centre of the living turrets)
   let gx = 0, gy = 0, gn = 0;
-  const guns = [];
-  for (const p of self.parts) if (p.alive && p.type === 'mg') { gx += p.wx; gy += p.wy; gn++; guns.push(p); }
+  const guns = [], byI = {}, mortars = [];
+  for (const p of self.parts) { byI[p.i] = p; if (p.alive && p.type === 'mg') { gx += p.wx; gy += p.wy; gn++; guns.push(p); } }
+  for (const w of self.weapons) if (w.alive && w.type === 'mortar') mortars.push(w);
   if (gn) { gx /= gn; gy /= gn; } else { gx = self.x; gy = self.y; }
 
   const z = state.zone, zd = U.dist(self, z);
@@ -248,13 +270,6 @@ function think(state, api) {
     for (const l of state.lastSeen) if (l.alive) { const d = U.dist(self, l); if (d < best) { best = d; goal = l; } }
     if (!goal) goal = api.map.center;
     if (zoneOut) goal = z;
-    fly = canFly;
-    if (fly && M.perches.length && !zoneOut) {
-      // the skiff waits just off its own shore until it knows what is coming
-      if (!M.home) { const sg = self.y > api.map.height / 2 ? 1 : -1; M.home = { x: self.x, y: clamp(self.y + sg * 6.5, -0.5, api.map.height + 0.5) }; }
-      hover(state, cmd, M.home, U.angleTo(goal, self));
-      return guard(state, api, cmd);
-    }
     travel(state, api, cmd, goal, best < 40 && !zoneOut);
     // close to where it should appear: come in slowly, so that whatever it is we can still get away from it
     if (best < 36 && !zoneOut && self.speed > 3.2) cmd.throttle = 0;
@@ -262,7 +277,7 @@ function think(state, api) {
   }
 
   // ── what it is ──
-  const n = { saw: 0, piston: 0, flamer: 0, spike: 0, plow: 0, harpoon: 0, keg: 0, thruster: 0, mortar: 0, movers: 0, guns: 0, side: 0, hover: 0 };
+  const n = { saw: 0, piston: 0, flamer: 0, spike: 0, plow: 0, harpoon: 0, keg: 0, thruster: 0, mortar: 0, laser: 0, mg: 0, movers: 0, guns: 0, side: 0, hover: 0 };
   let reach = 0;
   for (const p of foe.parts) {
     if (!p.alive) continue;
@@ -275,8 +290,8 @@ function think(state, api) {
   const bomber = n.keg > 0;
   const runner = !brawler && reach >= 19;
   const pusher = !brawler && !bomber && n.guns === 0;          // nothing left but its weight
-  // flying, anything that has to touch us, shove us or roll a bomb at us is met from out over the void
-  fly = canFly && (brawler || bomber || pusher || (n.guns > 0 && n.side === n.guns) || !!foe.hovering);
+  // nothing on it reaches past ten metres, and what it has goes through slopes and armour: stay outside its beams
+  const beamer = !brawler && n.laser >= 2 && reach <= 10.5;
 
   const d = U.dist(self, foe), bearing = U.angleTo(self, foe);
   const los = nav.los(self.x, self.y, foe.x, foe.y);
@@ -306,7 +321,7 @@ function think(state, api) {
           let v = q === g.core ? 1000 : (VAL[q.type] || 3);
           if (q !== g.core) {
             const def = api.parts[q.type];
-            if (def.mover) { if (runner || pusher) v *= 1.8; if (n.movers <= 1) v *= 1.5; }
+            if (def.mover) { if (runner || pusher) v *= 1.8; if (beamer) v *= BM; if (n.movers <= 1) v *= 1.5; }
             else if (def.weapon && def.weapon !== 'melee' && (bomber || runner)) v *= 1.6;
           }
           v /= bulletsFor(g, q, aa, api);
@@ -340,6 +355,10 @@ function think(state, api) {
     break;
   }
   cmd.aim = { x: aim.x, y: aim.y };
+  // shells first: a mortar about to fire keeps its 14 energy, the bullets take what is left
+  let soon = 0;
+  for (const w of mortars) if (w.cooldown < 1.2) soon++;
+  if (mortars.length && self.energy < 14 * soon + 3 && d > 5) shoot = false;
   if (shoot) {
     // only the turrets with a clear line fire
     // (a crate in the way is not cover, it is 150 hit points: those turrets shoot it down)
@@ -360,6 +379,8 @@ function think(state, api) {
     if (list.length) blindT = state.t;
   } else blindT = state.t;
 
+  if (mortars.length && g) shell(state, api, cmd, foe, g, mortars, byI);
+
   // ── items in hand ──
   if (self.item) {
     if (self.item.type === 'emp' && d < 6.5 + foe.radius) cmd.useItem = true;
@@ -367,36 +388,15 @@ function think(state, api) {
   }
 
   // ── where to drive ──
-  if (fly && M.perches.length && !foe.hovering) {
-    if (state.t - perchT > 0.45) {
-      perchT = state.t;
-      // somewhere over the void within easy gun range of it, with no floor near enough for it to reach us from
-      const depth = n.flamer > 0 ? 6.5 : 3.8;
-      let best = null, bp = Infinity;
-      for (const r of [9, 10.5, 7.5]) for (let i = 0; i < 18; i++) {
-        const a = i * (PI / 9), qx = foe.x + Math.cos(a) * r, qy = foe.y + Math.sin(a) * r;
-        if (Math.hypot(qx - z.x, qy - z.y) > z.r - 3) continue;
-        const sc = Math.hypot(qx - self.x, qy - self.y) + (perch && Math.hypot(qx - perch.x, qy - perch.y) < 2.5 ? -3 : 0);
-        if (sc >= bp || !overVoid(api, qx, qy, depth)) continue;
-        bp = sc; best = { x: qx, y: qy };
-      }
-      if (!best) for (const q of M.perches) {
-        if (Math.hypot(q.x - z.x, q.y - z.y) > z.r - 4) continue;
-        const sc = U.dist(self, q) + (U.dist(foe, q) < 9 ? 15 : 0) - (perch && q.x === perch.x && q.y === perch.y ? 6 : 0);
-        if (sc < bp) { bp = sc; best = q; }
-      }
-      perch = best;
-    }
-    if (perch) { hover(state, cmd, perch, bearing + PI); return guard(state, api, cmd); }
-  }
   if (zd > z.r - 2.5) { travel(state, api, cmd, z, false); return guard(state, api, cmd); }
   const away = bearing + PI;                                   // the heading that puts the tail on the target
-  let hold = 6;
+  let hold = mortars.length ? (M.pit ? GP : GH) : 6;
   if (brawler) hold = n.thruster > 0 ? 10.5 : 9;
   else if (bomber) hold = 11.5;
   else if (n.mortar > 0) hold = 4.5;
   else if (pusher) hold = M.pit ? 10 : 4;
-  const danger = brawler || bomber || (pusher && M.pit);
+  else if (beamer) hold = BH;
+  const danger = brawler || bomber || beamer || (pusher && M.pit);
   const lookahead = danger ? 0.9 : 0.4;
   let push = clamp((hold + lookahead * Math.max(0, closing) - d) * 0.6, -1, 1);   // + = get away, - = back in
   if (zoneOut && push < 0.3) push = Math.min(push, 0);
@@ -415,7 +415,7 @@ function think(state, api) {
 
   // A car that can no longer turn to face us: go round to the side it is cheapest to shoot through
   // and that its guns cannot reach, instead of trading with it nose to tail.
-  if (g && los && !danger && !fly && n.movers <= 1 && !foe.hovering && d < 13 && !zoneOut && Math.abs(foe.angVel) < 0.3 && foe.speed < 1.5 && state.t > flankOff) {
+  if (g && los && !danger && n.movers <= 1 && !foe.hovering && d < 13 && !zoneOut && Math.abs(foe.angVel) < 0.3 && foe.speed < 1.5 && state.t > flankOff) {
     if (state.t - flankT > 0.5) {
       flankT = state.t;
       const R = clamp(d, 5, 6.5), cur = away;                // where we stand, seen from it
@@ -463,18 +463,39 @@ function think(state, api) {
     }
   }
 
-  if (push > 0.05) {
+  // Where there are holes, a car with nothing but machine guns is only stepped back from straight, tail still on it,
+  // and only while there is room: the glacis turns its bullets, but turning to run shows it the wheels, and with
+  // a side of wheels gone its fire pushes us over the rim. (Beams and shells go through the glacis: from those we run.)
+  let stand = false;
+  if (M.pit && push > 0.05 && !danger && n.guns > 0 && n.mg === n.guns) {
+    let bs = -Infinity, bh = away, bf = 0;
+    for (const off of [0, 0.3, -0.3, 0.6, -0.6]) {
+      const free = freeRun(nav, self.x, self.y, away + off, 6, 1);
+      const sc = free - 2.5 * Math.abs(off) + (runH !== null ? 0.6 * Math.cos(away + off - runH) : 0);
+      if (sc > bs) { bs = sc; bh = away + off; bf = free; }
+    }
+    if (bf >= 3) {
+      runH = bh;
+      const err = angDiff(bh, self.heading);
+      cmd.steer = clamp(err * 2.6 - self.angVel * 0.4, -1, 1);
+      cmd.throttle = Math.abs(err) < 0.9 ? push * (bf < 4.5 ? 0.6 : 1) : 0;
+      return guard(state, api, cmd);
+    }
+    stand = true;
+  }
+  if (push > 0.05 && !stand) {
     run(state, api, cmd, foe, d, bearing, push);
   } else {
     if (n.movers > 1) flankA = null;
     // backing in, tail first — straight if the way is open, round the obstacle if not
     runH = null;
     const step = Math.min(Math.max(d - 3, 1), 5);
-    const open = nav.clear(self.x, self.y, self.x + ux * step, self.y + uy * step, { margin: 1.3, avoid: ['lava'], hover: fly });
+    const open = nav.clear(self.x, self.y, self.x + ux * step, self.y + uy * step, { margin: 1.3, avoid: ['lava'] });
     if (!open && d > hold + 1) { travel(state, api, cmd, foe, true); return guard(state, api, cmd); }
     const err = angDiff(away, self.heading);
     cmd.steer = clamp(err * 2.6 - self.angVel * 0.4, -1, 1);
     cmd.throttle = Math.abs(err) < 0.9 && open ? push : 0;
+    if (stand) { cmd.throttle = 0; cmd.brake = 1; return guard(state, api, cmd); }
     // in range and nothing bears for two seconds: edge closer until something does
     if (state.t - blindT > 2 && d > Math.max(5, hold - 4) && Math.abs(err) < 0.9) {
       if (open) cmd.throttle = -0.6; else { travel(state, api, cmd, foe, true); return guard(state, api, cmd); }
@@ -499,7 +520,7 @@ function pickAnchor(state, api, foe, d, bearing) {
   let best = null, bs = -Infinity;
   for (let i = 0; i < cand.length && i < 4; i++) {
     const p = cand[i].p;
-    const path = nav.path(self.x, self.y, p.x, p.y, { margin: 1.45, lavaCost: 60, mudCost: 2.2, iceCost: 3, hover: fly });
+    const path = nav.path(self.x, self.y, p.x, p.y, { margin: 1.45, lavaCost: 60, mudCost: 2.2, iceCost: 3 });
     if (!path.length) continue;
     // walk the first 20 m of it: where it points after 4 m, and how close it comes to the pursuer
     let len = 0, px = self.x, py = self.y, near = 99, dir4 = null;
@@ -540,7 +561,7 @@ function run(state, api, cmd, foe, d, bearing, push) {
       const ce = nav.clearance(ex, ey);
       let s = free + 0.3 * Math.min(ce.wall, 5) + 0.3 * Math.min(ce.pit, 5) - 2.5 * (1 - Math.cos(off)) + (ao < 0.7 ? 1 : 0);
       if (free >= 2.5) s += 0.35 * Math.max(freeRun(nav, ex, ey, h - 1.0, 6, 1.5), freeRun(nav, ex, ey, h + 1.0, 6, 1.5));
-      if (M.pit && !fly && ce.pit < 4) s -= (4 - ce.pit) * 1.2;
+      if (M.pit && ce.pit < 4) s -= (4 - ce.pit) * 1.2;
       if (runH !== null) s += 1.2 * Math.cos(h - runH);
       if (M.ice || M.mud) { const te = nav.tileAt(ex, ey); if (te === 'ice' || te === 'mud') s -= 2; }
       if (Math.hypot(ex - z.x, ey - z.y) > z.r - 3.5) s -= 6;
@@ -554,7 +575,7 @@ function run(state, api, cmd, foe, d, bearing, push) {
     }
     runH = bestH; runFree = bestFree; runT = state.t;
     // boxed in, or on a map of islands and bridges: take a planned route instead
-    if (bestFree < 3 || (M.maze && !fly) || state.t < planUntil) {
+    if (bestFree < 3 || M.maze || state.t < planUntil) {
       anchor = pickAnchor(state, api, foe, d, bearing);
       if (anchor) { fleeUntil = state.t + (M.maze ? 1.5 : 1.2); travel(state, api, cmd, anchor, false); return; }
     }
@@ -567,7 +588,7 @@ function run(state, api, cmd, foe, d, bearing, push) {
 // follow the planned route to a goal; `tailFirst` drives it backwards so the guns lead
 function travel(state, api, cmd, goal, tailFirst) {
   const self = state.self, U = api.util;
-  const wp = route.next(self, goal.x, goal.y, state.tick, { hover: fly });
+  const wp = route.next(self, goal.x, goal.y, state.tick);
   const a = U.angleTo(self, wp), dist = U.dist(self, wp);
   runH = null;
   if (dist < 0.6) { cmd.throttle = 0; cmd.brake = 1; return; }
@@ -648,18 +669,6 @@ function guard(state, api, cmd) {
   }
   if (state.t < unstickUntil) { cmd.throttle = unstickThr; cmd.steer = 0; cmd.brake = 0; }
 
-  if (fly) return cmd;
-  if (s.hovering && s.tile === 'pit') {
-    let bd = 99, ba = s.heading;
-    for (let i = 0; i < 16; i++) {
-      const a = i * (PI / 8);
-      for (let r = 0.75; r < 9; r += 0.75) {
-        if (nav.tileAt(s.x + Math.cos(a) * r, s.y + Math.sin(a) * r) !== 'pit') { if (r < bd) { bd = r; ba = a; } break; }
-      }
-    }
-    bolt(s, cmd, ba);
-    return cmd;
-  }
   const vf = s.vx * c + s.vy * n;
   if (M.lava) {
     if (s.tile === 'lava') {
@@ -686,6 +695,32 @@ function guard(state, api, cmd) {
     if (nav.tileAt(s.x + s.vx * k, s.y + s.vy * k) !== 'pit') continue;
     cmd.throttle = vf > 0 ? -1 : 1; cmd.brake = 1;
     return cmd;
+  }
+  // Close to the rim of a hole and drifting towards it (bullets, blasts, recoil and rams all push): get off it before
+  // the speed check above notices at the last half metre. Nose or tail towards the hole: drive straight off along
+  // our own axis. Hole alongside: turn away from it, rolling on if we were rolling.
+  if (M.pit) {
+    const cl = nav.clearance(s.x, s.y);
+    if (cl.pit < 1.7) {
+      let pa = null;
+      for (let i = 0; i < 16 && pa === null; i++) {
+        const a = i * (PI / 8);
+        if (nav.tileAt(s.x + Math.cos(a) * (cl.pit + 0.3), s.y + Math.sin(a) * (cl.pit + 0.3)) === 'pit') pa = a;
+      }
+      if (pa !== null) {
+        const px = Math.cos(pa), py = Math.sin(pa);
+        const vn = s.vx * px + s.vy * py, ax = c * px + n * py, lat = c * py - n * px;   // drift towards it; nose towards it; it is on our left
+        if (cl.pit < 0.8 || (vn > 0.05 && (cl.pit - 0.35) / vn < 0.9)) {
+          if (Math.abs(ax) > 0.35) { cmd.throttle = ax > 0 ? -1 : 1; cmd.brake = 0; }
+          else {
+            const roll = Math.abs(vf) > 1 ? Math.sign(vf) : (Math.sign(cmd.throttle || 0) || 1);
+            cmd.steer = (lat > 0 ? -1 : 1) * roll;
+            cmd.throttle = roll * (Math.abs(vf) > 1 ? 1 : 0.4); cmd.brake = 0;
+          }
+          return cmd;
+        }
+      }
+    }
   }
   const dir = Math.sign(cmd.throttle || 0);
   if (dir && M.pit) for (const dd of [0.4, 0.9, 1.4, 2.0]) for (const w of [-0.5, 0, 0.5]) {
