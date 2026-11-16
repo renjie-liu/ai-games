@@ -21,7 +21,7 @@ export const LADDER_METHOD = 'mixed-slot-rotation-v2';
 const SEED = 1, START = 1500, PRIOR = 2;
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const storeFile = () => path.join(LADDER_DIR, 'results.json');
-const RESULT_CHECK = 3; // v2 did not freeze source files to the hashes used for cache keys.
+export const RESULT_CHECK = 3; // v2 did not freeze source files to the hashes used for cache keys.
 const rankedResult = (r) => r && !r.void && [-1, 0, 1].includes(r.w);
 
 /** Who wrote a bot: the `author` its `meta` gives, read from the source (a plain string literal). */
@@ -91,7 +91,7 @@ export function schedule(queue, entrants) {
   return out;
 }
 
-const keyOf = (m, hashOf) => `${m.mode}|${m.map}|${m.seed}|${m.swap ? 1 : 0}|${m.teams[0].join('+')}|${m.teams[1].join('+')}|`
+export const keyOf = (m, hashOf) => `${m.mode}|${m.map}|${m.seed}|${m.swap ? 1 : 0}|${m.teams[0].join('+')}|${m.teams[1].join('+')}|`
   + sha(ENGINE_VERSION + [...m.teams[0], ...m.teams[1]].map((id) => hashOf[id]).join('')).slice(0, 10);
 
 /**
@@ -199,8 +199,10 @@ export async function ladder(pool, { queues = QUEUES, play = true, budgetMs = In
           try {
             const s = await pool.run({ map: m.map, mode: m.mode, seed: m.seed, swap: m.swap, teams: withSources(m.teams, sources), want: 'score' });
             if (![0, 1, -1].includes(s.winner)) throw new Error('match did not finish');
-            if (s.errors?.length) throw new Error('controller errors: ' + s.errors.join(' | '));
-            store.results[m.key] = { checked: RESULT_CHECK, w: s.winner, h: [s.teams[0].hull, s.teams[1].hull] };
+            // A match the engine played to a result counts as played. A controller that throws is the engine's to deal
+            // with (it idles that tick, and is cut off if it keeps on): were its errors to void the match, a bot could
+            // throw once whenever it was losing and never have a loss on file. The errors are kept beside the result.
+            store.results[m.key] = { checked: RESULT_CHECK, w: s.winner, h: [s.teams[0].hull, s.teams[1].hull], ...(s.errors?.length ? { err: ('controller errors: ' + s.errors.join(' | ')).slice(0, 200) } : {}) };
           } catch (e) {
             // A reliably attributed controller failure is a forfeit. Unattributed
             // failures are unscored, visible, and retried on the next call.

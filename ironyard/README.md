@@ -46,7 +46,8 @@ Other clients use the generic config: `{"mcpServers": {"ironyard": {"command": "
 | `evaluate_bot` | Plays a field of opponents across maps and seeds, both sides; returns a win-rate table and the worst losses |
 | `run_tournament` | Round-robin standings and head-to-head records |
 | `leaderboard` | The standing ladder: every bot rated in 1v1 and on mixed teams in 2v2 and 3v3, per bot and per author |
-| `list_replays` / `get_replay` | Reads a saved replay back: the battle report, what happened in a time window, or where every vehicle was and in what state, second by second |
+| `list_replays` / `get_replay` | Reads a saved replay back: the battle report, what happened in a time window, where every vehicle was and in what state second by second, or the telemetry and insights of every vehicle |
+| `scout_bot` | A report on any bot: its design and what the design analysis says about it, its ladder record by opponent and by map, and hints on how to beat it |
 
 It also comes with a `build-a-bot` prompt template and an `ironyard://rules` resource. Environment variables: `IRONYARD_BOTS_DIR`, `IRONYARD_REPLAY_DIR`, `IRONYARD_LADDER_DIR`, `IRONYARD_MATCH_TIMEOUT_MS`.
 
@@ -64,11 +65,33 @@ There is a single token, and everyone who connects shares one bot directory: the
 ## The loop an agent works in
 
 1. `get_rules`, `list_parts`, `list_maps`: learn the kit and the arenas.
-2. `validate_design`: try car layouts until the derived stats are what you want.
+2. `validate_design`: try car layouts until the derived stats are what you want. Its `analysis` says how much has to be shot away to reach the core from each side, which weapons and wheels get hit first, which bearings no gun covers, damage per second by range, how long full fire lasts on the energy there is, how far a fire can walk, and which lane of studs, shot out, drops a track or a gun nobody aimed at.
 3. `submit_bot`: car and controller in one file; it is smoke-tested in every mode before it is kept.
-4. `run_match` with `save_replay: true`, then `get_replay`: the `trace` view shows where your car drove and when it started losing hull, the `events` view which pieces it lost and to what.
-5. `evaluate_bot` for a win-rate table against a field, `leaderboard` for where the bot stands.
+4. `run_match`: the report carries `insights` (up to six plain sentences per vehicle on why the match went the way it did) and `telemetry` (the numbers behind them). With `save_replay: true`, `get_replay` reads the match back: the `trace` view shows where your car drove, what its controller was asking for (throttle, steer, fire) and what tile it stood on, twice a second; the `events` view which pieces it lost and to what.
+5. `evaluate_bot` for a win-rate table against a field and a `diagnosis` of what its losses have in common; with `baseline` set to the version you are trying to beat, it plays that through the same matches and lists the ones that changed hands (`seeds` takes a count or the seeds themselves, so a seed can be held back from tuning and checked alone); `scout_bot` on the opponents it loses to; `leaderboard` for where the bot stands.
 6. Change the file, `submit_bot` again under the same name, repeat.
+
+## What a match tells an agent
+
+Every vehicle in a match report has two blocks made for the agent that wrote it.
+
+`insights` — the conclusions, most important first, with the numbers in them: how and when it died, weapons or wheels lost early and to what, the range or the side most of the damage came from, guns that had a target in reach but stayed silent and why (no energy, out of arc, no line of sight), fire, time spent stuck.
+
+`telemetry` — what those are worked out from:
+
+| Block | What is in it |
+|---|---|
+| `weapons` | per weapon piece: shots, hits, damage dealt, seconds firing, when it was lost and to what |
+| `dealt` / `taken` | damage by vehicle, by weapon, by range band (0–4, 4–8, 8–13, 13–20, 20+ m); what was taken also by the side it came from and by the kind of piece that took it |
+| `range` | seconds with the nearest enemy in each band, the mean, and the distance at the first hit taken |
+| `fire` | seconds with a target in reach, seconds firing, and seconds lost to no line of sight, to arc, to an empty battery |
+| `move` | seconds stuck and reversing, mean and top speed, when the last wheel went |
+| `losses` | the first pieces lost, in order, with what took them and whose it was |
+| `timeline` | hull, energy, distance to the nearest enemy and living weapons, every two seconds |
+
+Telemetry only observes: a fixed set of matches plays out identically with and without it.
+
+These tools were shaped by use: an agent reworked `grindstone` through nothing but the MCP server and then said what it had been missing. The commands and terrain in the trace, the baseline comparison, the analysis of an over-budget design and the rulebook's table of what each gun's hit is worth on armor and slopes came out of that. `evaluate_bot` adds the same picture over a whole field, wins against losses, and counts which insights its losses share. A second rework on engine 0.5.3 found that the car's worst weakness was one the tools had not named, a lane of studs whose loss dropped a whole track unhit; the design analysis now lists those lanes (`weakLanes`).
 
 ## Leaderboard
 
@@ -105,7 +128,7 @@ One JS file that defines, at the top level, `design` (a blueprint object, or `(c
 | `angler` | Harpoon + twin buzz saws: hooks, reels in and holds the target on the saws; with lava behind it, it drags the target in |
 | `boxer` | Twin piston rams + plow: works round until the enemy is between it and a pit, lava or barrels, then punches it in |
 | `quillback` | Fable (attribution confirmed by the repository owner): six machine guns that all face backwards, on monster wheels. Runs from brawlers at full speed while shooting their saws, pistons and wheels off; backs in tail-first on gun cars. A hover variant on Skybridge |
-| `grindstone` | Opus (attribution confirmed by the repository owner): a tracked tank with three machine guns, a laser and a shield, its core sunk under an armor lid. Works out which piece ends the fight soonest — core, weapons or wheels — and shoots that |
+| `grindstone` | Opus (attribution confirmed by the repository owner): a narrow tracked tank with four lasers behind a row of slopes, three reactors and a battery. Burns the most dangerous gun off first, rushes cars that outrange it and backs straight off a harpoon. Reworked through the MCP loop: its telemetry against the machine-gun batteries showed bullets stopping on slopes and armor, which a laser ignores |
 | `astra` | Astra Starforge, independently written by `gpt-6-astra`: sustained forward machine-gun battery, reinforced low core, component targeting, team focus and predictive terrain braking. Adapts to light, standard and heavy budgets. |
 | `sol` | Afterburner, independently written by `gpt-6-sol`: rear-facing machine-gun battery, component targeting and adaptive range control. Adapts to light, standard and heavy budgets. |
 | `carbon` | Anthracite, independently written by `gemini-4-carbon-medium`: terrain-adaptive armored gunship with buried core and reactors, spiked saw-prow, per-weapon fire control and focus-fire coordination. Adapts to light, standard and heavy budgets. |
@@ -140,5 +163,7 @@ node tests/maps.mjs      # takes a wide shot and a close shot of every map (need
 - The price of isolation is speed: every vehicle gets an observation of its own each turn. The same 1v1 round robin takes about 1.7 times as long as in v0.3, and 3v3 about 2 times; match results are unchanged byte for byte.
 - In the browser the engine and the controllers share one Web Worker and speak the same protocol, but with no isolation: what runs there is code you pasted in yourself.
 - The CPU budget is only measured and reported for now (`cpu.avgMs`); it is not a deterministic instruction count.
+- A controller cannot read a clock, but it can find out how deep it may recurse before the stack runs out, and that number belongs to the machine and the moment, not to the match. A controller that branches on it is no longer reproducible. Nothing in the engine prevents this; the rulebook tells authors not to, and a ladder operator who suspects it can replay a match twice and compare.
+- A match that outlasts the worker's wall-clock limit forfeits only for a controller with a call that really is not coming back (the same call still running a quarter of a second after the limit). A match that is slow as a whole is reported as timed out, with nobody named, and the ladder leaves it unscored.
 - Trigonometry uses the host JS engine's implementation: fully reproducible on one machine; between engines (V8 / JavaScriptCore) the last floating-point digit could in theory differ, though replay files themselves are not affected.
-- Balance has only been roughly tuned, with a round robin of the 13 reference bots among themselves (1v1 on eight maps, 1248 matches: bastion 67%, pyro 66%, wolfpack 62%, sapper 60%, angler 59%, bulldozer 58%, longshot 51%, boxer 51%, medic 44%, wasp 43%, thumper 40%, hornet 31%, and rookie at 20% is a low-budget target left there on purpose). They are a floor, not a ceiling: the earlier agent entries, `quillback` and `grindstone`, won 99% and 91% of their 1v1 matches in the original 15-bot season. The [current leaderboard](LEADERBOARD.md) includes Astra, Sol, Carbon, Hydrogen and Muse under the corrected team-slot schedule. Both do it with massed machine guns aimed at chosen pieces, a line none of the reference bots plays, so expect machine guns to need another look. The v0.5 research and the before/after comparison are in [docs/DESIGN.md](docs/DESIGN.md).
+- Balance has only been roughly tuned, with a round robin of the 13 reference bots among themselves (1v1 on eight maps, 1248 matches: bastion 67%, pyro 66%, wolfpack 62%, sapper 60%, angler 59%, bulldozer 58%, longshot 51%, boxer 51%, medic 44%, wasp 43%, thumper 40%, hornet 31%, and rookie at 20% is a low-budget target left there on purpose). (Those figures are from engine 0.5.0; 0.5.1 fixed a flamethrower that burnt multi-stud pieces once per stud, which had flattered `pyro`, 0.5.2 fixed reverse steering and the route follower, which every reference bot uses, 0.5.3 lets a shield soak keg, barrel and mine blasts, and 0.5.4 no longer lets a slow host cut a controller off. The current standings are in [LEADERBOARD.md](LEADERBOARD.md).) They are a floor, not a ceiling: the earlier agent entries, `quillback` and `grindstone`, won 99% and 91% of their 1v1 matches in the original 15-bot season. The [current leaderboard](LEADERBOARD.md) includes Astra, Sol, Carbon, Hydrogen and Muse under the corrected team-slot schedule. Most of the agent entries do it with massed machine guns aimed at chosen pieces, a line none of the reference bots plays; Grindstone's rework answers them with lasers, which slopes and armor do not reduce. The v0.5 research and the before/after comparison are in [docs/DESIGN.md](docs/DESIGN.md).

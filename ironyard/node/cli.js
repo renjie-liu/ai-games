@@ -23,7 +23,13 @@ function parseArgs(argv) {
   return out;
 }
 const list = (s) => String(s).split(',').map((x) => x.trim()).filter(Boolean);
-const budgetOf = (b) => (b === undefined ? DEFAULT_BUDGET : BUDGETS[b] ?? Number(b));
+function budgetOf(b) {
+  if (b === undefined) return DEFAULT_BUDGET;
+  const key = String(b).toLowerCase();
+  const n = Object.hasOwn(BUDGETS, key) ? BUDGETS[key] : Number(b);
+  if (!(n > 0)) throw new Error(`--budget must be a number of credits or one of ${Object.keys(BUDGETS).join(', ')}, got "${b}"`);
+  return n;
+}
 
 const HELP = `ironyard — agents build the car and write the strategy
 

@@ -12,13 +12,16 @@ import http from 'node:http';
 import readline from 'node:readline';
 import crypto from 'node:crypto';
 import {
-  MAPS, MAP_IDS, MODES, PARTS, ITEMS, TILES, RULES, BUDGETS, DEFAULT_BUDGET, CELL, GRID_HX, GRID_HY, GRID_W, GRID_L, PAINTS, DECOR_LIMIT,
+  MAPS, MAP_IDS, MODES, PARTS, ITEMS, TILES, TILE, RULES, BUDGETS, DEFAULT_BUDGET, CELL, GRID_HX, GRID_HY, GRID_W, GRID_L, PAINTS, DECOR_LIMIT,
   validateDesign, parseBlueprint, renderDesign, makeSchedule, standings, summarize, FLAG, ENGINE_VERSION, tournamentResult, tournamentStatus, scoredResult,
 } from '../engine/index.js';
 import { ladder, QUEUES } from './ladder.js';
 import { rulesMarkdown } from '../engine/rulesdoc.js';
 import { listBots, readBotSource, makeBot, BOT_NAME_RE, USER_DIR, BUILTIN_DIR, ROOT } from './loader.js';
 import { MatchPool, withSources } from './runner.js';
+import { diagnose, telemetryView } from '../engine/insights.js';
+import { analyzeDesign } from '../engine/designcheck.js';
+import { scoutBot } from './scout.js';
 
 const SERVER = { name: 'ironyard', title: 'Ironyard Arena', version: ENGINE_VERSION };
 const PROTOCOLS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
@@ -32,6 +35,8 @@ const pool = new MatchPool({ timeoutMs: Number(process.env.IRONYARD_MATCH_TIMEOU
 const log = (...a) => process.stderr.write(`[ironyard-mcp] ${a.join(' ')}\n`);
 
 const modeEnum = Object.keys(MODES);
+/** `seeds` as a tool takes it: a count n means seeds 1..n, a list is the seeds themselves. */
+const seedList = (s) => (Array.isArray(s) ? [...new Set(s)] : Array.from({ length: s || 1 }, (_, i) => i + 1));
 const budgetSchema = { type: 'integer', minimum: 100, maximum: 5000, description: `Credits per vehicle. Default ${DEFAULT_BUDGET} (light ${BUDGETS.light}, standard ${BUDGETS.standard}, heavy ${BUDGETS.heavy}).` };
 const teamSchema = (who) => ({
   type: 'array', minItems: 1, maxItems: 3, items: { type: 'string' },
@@ -103,9 +108,17 @@ const TOOLS = [
     run: async ({ name }) => readBotSource(String(name)),
   },
   {
+    name: 'scout_bot',
+    title: 'Scouting report on a bot',
+    description: 'What to expect from one bot before you play it, without running a match. `design`: the vehicle it fields in 1v1 at the default budget (cost, mass, speed, weapons) with the same analysis validate_design gives: what stands between each side and its core, dps by range, blind arcs, energy endurance, design insights. `otherDesigns`: different vehicles it fields in team slots or on other maps. `record`: its 1v1 ladder record from the results on file, overall, per opponent (worst first) and per map; it says how many of its matches are on file and says so plainly when the file is missing or was made with other source code. `hints`: 2-4 sentences on who beats it, where, and what its vehicle gives away. Sides are front / rear / left / right of the vehicle; bearings are degrees clockwise from dead ahead (90 = right, 180 = astern).',
+    inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'Bot name from list_bots.' } }, required: ['name'], additionalProperties: false },
+    annotations: { readOnlyHint: true },
+    run: async ({ name }) => scoutBot(String(name), { pool }),
+  },
+  {
     name: 'validate_design',
     title: 'Check a blueprint',
-    description: 'Validates a vehicle blueprint against the building rules and budget WITHOUT saving anything. Returns errors, warnings, derived stats (cost, mass and weight class, top speed, turn rate, dps, energy balance, hp…) and ASCII pictures of both layers. Give either `design` (JSON) or `blueprint` (ASCII).',
+    description: 'Validates a vehicle blueprint against the building rules and budget WITHOUT saving anything. Returns errors, warnings, derived stats (cost, mass and weight class, top speed, turn rate, dps, energy balance, hp…) and ASCII pictures of both layers. A valid design also gets `analysis`, worked out from the hit rules before any match: `coreProtection` (what a straight shot from the front / rear / left / right must destroy before it reaches the core: pieces, hp, and hp counting armor and slopes against a 4-damage bullet and a 30-damage shell), `exposed` (guns, movers, reactors, batteries and kegs that are the first piece hit from a side), `weapons` (facing, arc, range, dps and the bearings each can reach; `i` is the index to fire it by), `dpsByRange` / `dpsByRangeRear` (dps on a target dead ahead / astern at 2-22 m), `blindArcsDeg`, `energy` (seconds of everything firing before the store is empty), `fire` (how much burns and what the largest touching cluster reaches), `mass`, `weakLanes` (the lanes of studs on which the least has to be shot away before running gear or guns fall off untouched, because everything tying them to the core lies on that lane: `from` a side, its stud `x` or `y`, `shotAway` pieces worth `hp`, `thenFallOff`), and up to 6 `insights`, most important first. Bearings are degrees clockwise from dead ahead (90 = right, 180 = astern). Give either `design` (JSON) or `blueprint` (ASCII).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -137,7 +150,7 @@ const TOOLS = [
       if (!design && !blueprint) throw new Error('give `design` (JSON) or `blueprint` ({ chassis: [rows], deck: [rows] })');
       const d = design || parseBlueprint('blueprint', blueprint, { paint: { accent: blueprint.accent } });
       const v = validateDesign(d, { budget: budget ?? DEFAULT_BUDGET });
-      return { ok: v.ok, errors: v.errors, warnings: v.warnings, stats: v.stats, picture: v.design ? renderDesign(v.design) : undefined,
+      return { ok: v.ok, errors: v.errors, warnings: v.warnings, stats: v.stats, analysis: v.design && v.stats && (v.ok || v.errors.every((e) => /exceeds budget/.test(e))) ? analyzeDesign(v) : undefined, picture: v.design ? renderDesign(v.design) : undefined,
         design: design ? undefined : v.design };
     },
   },
@@ -189,7 +202,7 @@ const TOOLS = [
   {
     name: 'run_match',
     title: 'Run one match',
-    description: 'Runs a full deterministic match and returns the battle report: winner and reason, per-vehicle stats (damage by type, accuracy, time stuck / out of arc / energy-starved, first parts lost), the event timeline, runtime errors and api.log output. Team 0 = team_a.',
+    description: 'Runs a full deterministic match and returns the battle report: winner and reason, the event timeline, runtime errors, api.log output, and per vehicle three things that say WHY it won or lost. `insights`: up to six plain-language findings with their numbers, most important first (how it ended, movers or weapons lost early and to what, an enemy inside gun range while the guns were silent and the reason, damage taken at a range or from a side it does not fight at, damage from lava / the zone / walls, fire, time stuck, low accuracy). `telemetry`: the numbers behind them — weapons[] (per weapon piece: shots, hits, damage, firingTime, lostAt), dealt and taken broken down by vehicle id, by weapon, by range band (metres between the two vehicles) and, for taken, by the side the hit came from (front / left / right / rear) and by piece type; range (seconds per distance band to the nearest enemy); fire (of the seconds an enemy was inside gun range: firing, no line of sight, out of arc, energy-starved); move (stuck, reversing, speeds, movers lost); losses (the first pieces lost: when, to what, by whom); timeline (hull %, energy %, distance to the nearest enemy and weapons left, every 2 s). `stats`: the plain totals. Read the insights first, then the telemetry they point at, then change the bot or the blueprint and run the same match again (same seed = same match). `brief: true` leaves out the design, the timeline and the losses list. To see where everybody was and when, set save_replay and read it with get_replay (views "trace", "events", "telemetry"). Team 0 = team_a.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -200,6 +213,7 @@ const TOOLS = [
         swap: { type: 'boolean', description: 'Swap spawn sides (team_a starts where team_b normally does).' },
         budget: budgetSchema,
         save_replay: { type: 'boolean', description: 'Also write a replay JSON file that the web viewer can load. Default false.' },
+        brief: { type: 'boolean', description: 'Leave out each vehicle\'s design, telemetry.timeline and telemetry.losses to save tokens. Default false.' },
       },
       required: ['team_a', 'team_b'], additionalProperties: false,
     },
@@ -218,13 +232,14 @@ const TOOLS = [
         const { summarize } = await import('../engine/index.js');
         res = summarize(res);
       }
+      if (a.brief) for (const v of res.vehicles) { delete v.design; if (v.telemetry) { delete v.telemetry.timeline; delete v.telemetry.losses; } }
       return { ...res, replayFile: replay };
     },
   },
   {
     name: 'evaluate_bot',
     title: 'Benchmark a bot',
-    description: 'Plays one bot against a field of opponents on several maps and seeds, both spawn sides, and returns its win rate overall, per opponent and per map, how its vehicles died, and the worst losses to replay with run_match. Use this to decide whether a change actually helped.',
+    description: 'Plays one bot against a field of opponents on several maps and seeds, both spawn sides, and returns its win rate overall, per opponent and per map, how its vehicles died, the worst losses to replay with run_match (each with `damageDealt` and `opponentDealt`: a loss with next to no damage dealt is a car that never got to fight — look there first), and a `diagnosis`: the telemetry of all its matches added up, apart for wins and for losses — mean hull left and duration, death causes, the share of damage taken by weapon and by side hit, mean range and share of time per range band, fire-discipline totals (seconds with an enemy in gun range: firing, no line of sight, out of arc, energy-starved), the pieces it loses first, and `commonInsights`: each kind of finding with the number of matches it came up in and one example. What differs between the losses and the wins is what to fix. Use this to decide whether a change actually helped, then run_match one of the worst losses to see that match\'s own insights and telemetry.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -232,7 +247,9 @@ const TOOLS = [
         mode: { type: 'string', enum: modeEnum, description: 'Default 1v1.' },
         opponents: { type: 'array', items: { type: 'string' }, description: 'Default: every built-in bot.' },
         maps: { type: 'array', items: { type: 'string', enum: MAP_IDS }, description: 'Default: all maps.' },
-        seeds: { type: 'integer', minimum: 1, maximum: 5, description: 'Seeds per pairing and map. Default 1.' },
+        seeds: { oneOf: [{ type: 'integer', minimum: 1, maximum: 5 }, { type: 'array', items: { type: 'integer', minimum: 1, maximum: 9999 }, minItems: 1, maxItems: 5, uniqueItems: true }],
+          description: 'Seeds per pairing and map: a count n (seeds 1..n), or the seeds themselves, e.g. [3] to play only seed 3 after 1 and 2 were used to tune. Default 1.' },
+        baseline: { type: 'string', description: 'Another bot to play through exactly the same matches — for instance the version you are trying to improve on. Adds `comparedWith`: its record next to yours per opponent (`vsOpponent` as text, `byOpponent` as numbers), and the matches whose result changed (`gained`, `lost`).' },
         budget: budgetSchema,
       },
       required: ['name'], additionalProperties: false,
@@ -240,9 +257,13 @@ const TOOLS = [
     run: async (a) => {
       const name = String(a.name);
       const mode = a.mode || '1v1';
+      // a baseline that cannot be played is refused now, not after the whole field has been played
+      const base = a.baseline !== undefined ? String(a.baseline) : null;
+      if (base === name) throw new Error('baseline must be a different bot from the one being evaluated');
+      const baseSource = base === null ? null : readBotSource(base);
       const opp = (a.opponents && a.opponents.length ? a.opponents.map(String) : listBots().filter((b) => b.kind === 'builtin').map((b) => b.id)).filter((id) => id !== name);
       const maps = a.maps && a.maps.length ? a.maps : MAP_IDS;
-      const seeds = Array.from({ length: a.seeds || 1 }, (_, i) => i + 1);
+      const seeds = seedList(a.seeds);
       const entrants = [name, ...opp].map((id) => ({ id, bots: [id] }));
       const schedule = makeSchedule({ entrants, maps, seeds, focus: name });
       const sources = Object.fromEntries([name, ...opp].map((id) => [id, readBotSource(id)]));
@@ -252,14 +273,16 @@ const TOOLS = [
         const mine = m.a === name ? 0 : 1;
         let r;
         try {
-          const s = await pool.run({ map: m.map, mode, seed: m.seed, swap: m.swap, budget: a.budget ?? DEFAULT_BUDGET, want: 'summary',
+          const s = await pool.run({ map: m.map, mode, seed: m.seed, swap: m.swap, budget: a.budget ?? DEFAULT_BUDGET, want: 'digest',
             teams: m.teams.map((t) => t.map((id) => ({ id, source: sources[id] }))) });
-          if (s.vehicles.some(v => v.team === mine && v.errors.length)) errors++;
+          if (s.vehicles.some((v) => v.team === mine && v.errors.length)) errors++;
           r = tournamentResult(m, s);
           if (scoredResult(r)) {
+            const won = r.winner === mine, draw = r.winner < 0;
             for (const v of s.vehicles) if (v.team === mine && v.death) deaths[v.death.cause] = (deaths[v.death.cause] || 0) + 1;
-            if (r.winner >= 0 && r.winner !== mine) losses.push({ opponent: m.a === name ? m.b : m.a, map: m.map, seed: m.seed, swap: m.swap, reason: s.reason, duration: s.duration,
-              hullLeft: [s.teams[mine].hull, s.teams[1 - mine].hull] });
+            if (!won && !draw) losses.push({ opponent: m.a === name ? m.b : m.a, map: m.map, seed: m.seed, swap: m.swap, reason: s.reason, duration: s.duration,
+              hullLeft: [s.teams[mine].hull, s.teams[1 - mine].hull], damageDealt: s.teams[mine].damage, opponentDealt: s.teams[1 - mine].damage });
+            r.digest = { outcome: won ? 'win' : draw ? 'draw' : 'loss', duration: s.duration, vehicles: s.vehicles.filter((v) => v.team === mine) };
           }
         } catch (e) {
           if (e.detail?.bot === name) errors++;
@@ -273,13 +296,51 @@ const TOOLS = [
       }));
       const table = standings(entrants, results);
       const me = table.find((r) => r.id === name);
-      losses.sort((x, y) => (y.hullLeft[1] - y.hullLeft[0]) - (x.hullLeft[1] - x.hullLeft[0]));
+      // the same matches with another bot in this one's place: what changed, opponent by opponent and match by match
+      let comparedWith;
+      if (base !== null) {
+        const key = (m) => `${m.b}|${m.map}|${m.seed}|${m.swap ? 1 : 0}`;
+        const mark = (w, mine) => (w === mine ? 'win' : w < 0 ? 'draw' : 'loss');
+        const now = new Map(results.filter(scoredResult).map((m) => [key(m), mark(m.winner, 0)]));   // a match nobody could score is compared with nothing
+        const then = new Map();
+        await Promise.all(schedule.filter((m) => m.b !== base).map(async (m) => {
+          try {
+            const s = await pool.run({ map: m.map, mode, seed: m.seed, swap: m.swap, budget: a.budget ?? DEFAULT_BUDGET, want: 'score',
+              teams: m.teams.map((t, side) => t.map((id) => (side === 0 ? { id: base, source: baseSource } : { id, source: sources[id] }))) });
+            const r = tournamentResult(m, s);
+            if (scoredResult(r)) then.set(key(m), mark(r.winner, 0));
+          } catch (e) { if (e.detail && e.detail.bot === base) then.set(key(m), 'loss'); }
+        }));
+        const per = {}, gained = [], lost = [];
+        let bw = 0, bl = 0, bd = 0;
+        for (const m of schedule) {
+          const k = key(m), was = then.get(k), is = now.get(k);
+          if (was === undefined || is === undefined) continue;
+          const row = (per[m.b] ||= { now: [0, 0], baseline: [0, 0] });
+          if (is === 'win') row.now[0]++; else if (is === 'loss') row.now[1]++;
+          if (was === 'win') { row.baseline[0]++; bw++; } else if (was === 'loss') { row.baseline[1]++; bl++; } else bd++;
+          const at = { opponent: m.b, map: m.map, seed: m.seed, ...(m.swap ? { swap: true } : {}) };
+          if (is === 'win' && was !== 'win') gained.push(at); else if (is !== 'win' && was === 'win') lost.push(at);
+        }
+        comparedWith = {
+          baseline: base, baselineRecord: `${bw}W ${bd}D ${bl}L`,
+          vsOpponent: Object.fromEntries(Object.entries(per).map(([o, r]) => [o, `now ${r.now[0]}-${r.now[1]}, baseline ${r.baseline[0]}-${r.baseline[1]} (${r.now[0] - r.baseline[0] >= 0 ? '+' : ''}${r.now[0] - r.baseline[0]})`])),
+          byOpponent: Object.fromEntries(Object.entries(per).map(([o, r]) => [o, { wins: r.now[0], losses: r.now[1], baselineWins: r.baseline[0], baselineLosses: r.baseline[1], winsGained: r.now[0] - r.baseline[0] }])),
+          matchesGained: gained.length, matchesLost: lost.length,
+          lost: lost.slice(0, 12), gained: gained.slice(0, 12),
+          note: lost.length > 12 || gained.length > 12 ? 'lists are cut at 12; replay any of them with run_match (team_a: you or the baseline, team_b: the opponent, same map, seed and swap)' : 'replay any of these with run_match (team_a: you or the baseline, team_b: the opponent, same map, seed and swap)',
+        };
+      }
+      // the most one-sided first; among those, the ones in which this bot hurt nobody: something in it is broken, not outgunned
+      losses.sort((x, y) => (y.hullLeft[1] - y.hullLeft[0]) - (x.hullLeft[1] - x.hullLeft[0]) || x.damageDealt - y.damageDealt);
       const failed = results.filter((r) => r.error);
       return {
-        bot: name, mode, ...tournamentStatus(results, schedule.length), matches: me.played, wins: me.w, draws: me.d, losses: me.l, winRate: me.winRate,
+        bot: name, mode, seeds, ...tournamentStatus(results, schedule.length), matches: me.played, wins: me.w, draws: me.d, losses: me.l, winRate: me.winRate,
         vsOpponent: Object.fromEntries(Object.entries(me.vs).map(([k, v]) => [k, `${v.w}W ${v.d}D ${v.l}L`])),
         byMap: Object.fromEntries(Object.entries(byMap).map(([k, v]) => [k, `${v.w}W ${v.d}D ${v.l}L`])),
         howMyVehiclesDied: deaths,
+        ...(comparedWith ? { comparedWith } : {}),
+        diagnosis: diagnose(results.filter((r) => r.digest).map((r) => r.digest)),
         matchesWithMyRuntimeErrors: errors,
         worstLosses: losses.slice(0, 6).map((l) => ({ ...l,
           replayWith: `run_match ${JSON.stringify({ team_a: [name], team_b: [l.opponent], mode, map: l.map, seed: l.seed, ...(l.swap ? { swap: true } : {}) })}` })),
@@ -365,12 +426,13 @@ const TOOLS = [
   {
     name: 'get_replay',
     title: 'Read a replay',
-    description: 'Reads back a replay that run_match saved, in a form small enough to reason about. view "summary": the battle report (result, per-vehicle stats, first pieces lost, your api.log lines). view "events": everything that happened in a time window, in order — pieces lost and to what, fires, hooks, punches, blasts, pickups, deaths. view "trace": where every vehicle was and in what state, sampled every `step` seconds — use it to see what your controller actually did: where it drove, when it stood still, when it started losing hull. The frame-by-frame file itself stays on the server for the web viewer.',
+    description: 'Reads back a replay that run_match saved, in a form small enough to reason about. view "summary": the battle report (result, per-vehicle stats, first pieces lost, your api.log lines). view "events": everything that happened in a time window, in order — pieces lost and to what, fires, hooks, punches, blasts, pickups, deaths. view "trace": where every vehicle was and in what state, sampled every `step` seconds — use it to see what your controller actually did: where it drove, when it stood still, when it started losing hull. view "telemetry": per vehicle (or for the one `vehicle` id) its insights and its full telemetry, with a legend — who hurt it with what, from which side and at what range, what each of its weapons did, what kept its guns silent, the pieces it lost and a 2-second timeline. A good order: "telemetry" for what went wrong, "events" and "trace" around the moment it went wrong, then change the bot and run the match again. The frame-by-frame file itself stays on the server for the web viewer.',
     inputSchema: {
       type: 'object',
       properties: {
         file: { type: 'string', description: 'A file name from list_replays, or the replayFile that run_match returned.' },
-        view: { type: 'string', enum: ['summary', 'events', 'trace'], description: 'Default "summary".' },
+        view: { type: 'string', enum: ['summary', 'events', 'trace', 'telemetry'], description: 'Default "summary".' },
+        vehicle: { type: 'integer', minimum: 0, description: 'telemetry only: the id of the one vehicle to return. Default: all.' },
         from: { type: 'number', minimum: 0, description: 'Start of the window in seconds. Default 0.' },
         to: { type: 'number', minimum: 0, description: 'End of the window in seconds. Default: the end of the match.' },
         step: { type: 'number', minimum: 0.1, maximum: 10, description: 'trace only: seconds between samples. Default 0.5; widened if the window would give more than 400 rows.' },
@@ -386,6 +448,7 @@ const TOOLS = [
       const res = JSON.parse(fs.readFileSync(full, 'utf8'));
       const view = a.view || 'summary';
       if (view === 'summary') return summarize(res);
+      if (view === 'telemetry') return { file: name, ...telemetryView(res, a.vehicle) };
       const from = a.from ?? 0, to = Math.min(a.to ?? res.duration, res.duration);
       if (!(to >= from)) throw new Error(`the window is empty: from ${from} to ${to} (the match lasted ${res.duration} s)`);
       const vehicles = res.vehicles.map((v) => ({ id: v.id, team: v.team, name: v.name, bot: v.bot }));
@@ -401,17 +464,24 @@ const TOOLS = [
       let step = a.step ?? 0.5;
       if ((to - from) / step > 400) step = Math.ceil(((to - from) / 400) * 10) / 10;
       const rows = [];
+      const tracks = res.vehicles.map((v) => (v.telemetry && v.telemetry.track) || null);
       let next = from;
       for (const f of res.frames) {
         if (f.t + 1e-9 < next || f.t > to + 1e-9) continue;
         next = f.t + step;
-        rows.push([f.t, ...f.v.map((r) => {
+        rows.push([f.t, ...f.v.map((r, vi) => {
           const state = !(r[6] & FLAG.alive) ? 'dead' : [r[6] & FLAG.fire && 'burning', r[6] & FLAG.stun && 'stunned', r[6] & FLAG.boost && 'boosting', r[6] & FLAG.hover && 'hovering'].filter(Boolean).join('+');
-          return [r[0], r[1], Math.round((r[2] * 180) / Math.PI), Math.round(r[5] * 100), Math.round(r[3] * 100), state];
+          const row = [r[0], r[1], Math.round((r[2] * 180) / Math.PI), Math.round(r[5] * 100), Math.round(r[3] * 100), state];
+          // what its controller was asking for, and what it stood on, at the nearest half second
+          // (sample n of the track was taken at (n + 1) steps: there is none for the instant the match starts)
+          const k = tracks[vi], n = k ? Math.round(f.t / k.step) - 1 : -1;
+          if (k && n >= 0 && n < k.throttle.length) row.push(k.throttle[n], k.steer[n], k.fire[n], k.tile[n]);
+          return row;
         })]);
       }
-      return { file: name, window: [from, to], step, vehicles,
-        legend: 'each row: [t, then one entry per vehicle in the order of `vehicles`: [x m, y m, heading deg, hull %, energy %, state]]', rows };
+      return { file: name, window: [from, to], step, vehicles, tilesAreMetres: TILE,
+        legend: 'each row: [t, then one entry per vehicle in the order of `vehicles`: [x m, y m, heading deg, hull %, energy %, state'
+          + (tracks.some(Boolean) ? ', throttle asked -1..1, steer asked -1..1, fire asked 0/1, tile underneath]]. The last four are absent before the first half second and once the vehicle is dead. In the pictures list_maps gives, a tile is in column floor(x / ' + TILE + ') counted from the left and in row floor(y / ' + TILE + ') counted from the BOTTOM: y grows northwards and the first row listed is the far north.' : ']]'), rows };
     },
   },
 ];
@@ -432,8 +502,8 @@ function promptText({ mode = '1v1', idea } = {}) {
 1. Call get_rules and read it fully. Skim list_maps and one or two built-in bots with get_bot (rookie is the baseline).
 2. Design a vehicle${idea ? ` in this style: ${idea}` : ''} on the two-layer stud grid. Iterate with validate_design until it is legal and the stats match your plan (top speed, turn rate, dps, energy balance). Give it a paint accent and a few free decor pieces so it has a look of its own.
 3. Write the controller file (design + tick) and submit_bot it under a new name.
-4. run_match against rookie and two different archetypes; read the reports and your api.log lines to see what actually happened.
-5. evaluate_bot for the win-rate table, fix the worst losses, repeat until it beats rookie everywhere and holds its own against the rest.
+4. run_match against rookie and two different archetypes. Read each vehicle's \`insights\` first (why it won or lost, with numbers), then the \`telemetry\` they point at (who hurt you with what, from which side and at what range; what kept your guns silent; what you lost first) and your api.log lines. For where and when, run it with save_replay and read get_replay (views "trace", "events", "telemetry").
+5. evaluate_bot for the win-rate table and its \`diagnosis\` (what your losses have in common that your wins do not), fix that in the bot or the blueprint, replay the worst losses, and repeat until it beats rookie everywhere and holds its own against the rest.
 Finish by reporting the final bot name, its design picture, the strategy in three sentences, and its evaluate_bot table.`;
 }
 
@@ -444,6 +514,14 @@ function pretty(v, indent = '', width = 120) {
   if (flat === undefined) return 'null';
   if (v === null || typeof v !== 'object' || flat.length <= width - indent.length) return flat;
   const inner = indent + ' ';
+  if (Array.isArray(v) && v.every((x) => typeof x === 'number' || x === null)) {   // a long row of numbers (a telemetry timeline) is wrapped, not stood on end
+    const rows = [''];
+    for (const x of v) {
+      const s = JSON.stringify(x), k = rows.length - 1;
+      if (rows[k] && rows[k].length + s.length + 2 > width - inner.length) rows.push(s); else rows[k] += (rows[k] ? ', ' : '') + s;
+    }
+    return `[\n${rows.map((r) => inner + r).join(',\n')}\n${indent}]`;
+  }
   if (Array.isArray(v)) return `[\n${v.map((x) => inner + pretty(x, inner, width)).join(',\n')}\n${indent}]`;
   return `{\n${Object.entries(v).filter(([, x]) => x !== undefined).map(([k, x]) => `${inner}${JSON.stringify(k)}: ${pretty(x, inner, width)}`).join(',\n')}\n${indent}}`;
 }
@@ -455,6 +533,10 @@ function pretty(v, indent = '', width = 120) {
 // says what was expected, so the next call can be right.
 function fit(name, schema, v) {
   const say = (what) => { throw new Error(`argument "${name}" ${what}, got ${JSON.stringify(v) === undefined ? typeof v : JSON.stringify(v).slice(0, 80)}`); };
+  if (schema.oneOf) {   // the first form it fits
+    for (const form of schema.oneOf) { try { return fit(name, form, v); } catch { /* try the next */ } }
+    say(`must be ${schema.oneOf.map((f) => (f.type === 'integer' ? `a whole number ${f.minimum ?? ''}..${f.maximum ?? ''}` : f.type === 'array' ? `a list of ${f.minItems ?? 0}..${f.maxItems ?? 'any number of'} of them` : `a ${f.type}`)).join(' or ')}`);
+  }
   if (typeof v === 'string' && (schema.type === 'object' || schema.type === 'array' || schema.type === 'integer' || schema.type === 'boolean')) {
     const t = v.trim();
     if (schema.type === 'array' && !t.startsWith('[')) v = [v];
@@ -509,7 +591,7 @@ async function handle(msg) {
           protocolVersion: PROTOCOLS.includes(want) ? want : PROTOCOLS[0],
           capabilities: { tools: {}, prompts: {}, resources: {} },
           serverInfo: SERVER,
-          instructions: 'Ironyard: design a vehicle within a budget and write its controller, then test offline. Start with get_rules. Typical loop: validate_design → submit_bot → run_match → evaluate_bot.',
+          instructions: 'Ironyard: design a vehicle within a budget and write its controller, then test offline. Start with get_rules. Typical loop: validate_design → submit_bot → run_match (read each vehicle\'s insights, then its telemetry; get_replay for the trace) → change the bot → evaluate_bot (win rates and a diagnosis of the losses) → repeat.',
         });
       }
       case 'notifications/initialized': case 'notifications/cancelled': case 'notifications/roots/list_changed': return null;

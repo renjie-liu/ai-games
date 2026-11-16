@@ -1,7 +1,7 @@
 // The rulebook, generated from the same tables the simulator runs on, so it
 // can never drift from the engine. Served as AGENTS.md, by the MCP `get_rules`
 // tool and on the web Rules tab.
-import { PARTS, ITEMS, TILES, RULES, CELL, GRID_HX, GRID_HY, GRID_W, GRID_L, BUDGETS, TILE, DECOR_LIMIT, PAINT_IDS } from './parts.js';
+import { PARTS, ITEMS, TILES, RULES, CELL, GRID_HX, GRID_HY, GRID_W, GRID_L, BUDGETS, TILE, DECOR_LIMIT, PAINT_IDS, hitOn } from './parts.js';
 import { PHYS } from './design.js';
 import { MAPS, MAP_IDS } from './maps.js';
 import { ENGINE_VERSION } from './match.js';
@@ -50,6 +50,11 @@ function partRow(p) {
 
 export function rulesMarkdown() {
   const cats = { structure: 'Structure & defence', mobility: 'Mobility & steering', weapon: 'Weapons', utility: 'Utility', decor: 'Decor (free)' };
+  // what one hit of each gun is worth on the three kinds of surface, by the same arithmetic the engine uses
+  const after = (d, def, faced) => Math.round(hitOn(def, d, 'kinetic', faced) * 10) / 10;
+  const hitTable = ['| weapon | one hit | on a plain piece | on armor | on a slope, face on | on a slope, from elsewhere |', '|---|---|---:|---:|---:|---:|',
+    ...Object.values(PARTS).filter((p) => p.weapon && p.weapon !== 'hook' && p.dmg && (p.dtype === 'kinetic' || p.dtype === 'explosive')).map((p) =>
+      `| ${p.id} | ${p.dmg}${p.salvo ? ' x' + p.salvo : ''} ${p.dtype} | ${p.dmg} | ${after(p.dmg, PARTS.armor, false)} | ${after(p.dmg, PARTS.slope, p.weapon !== 'lob')} | ${after(p.dmg, PARTS.slope, false)} |`)].join('\n');
   const partTables = Object.entries(cats).map(([cat, title]) =>
     `**${title}**\n\n| type | glyph | studs | cost | mass kg | hp | placement | numbers | notes |\n|---|---|---|---|---|---|---|---|---|\n` +
     Object.values(PARTS).filter((p) => p.cat === cat).map(partRow).join('\n')).join('\n\n');
@@ -133,10 +138,20 @@ What happens under fire:
   moves it (wheels, tracks, hover pads, thrusters) and nothing left that can hurt (guns, flamers, harpoons, saws,
   pistons, spikes, plows, kegs): a hull like that is a wreck.
 * **Shots, beams and blasts hit the deck piece of a stud column first**, then the chassis piece under it.
-  **Rams, saws and mines hit the chassis piece first.** A shot travelling across the vehicle hits whatever column it enters first.
+  **Rams, saws and mines hit the chassis piece first.** A shot travelling across the vehicle hits whatever column it enters first —
+  whether what stands there is on the deck or only on the chassis. (\`low\` in the tables is about your own firing lanes only: a deck
+  gun shoots over a low deck piece in front of it. To an incoming shot a low piece is a piece like any other.)
 * Slopes: a kinetic or explosive hit arriving against the slope's facing (within 60°) only does ${Math.round(PARTS.slope.deflect * 100)}%.
+* **What a hit is worth** after the piece it lands on has had its say (armor takes ${PARTS.armor.armor} off every kinetic or explosive hit, never
+  more than three quarters of it; a slope struck on its face lets ${Math.round(PARTS.slope.deflect * 100)}% through and then takes ${PARTS.slope.armor} off). Lasers, flame and saws are not reduced by either.
+  A mortar round comes down from above and the splash of any burst has no direction: a slope's face deflects neither:
+
+${hitTable}
+
 * Decor is not solid: shots pass through it, and it is shaken off when the piece under it takes ${PARTS.tile.hp} damage.
-* **Fire.** Every piece has heat. Flamethrowers, lava, and the blasts of kegs and barrels raise it; at heat 1 a piece
+* **Fire.** Every piece has heat. Flamethrowers and lava raise it steadily. Every blast raises it too: the burst of a cannon shell, a missile or a
+  mortar round gives each piece it damages up to ${R.blastHeat} heat (times that piece's \`burn\`, less towards the edge of the burst), so three
+  or four bursts on the same plates light them, and the blast of a keg or a barrel lights everything in reach that burns at once. At heat 1 a piece
   that burns catches fire. It then loses ${R.fireDps} hp/s for ${R.fireTime} s (armor does not help) and heats every piece touching
   it by ${R.fireSpread}/s, so the fire walks across the vehicle. A piece burns once. The tables say what burns: plates, bricks,
   wheels and most equipment do; armor, slopes, tracks, spikes, plows, pistons and the core do not, so a row of them is a
@@ -208,7 +223,8 @@ Off the edge of the map counts as a pit.
 * **Friendly fire is off** for guns, flamethrowers, saws, pistons and hooks: shots and their splash pass through
   teammates. You can still bump into them. **Powder kegs and barrels are the exception**: their blasts hit everyone in
   reach, a teammate sets off a rolling keg by touching it, and nothing done to your own side counts as damage dealt.
-* **Timeout:** more vehicles alive wins; then more total hull fraction remaining; then more damage dealt; else a draw.
+* **Timeout:** more vehicles alive wins; then more total hull fraction remaining (a lead of less than half a percent of a hull
+  counts as level); then more damage dealt (by more than 1 hp); else a draw.
 * **Crates and barrels** are tiles with hit points. A crate is a wall until it is broken; a barrel explodes when it is,
   a tenth of a second later, so a row of them goes off one after another. Shots, beams, blasts, fire, pistons and
   collisions (x${R.ramTile}, and more through a spike or plow) all damage them. \`api.nav\` always answers for the map as it is
@@ -216,7 +232,7 @@ Off the edge of the map counts as a pit.
 
 ### Items
 Pick-ups appear on the map's \`*\` spots at t=${R.itemFirstSpawn}s and again ${R.itemRespawn}s after being taken. Drive over one to take it.
-Mirrored spots always hold the same item type.
+Mirrored spots start with the same item type; after that each spot moves on to its next item when its own is taken.
 
 | item | kind | effect |
 |---|---|---|
@@ -247,7 +263,8 @@ state = {
     weapons: [{ i, type, dir, alive, ready, cooldown, angle, mountAngle, arc, range, minRange, projSpeed, dmg }],
   },
   allies:  [{ id, slot, name, alive, x, y, heading, vx, vy, speed, hpFrac, coreFrac, energyFrac, mass, radius, shield, burning, item, parts, ... }],
-  enemies: [ same shape — ONLY enemies your team can currently see; parts[] shows their layout (with z) and damage ],
+  enemies: [ same shape — ONLY enemies your team can currently see; parts[] shows their layout (with z) and damage: every piece
+             they started with stays in the list, the ones shot off with alive: false ],
   enemiesAlive,                      // how many are left, seen or not
   lastSeen: [{ id, x, y, t, alive }],
   projectiles: [{ kind: 'bullet' | 'shell' | 'missile' | 'mortar' | 'hook', x, y, vx, vy, landsAt?, landsIn? }],  // enemy shots in sensor range, nearest first (max 24)
@@ -294,6 +311,8 @@ Missing or invalid fields count as 0 / off (for a number, \`true\` counts as ful
 when \`tick\` returns. If \`tick\` throws, the vehicle idles for that step and the match report quotes the
 message with the line of your file; after ${R.maxViolations} exceptions the controller is cut off for the rest of
 the match. A tick should take well under ${R.tickBudgetMs} ms; one that never returns forfeits the match.
+Do not build on running out of stack or memory: how deep a call can nest is a property of the machine, not of the
+match, and a controller that measures it has given up the promise that the same files and seed play the same match.
 
 ### Helpers: \`api\`
 * \`api.util.driveTo(self, point, { reverse, stopDist, speed })\` → \`{ throttle, steer, brake }\` pursuit controller.
@@ -304,7 +323,7 @@ the match. A tick should take well under ${R.tickBudgetMs} ms; one that never re
 * \`api.util.threat(state, margin = 1.2)\` → \`null\`, or \`{ x, y, r, in, away }\` for the keg or mortar shell whose blast you are in or
   nearly in: where, how big, in how many seconds, and a point just outside it to drive to (\`driveTo(self, t.away, { reverse: true })\`).
 * \`api.nav.follower()\` → object with \`next(self, goalX, goalY, state.tick)\` returning the next waypoint of an A* route
-  (cached, re-planned twice a second, sized to your hull, backs out when wedged). Keep one per controller.
+  (cached, re-planned twice a second, sized to your hull, keeps to the way round an obstacle it has chosen, backs out when wedged). Keep one per controller.
 * \`api.nav.path(x0, y0, x1, y1, { hover, margin, mudCost, iceCost, lavaCost })\` → waypoints.
 * \`api.nav.los(x0, y0, x1, y1)\` (can a shot get through?), \`api.nav.clear(x0, y0, x1, y1, { margin, hover })\` (can I drive it?),
   \`api.nav.tileAt(x, y)\`, \`api.nav.isOpen(x, y, hover)\`, \`api.nav.clearance(x, y)\` → \`{ wall, pit }\` metres.
@@ -325,9 +344,23 @@ the match. A tick should take well under ${R.tickBudgetMs} ms; one that never re
 
 ## 7. Workflow
 
-With the MCP server (\`ironyard-mcp\`): \`get_rules\` → \`list_parts\` / \`list_maps\` → \`validate_design\` until the blueprint is legal and the
-stats look right → \`submit_bot\` → \`run_match\` against the built-ins and read the report (damage by type, accuracy, time
-stuck, first pieces lost, your own \`api.log\` lines) → \`evaluate_bot\` for a win-rate table over maps, seeds and both sides → iterate.
+With the MCP server (\`ironyard-mcp\`):
+
+1. \`get_rules\`, \`list_parts\`, \`list_maps\` — the kit and the arenas.
+2. \`validate_design\` until the blueprint is legal. Read its \`analysis\`: how much has to be shot away to reach your core
+   from each side, which of your weapons and wheels are the first thing hit, which bearings no gun covers, damage per
+   second by range, how many seconds of full fire your energy lasts, how far a fire can walk across the car, and which
+   lane of studs, once shot out, drops a track or a gun nobody was aiming at (\`weakLanes\`).
+3. \`submit_bot\`, then \`run_match\`. Every vehicle in the report has \`insights\` — up to six sentences on why the match
+   went as it did, with the numbers in them — and \`telemetry\`: each weapon's shots, hits and damage and when it was
+   lost; damage dealt and taken by vehicle, by weapon, by range band and (taken) by the side it came from; seconds at
+   each range; seconds with a target in reach against seconds firing, and what kept the guns silent; seconds stuck;
+   the first pieces lost and to what; hull, energy, distance and living weapons every two seconds. Your own
+   \`api.log\` lines are there too. \`save_replay: true\` keeps the match: \`get_replay\` reads back the events of a time
+   window or a trace of where everybody was.
+4. \`evaluate_bot\` for a win-rate table over maps, seeds and both sides, and a \`diagnosis\` of what the losses have in
+   common. \`scout_bot\` on whoever beats you: its design, its record by opponent and map, where it is thin.
+5. \`leaderboard\` for where you stand; change the file, submit again under the same name, repeat.
 
 Without MCP: \`node node/cli.js validate mybot.js\`, \`node node/cli.js match --a mybot.js --b rookie\`, \`node node/cli.js tournament\`.
 

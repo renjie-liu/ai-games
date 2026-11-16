@@ -2,7 +2,7 @@
 // and the crates and barrels a map can be built from.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAPS, PARTS, RULES, TILES, World, validateDesign, runMatch, makeNav, liveMap } from '../engine/index.js';
+import { MAPS, PARTS, RULES, TILES, DIR_ANGLE, World, validateDesign, runMatch, makeNav, liveMap, hitOn } from '../engine/index.js';
 import { loadBot, makeBot, readBotSource } from '../node/loader.js';
 
 const legal = (parts) => { const v = validateDesign({ parts }); assert.equal(v.ok, true, v.errors.join('; ')); return v.design; };
@@ -378,4 +378,176 @@ test('the new commands reach the engine from a controller', () => {
   assert.deepEqual(v.errors, []);
   const gone = res.events.filter((e) => e.k === 'part' && e.v === 0 && e.c === 'jettisoned').map((e) => e.i).sort();
   assert.deepEqual(gone, [0, 2], 'pieces 0 and 2 were let go of; the nonsense entries were ignored');
+});
+
+test('armor and slopes: the engine and the published arithmetic give the same answer', () => {
+  // hitOn (parts.js) is what the design analysis and the rulebook's table use; World.damage is what a match does
+  const armored = car([{ type: 'armor', x: 0, y: 3, z: 0 }, { type: 'slope', x: 1, y: 3, z: 0, dir: 'N' }]);
+  for (const dmg of [4, 30, 64]) for (const dtype of ['kinetic', 'explosive', 'energy']) {
+    const { w, p, q } = duel(car(), armored, { gap: 6 });
+    const plate = piece(q, 'plate'), armor = piece(q, 'armor'), slope = piece(q, 'slope');
+    const face = q.th + DIR_ANGLE[slope.dir];          // the way the slope looks; a shot going the other way strikes its face
+    // each hit takes what the arithmetic says, or whatever the piece still had
+    const hit = (part, ang, faced, what) => {
+      const before = part.hp, want = Math.min(before, hitOn(part.def, dmg, dtype, faced));
+      w.damage(q, part, dmg, dtype, p, ang);
+      assert.ok(Math.abs((before - Math.max(0, part.hp)) - want) < 1e-9, `${dmg} ${dtype} ${what}: took ${before - part.hp}, the arithmetic says ${want}`);
+    };
+    hit(plate, face + Math.PI, true, 'on a plate');
+    hit(armor, face + Math.PI, true, 'on armor');
+    hit(slope, face + Math.PI, true, 'on a slope, face on');
+    hit(slope, face, false, 'on a slope, from behind');
+    hit(slope, undefined, false, 'on a slope with no direction (a blast)');
+  }
+  assert.equal(hitOn(PARTS.armor, 4), 2); assert.equal(hitOn(PARTS.armor, 1), 0.25); assert.equal(hitOn(PARTS.armor, 22, 'energy'), 22);
+});
+
+test('a design is made of our parts and our four facings, whatever else its JSON may hold', () => {
+  const base = car().parts;
+  // an array that reads like a name, and names every object has, are not parts or facings
+  for (const type of [['core'], ['plate'], 'constructor', 'toString', '__proto__', 7, null, { toString: () => 'plate' }]) {
+    const v = validateDesign({ parts: base.concat([{ type, x: 0, y: 3, z: 0 }]) });
+    assert.equal(v.ok, false, `type ${JSON.stringify(type)}`);
+    assert.match(v.errors.join(' '), /unknown part type/);
+  }
+  for (const dir of [['E'], 'toString', 'valueOf', 'constructor', 3, {}]) {
+    const v = validateDesign({ parts: base.concat([{ type: 'thruster', x: 0, y: -2, z: 0, dir }]) });
+    assert.equal(v.ok, false, `dir ${JSON.stringify(dir)}`);
+    assert.match(v.errors.join(' '), /dir must be one of N, E, S, W/);
+  }
+  // the same goes for a paint, a map and a mode: a name every object has is not one of ours
+  for (const accent of ['constructor', 'toString', ['red'], 5]) assert.equal(validateDesign({ parts: base, paint: { accent } }).design.paint.accent, 'white', `accent ${JSON.stringify(accent)}`);
+  assert.equal(validateDesign({ parts: base, paint: { accent: 'red' } }).design.paint.accent, 'red');
+  assert.throws(() => runMatch({ map: 'constructor', teams: [[loadBot('rookie')], [loadBot('rookie')]], record: false }), /unknown map "constructor"/);
+  assert.throws(() => runMatch({ map: 'proving', mode: 'toString', teams: [[loadBot('rookie')], [loadBot('rookie')]], record: false }), /unknown mode "toString"/);
+  // and a bot that hands such a design over is refused before the match, by name, not allowed to break it for both sides
+  const evil = makeBot('evil', `const meta = { name: 'Evil' }; const design = { parts: ${JSON.stringify(base)}.map((p) => (p.type === 'core' ? { ...p, type: ['core'] } : p)) }; function tick() { return {}; }`);
+  assert.throws(() => runMatch({ map: 'proving', teams: [[evil], [loadBot('rookie')]], record: false }), /bot "evil".*invalid design/);
+});
+
+test('a repair kit puts every fire on the vehicle out', () => {
+  const { w, p, q, run } = duel(car(), car(), { gap: 20 });
+  for (const part of p.parts.filter((x) => x.type === 'plate').slice(0, 3)) w.warm(p, part, 2, q.id);
+  run(0.2);
+  assert.ok(p.burning >= 3);
+  w.pickup(p, { ...w.itemSpawns[0], type: 'repair', present: true });
+  assert.equal(p.burning, 0);
+  run(1);
+  assert.equal(p.burning, 0, 'and nothing smoulders on');
+});
+
+test('flamethrower: a piece of several studs is washed once a tick, not once per stud', () => {
+  const flamer = car([{ type: 'flamer', x: 0, y: 1, z: 1, dir: 'N' }]);
+  // the same nose, once as four 1x1 plates and once as one 2x2 plate
+  const nose = (parts) => legal([
+    ...[-1, 0, 1].flatMap((x) => [-1, 0, 1, 2].map((y) => ({ type: 'armor', x, y, z: 0 }))), ...parts,
+    { type: 'wheel', x: -2, y: 2, z: 0 }, { type: 'wheel', x: 2, y: 2, z: 0 }, { type: 'wheel', x: -2, y: -1, z: 0 }, { type: 'wheel', x: 2, y: -1, z: 0 },
+    { type: 'core', x: 0, y: 0, z: 1 }]);
+  const lost = (design, type) => {
+    const { w, p, q, run } = duel(flamer, design, { gap: 5 });
+    w.setCommand(p, { fire: true, aim: { x: q.x, y: q.y } });
+    run(0.5);
+    const hit = q.parts.filter((x) => x.type === type);
+    return Math.max(...hit.map((x) => x.maxHp - x.hp));
+  };
+  const small = lost(nose([{ type: 'plate', x: 0, y: 3, z: 0 }, { type: 'plate', x: -1, y: 3, z: 0 }, { type: 'plate', x: 0, y: 4, z: 0 }, { type: 'plate', x: -1, y: 4, z: 0 }]), 'plate');
+  const big = lost(nose([{ type: 'plate4', x: -1, y: 3, z: 0 }]), 'plate4');
+  assert.ok(small > 0.5 && big > 0.5, `both are burnt (${small.toFixed(2)}, ${big.toFixed(2)})`);
+  assert.ok(big < small * 1.3, `the 2x2 plate loses about what one 1x1 plate does (${big.toFixed(2)} against ${small.toFixed(2)}), not four times it`);
+});
+
+test('nobody ends a tick inside a wall, however hard they are thrown at it', () => {
+  // proving has a pillar two tiles thick at x 14..18, y 38..42: straight at its seam, fast enough to be past the face in one tick
+  let inside = 0;
+  for (let k = 0; k < 40; k++) {
+    const { w, p, q } = duel(car(), car(), { gap: 30, at: { x: 13.0 + (k % 8) * 0.03, y: 39.7 + Math.floor(k / 8) * 0.12 } });
+    q.x = 50; q.y = 10; w.updateCells(q);
+    p.vx = 40;
+    for (let i = 0; i < 120; i++) {
+      w.step();
+      const tx = Math.floor(p.x / 2), ty = Math.floor(p.y / 2);
+      if (w.map.tiles[ty * w.map.w + tx] === Object.keys(TILES).indexOf('wall')) inside++;
+    }
+  }
+  assert.equal(inside, 0);
+});
+
+test('a shield that soaks a whole burst still lets the shove through, and soaks the splash of a shell beside it', () => {
+  const shielded = car([{ type: 'shieldgen', x: 1, y: -1, z: 1 }]);
+  const { w, p, q } = duel(car(), shielded, { gap: 8 });
+  w.explode(q.x - 1.4, q.y, 2, 46, 0.35, 0, p, 7, { shieldable: true });   // a mortar shell: all of it fits in a full bubble
+  assert.equal(q.stats.damageTaken, 0, 'nothing gets through');
+  assert.ok(q.shield < 120, 'the bubble paid');
+  assert.ok(q.vx > 1.5, `and it is thrown all the same (${q.vx.toFixed(2)} m/s)`);
+  // a cannon shell going off on the wall beside a shielded car: its splash is a burst like any other
+  const wall = duel(car([{ type: 'cannon', x: 0, y: 1, z: 1, dir: 'N' }]), shielded, { gap: 8 });
+  const s0 = wall.q.shield;
+  wall.w.explode(wall.q.x - wall.q.radius - 0.2, wall.q.y, 1.1, 30, 0.4, 0, wall.p, 5, { shieldable: true });
+  assert.ok(wall.q.shield < s0 && wall.q.stats.damageTaken === 0, 'the bubble pays for it, the hull does not');
+});
+
+test('a harpoon whose cable is out is not ready, and a mortar cannot be aimed at nowhere', () => {
+  const { w, p, q, run } = duel(car([{ type: 'harpoon', x: 0, y: 1, z: 1, dir: 'N' }]), car(), { gap: 5 });
+  const ready = () => w.observeAll()[p.id].self.weapons.find((x) => x.type === 'harpoon').ready;
+  assert.equal(ready(), true);
+  w.setCommand(p, { fire: true, aim: { x: q.x, y: q.y } });
+  run(0.5);
+  w.setCommand(p, {});
+  run(7);                                                                  // long past the 6 s reload: the cable (7 s) still holds
+  if (w.tethers.length) assert.equal(ready(), false, 'hooked: nothing to fire');
+  assert.ok(p.stats.hooks >= 1, 'it bit');
+
+  const m = duel(car([{ type: 'mortar', x: -1, y: 1, z: 1, dir: 'N' }]), car(), { gap: 2.5 });
+  m.w.setCommand(m.p, { fire: true, aim: { x: 1.7e308, y: 1.7e308 } });    // squared, this overflows: it used to slip under the minimum range
+  m.run(3);
+  assert.equal(m.q.stats.damageTaken, 0, 'no shell on a car 2.5 m away');
+  assert.equal(m.p.stats.damageTaken, 0);
+});
+
+test('nobody leaves the map, and a fork-shaped car is not stopped by a wall it does not touch', () => {
+  const hover = legal([
+    ...[-1, 0, 1].flatMap((x) => [-1, 0, 1].map((y) => ({ type: 'hover', x, y, z: 0 }))),
+    { type: 'core', x: 0, y: 0, z: 1 }, { type: 'reactor', x: 0, y: -1, z: 1 }, { type: 'reactor', x: 0, y: 1, z: 1 }]);
+  const { w, p, run } = duel(hover, car(), { gap: 20, map: MAPS.sumo, at: { x: 36, y: 20 }, heading: Math.PI });
+  p.vx = 30;                                                               // thrown east, out over the edge
+  run(1.5);
+  assert.ok(p.alive && p.x <= MAPS.sumo.width && p.x >= 0, `still over the map (x = ${p.x.toFixed(1)} of ${MAPS.sumo.width})`);
+
+  const fork = legal([
+    { type: 'track', x: -4, y: 0, z: 0 }, { type: 'track', x: -4, y: 3, z: 0 }, { type: 'track', x: 4, y: 0, z: 0 }, { type: 'track', x: 4, y: 3, z: 0 },
+    ...[-4, -3, -2, -1, 0, 1, 2, 3, 4].map((x) => ({ type: 'plate', x, y: -1, z: 0 })), { type: 'core', x: 0, y: -1, z: 1 }]);
+  // Canyon's rock wall at column 11 is one tile wide and ends at y = 34; the fork's centre of mass lies between its prongs
+  const f = duel(fork, car(), { gap: 30, map: MAPS.canyon, at: { x: 23, y: 29 }, heading: Math.PI / 2 });
+  f.q.x = 50; f.q.y = 50; f.w.updateCells(f.q);
+  let top = 0;
+  for (let i = 0; i < 90; i++) { f.w.setCommand(f.p, { throttle: 1 }); f.w.step(); top = Math.max(top, f.p.y); }
+  assert.ok(top > 34.3, `its centre goes in between the prongs until the cross-bar meets the wall (got to y = ${top.toFixed(2)})`);
+});
+
+test('a shield soaks a keg, a barrel or a mine going off outside it, but not a keg still bolted under it', () => {
+  const shielded = car([{ type: 'shieldgen', x: 1, y: -1, z: 1 }]);
+  const K = PARTS.keg.blast;
+  // a keg rolled up to the bubble
+  const out = duel(car(), shielded, { gap: 12 });
+  const s0 = out.q.shield;
+  out.w.blast(out.q.x - out.q.radius - 0.3, out.q.y, K, out.p, false);
+  assert.equal(out.q.stats.damageTaken, 0, 'none of it reaches the hull');
+  assert.ok(Math.abs((s0 - out.q.shield) - K.dmg) < 1e-6, `the bubble pays one blast's worth (${(s0 - out.q.shield).toFixed(1)} of ${K.dmg})`);
+  assert.ok(Math.hypot(out.q.vx, out.q.vy) > 1, 'and the car is thrown all the same');
+  assert.equal(out.q.burning, 0, 'nothing is set alight');
+  // the same blast on the same car without a generator
+  const bare = duel(car(), car(), { gap: 12 });
+  bare.w.blast(bare.q.x - bare.q.radius - 0.3, bare.q.y, K, bare.p, false);
+  assert.ok(bare.q.stats.damageTaken > 100, `unshielded, it tears the car up (${Math.round(bare.q.stats.damageTaken)} hp)`);
+  // a mine under a shielded car
+  const mine = duel(car(), shielded, { gap: 12 });
+  mine.w.explode(mine.q.x, mine.q.y, 1.8, 60, 0.4, 0, mine.p, 6, { ground: true, shieldable: true });
+  assert.equal(mine.q.stats.damageTaken, 0);
+  // its own keg, shot off while still on the car: that one is inside the bubble
+  const carrier = duel(car(), car([{ type: 'shieldgen', x: 1, y: -1, z: 1 }, { type: 'keg', x: 0, y: 2, z: 1, dir: 'N' }]), { gap: 12 });
+  const keg = piece(carrier.q, 'keg');
+  carrier.w.damage(carrier.q, keg, 999, 'kinetic', carrier.p);
+  carrier.w.settle();
+  assert.ok(carrier.q.stats.damageTaken > keg.maxHp + 100, `its own keg goes off under the shield (${Math.round(carrier.q.stats.damageTaken)} hp gone)`);
+  assert.equal(carrier.q.shield, 120, 'which is not touched');
 });

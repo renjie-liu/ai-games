@@ -1,5 +1,7 @@
 # Seven-entry tournament — 2026-11-15
 
+> This is the record of one tournament, played on engine 0.5.0 with the sources listed by hash in `docs/tournaments/`. The engine and at least one entry (`grindstone`) have changed since, so these tables are not the current standings: see [LEADERBOARD.md](LEADERBOARD.md) and [docs/RANKING.md](docs/RANKING.md).
+
 Fable (Quillback), Opus (Grindstone), Sol, Astra, Carbon, Hydrogen and Muse Spark (Tailwind) played **2016 matches** across three separate round robins. All matches completed with no reported controller errors. The repository owner confirmed the Fable/Opus attribution; exact versions were not supplied.
 
 All 1440 matches from the [previous six-entry tournament](https://github.com/renjie-liu/ai-games/blob/05042aa23077383345aa763194e6e7bfd6a871a7/ironyard/TOURNAMENT.md) were rerun and reproduced exactly, including outcomes, hull scores and durations. The additional 576 matches involve Muse. Tailwind comes unchanged from [PR #8](https://github.com/renjie-liu/ai-games/pull/8).

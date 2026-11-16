@@ -59,7 +59,9 @@ export function makeUtil() {
       if (d < (opts.stopDist ?? 0.6)) return { throttle: 0, steer: 0, brake: 1 };
       let err = angDiff(Math.atan2(dy, dx), self.heading), dir = 1;
       if (opts.reverse && Math.abs(err) > Math.PI * 0.6) { err = angDiff(err + Math.PI, 0); dir = -1; }
-      const steer = clamp(err * 2.2 - (self.angVel || 0) * 0.35, -1, 1) * dir;
+      // `steer` turns the car the same way whichever way it is rolling: `err` is already how far the heading has to turn
+      // for the tail to point at the goal, so backing up does not flip it
+      const steer = clamp(err * 2.2 - (self.angVel || 0) * 0.35, -1, 1);
       const align = Math.max(0, Math.cos(err));
       const throttle = (opts.speed ?? 1) * dir * (Math.abs(err) > 1.2 ? 0.15 : 0.3 + 0.7 * align);
       return { throttle, steer, brake: 0 };
@@ -95,18 +97,25 @@ export function makeUtil() {
 /**
  * Stateful path follower built on a `path(x0, y0, x1, y1, opts)` function: caches
  * the route, re-plans every `replanTicks` ticks (default 30 = 0.5 s) or when the
- * goal moves, and backs out when the vehicle is wedged against something.
+ * goal moves, keeps to the way round an obstacle it has chosen when a fresh plan would
+ * swap sides, and backs out when the vehicle is wedged against something.
  *   const f = api.nav.follower();                       // keep it in your controller's closure
  *   const wp = f.next(self, goalX, goalY, state.tick);  // -> { x, y, reverse? } waypoint to steer at
  *   Object.assign(cmd, api.util.driveTo(self, wp));
  */
-export function makeFollower(path) {
+export function makeFollower(path, clear) {
   return function follower(defaults = {}) {
-    let route = [], gx = NaN, gy = NaN, nextPlan = -1;
+    let route = [], gx = NaN, gy = NaN, nextPlan = -1, rx = NaN, ry = NaN, ox = NaN, oy = NaN;   // rx, ry: the goal `route` was planned for; ox, oy: where the leg to route[0] starts
     let cx = NaN, cy = NaN, ct = -1, lastCall = -99, escape = null, escapeUntil = -1, flip = 1;
+    // is the car within 0.75 m of the straight line from where the current leg began to the corner it leads to?
+    const onLeg = (self, to) => {
+      const lx = to.x - ox, ly = to.y - oy, l2 = lx * lx + ly * ly;
+      const k = l2 > 0 ? Math.max(0, Math.min(1, ((self.x - ox) * lx + (self.y - oy) * ly) / l2)) : 0;
+      return Math.hypot(self.x - (ox + lx * k), self.y - (oy + ly * k)) < 0.75;
+    };
     return {
       get route() { return route; },
-      reset() { nextPlan = -1; },
+      reset() { nextPlan = -1; route = []; },
       next(self, x, y, tick, opts) {
         const o = opts ? { ...defaults, ...opts } : defaults;
         // stuck detection: called continuously yet barely moved in 1.5 s
@@ -119,7 +128,7 @@ export function makeFollower(path) {
             flip = -flip;
             const a = self.heading + Math.PI + flip * 0.7;
             escape = { x: self.x + Math.cos(a) * 4, y: self.y + Math.sin(a) * 4, reverse: true };
-            escapeUntil = tick + 45; nextPlan = -1;
+            escapeUntil = tick + 45; nextPlan = -1; route = [];   // wedged on that route: plan afresh once clear
           }
           cx = self.x; cy = self.y; ct = tick;
           if (tick < escapeUntil) return escape;
@@ -127,11 +136,25 @@ export function makeFollower(path) {
         const moved = Math.hypot(x - gx, y - gy);
         if (!(tick < nextPlan) || !(moved <= (o.replanDist ?? 3))) {
           const margin = o.margin ?? Math.max(0.8, Math.min(2.0, (self.radius || 1.5) * 0.8));
-          route = path(self.x, self.y, x, y, { hover: !!self.hovering, ...o, margin });
+          const hover = !!self.hovering;
+          const fresh = path(self.x, self.y, x, y, { hover, ...o, margin });
+          // Two ways round a hole are often the same length, and a plan made afresh every half second may pick the
+          // other one each time — leaving the car to steer at the hole between them. So when the fresh plan sets off
+          // somewhere else altogether (its first corner more than 3 m from the one being driven to), the old corner is
+          // kept — if there is still a corner to go round, the goal is about where the route was planned for, that way
+          // is not clearly the longer one, and the car is either still on the leg it was given (within 0.75 m of it)
+          // or can drive straight to the corner from wherever it now is.
+          const along = (r) => { let d = 0, px = self.x, py = self.y; for (const w of r) { d += Math.hypot(w.x - px, w.y - py); px = w.x; py = w.y; } return d; };
+          const keep = !!clear && route.length > 1 && fresh.length > 0
+            && Math.hypot(x - rx, y - ry) <= (o.replanDist ?? 3)
+            && Math.hypot(fresh[0].x - route[0].x, fresh[0].y - route[0].y) > 3
+            && along(route) <= along(fresh) * 1.15
+            && (onLeg(self, route[0]) || clear(self.x, self.y, route[0].x, route[0].y, hover ? { hover, margin } : { margin, avoid: ['lava'] }));
+          if (!keep) { route = fresh; rx = x; ry = y; ox = self.x; oy = self.y; }
           gx = x; gy = y; nextPlan = tick + (o.replanTicks ?? 30);
         }
         const reach = o.reach ?? 1.3;
-        while (route.length > 1 && Math.hypot(route[0].x - self.x, route[0].y - self.y) < reach) route.shift();
+        while (route.length > 1 && Math.hypot(route[0].x - self.x, route[0].y - self.y) < reach) { ox = route[0].x; oy = route[0].y; route.shift(); }
         return route[0] || { x, y };
       },
     };
@@ -228,15 +251,16 @@ export function controllerRealm(factory, host, boot, makeUtil, makeFollower) {
     return out;
   };
   const path = (x0, y0, x1, y1, opts) => { const o = pack(opts); return points(hPath(+x0, +y0, +x1, +y1, o)); };
+  const clear = (x0, y0, x1, y1, opts) => { const o = pack(opts); return hClear(+x0, +y0, +x1, +y1, o); };
   const nav = freeze({
-    follower: makeFollower(path),
+    follower: makeFollower(path, clear),
     tileAt: (x, y) => hTileAt(+x, +y),
     tileAtCell: (tx, ty) => hTileAtCell(+tx, +ty),
     isOpen: (x, y, hover) => hIsOpen(+x, +y, !!hover),
     /** metres from (x, y) to the nearest wall/barrier and the nearest pit (capped at 6) */
     clearance: (x, y) => ({ wall: hClearWall(+x, +y), pit: hClearPit(+x, +y) }),
     los: (x0, y0, x1, y1) => hLos(+x0, +y0, +x1, +y1),
-    clear: (x0, y0, x1, y1, opts) => { const o = pack(opts); return hClear(+x0, +y0, +x1, +y1, o); },
+    clear,
     path,
   });
 

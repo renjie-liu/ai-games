@@ -2,7 +2,7 @@
 // runaway controller can be killed by the watchdog in runner.js.
 import { parentPort } from 'node:worker_threads';
 import { performance } from 'node:perf_hooks';
-import { runMatch, summarize } from '../engine/index.js';
+import { runMatch, summarize, matchDigest } from '../engine/index.js';
 import { makeBot } from './loader.js';
 
 const cache = new Map();
@@ -23,6 +23,9 @@ parentPort.on('message', (job) => {
     let result;
     if (want === 'full') result = res;
     else if (want === 'summary') result = summarize(res);
+    // 'digest': what a benchmark over hundreds of matches needs — the score, and per vehicle its end,
+    // telemetry (no timeline, no logs, no design) and insights with their kinds
+    else if (want === 'digest') result = matchDigest(res);
     else result = { winner: res.winner, reason: res.reason, duration: res.duration, teams: res.teams,
       errors: res.vehicles.flatMap((v) => v.errors.map((e) => `${v.bot}: ${e}`)).slice(0, 6) };
     parentPort.postMessage({ id: job.id, ok: true, result });

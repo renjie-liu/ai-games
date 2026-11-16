@@ -98,7 +98,8 @@ export function validateDesign(input, opts = {}) {
   input.parts.forEach((raw, i) => {
     const at = `parts[${i}]`;
     if (!raw || typeof raw !== 'object') { errors.push(`${at} is not an object`); return; }
-    const def = PARTS[raw.type];
+    // (a controller hands its design over as JSON: an array ["core"] or the name of an inherited property would look a part up without being one)
+    const def = typeof raw.type === 'string' && Object.hasOwn(PARTS, raw.type) ? PARTS[raw.type] : null;
     if (!def) { errors.push(`${at}: unknown part type "${raw.type}". Valid: ${Object.keys(PARTS).join(', ')}`); return; }
     let z = raw.z;
     if (z === 'chassis') z = 0; else if (z === 'deck') z = 1;
@@ -107,7 +108,7 @@ export function validateDesign(input, opts = {}) {
     if (def.layer !== 'any' && def.layer !== LAYER_NAME[z]) { errors.push(`${at}: ${raw.type} can only go on the ${def.layer} layer (z = ${def.layer === 'deck' ? 1 : 0})`); return; }
     let dir = raw.dir ?? 'N';
     if (def.fixedDir) dir = 'N';
-    if (!DIRS[dir]) { errors.push(`${at} (${raw.type}): dir must be one of N, E, S, W (N = front), got "${raw.dir}"`); return; }
+    if (typeof dir !== 'string' || !Object.hasOwn(DIRS, dir)) { errors.push(`${at} (${raw.type}): dir must be one of N, E, S, W (N = front), got "${raw.dir}"`); return; }
     const p = { type: raw.type, x: raw.x, y: raw.y, z, dir };
     if (!Number.isInteger(p.x) || !Number.isInteger(p.y)) { errors.push(`${at} (${raw.type}): x and y must be integers, got (${raw.x}, ${raw.y})`); return; }
     const cells = cellsOf(p);
@@ -201,7 +202,7 @@ export function validateDesign(input, opts = {}) {
   if (stats.groundMovers > 0 && Math.abs(stats.wheelBias) > 0.25) warnings.push('drive force is lopsided left/right: the vehicle will pull to one side');
   if (stats.turnRate < 0.8 && stats.groundMovers + stats.hoverMovers > 0) warnings.push(`slow turn rate (~${stats.turnRate.toFixed(2)} rad/s): widen the wheelbase or add a gyro`);
 
-  const accent = input.paint && PAINTS[input.paint.accent] ? input.paint.accent : 'white';
+  const accent = input.paint && typeof input.paint.accent === 'string' && Object.hasOwn(PAINTS, input.paint.accent) ? input.paint.accent : 'white';
   out.design = { name: String(input.name || 'Unnamed').slice(0, 40), paint: { accent }, parts };
   out.ok = errors.length === 0;
   return out;
@@ -346,7 +347,7 @@ export function parseBlueprint(name, layers, opts = {}) {
       const idx = Number(k.split(':')[0]);
       if (!cont.has(idx)) {
         const x = (idx % GRID_W) - GRID_HX, y = Math.floor(idx / GRID_W) - GRID_HY;
-        throw new Error(`${LAYER_NAME[z]}: stud (${x}, ${y}) is covered by ${k.split(':')[1]} and must be written ":" in the picture`);
+        throw new Error(`${LAYER_NAME[z]}: stud (${x}, ${y}) is covered by ${k.split(':')[1]} and must be written ":" in the picture (rows are drawn front first, so a multi-stud piece's own glyph goes on its left stud in the LOWEST of its rows in the picture, and ":" on every other stud it covers)`);
       }
     }
     for (const idx of cont) {

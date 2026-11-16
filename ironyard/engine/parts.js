@@ -219,7 +219,7 @@ export const PARTS = {
   shieldgen: {
     name: 'Shield generator', cat: 'utility', glyph: 'G', layer: 'deck', max: 1,
     cost: 130, mass: 12, hp: 70, burn: 0.6, shield: 120, shieldRegen: 10, shieldDelay: 3, energyUse: 2.5,
-    desc: 'Bubble that absorbs 120 projectile/beam/blast damage, recharging after 3 s without a hit. Rams and saws go straight through.',
+    desc: 'Bubble that absorbs 120 damage from shots, beams, flame and every blast from outside it — shells, missiles, mortar rounds, powder kegs, barrels, mines — recharging after 3 s without a hit. A blast it soaks still shoves you. Rams, saws, pistons, fire already burning, and a keg that goes off while still bolted to you go straight through.',
   },
   repairer: {
     name: 'Repair arm', cat: 'utility', glyph: '+', layer: 'deck', max: 2,
@@ -282,7 +282,7 @@ export const ITEMS = {
   shield: { name: 'Overshield', icon: '🛡️', held: false, color: '#60a5fa', amount: 100, time: 12,
     desc: '+100 temporary shield for 12 s, even without a generator.' },
   overdrive: { name: 'Overdrive', icon: '💥', held: false, color: '#f87171', mult: 1.5, time: 8,
-    desc: 'All your damage x1.5 for 8 s.' },
+    desc: 'Everything your guns, flamethrowers, saws and pistons deal x1.5 for 8 s. Not powder kegs, rams or fire once it has caught.' },
   nitro: { name: 'Nitro', icon: '⚡', held: false, color: '#facc15', mult: 1.6, time: 6,
     desc: 'Drive and thruster force x1.6 for 6 s.' },
   mine: { name: 'Mines', icon: '💣', held: true, color: '#fb923c', charges: 2,
@@ -295,6 +295,19 @@ export const ITEMS = {
 export const ITEM_IDS = Object.keys(ITEMS);
 
 // Tile types. `ch` is the character used in ASCII maps.
+/**
+ * What one hit is worth once the piece it lands on has had its say: a slope struck on its face lets
+ * `deflect` of it through, armor takes `armor` off but never more than three quarters. Only kinetic
+ * and explosive hits are reduced. This is the arithmetic of World.damage (sim.js), stated once for
+ * the design analysis and the rulebook; tests/contraptions.test.js holds the two to the same answer.
+ */
+export function hitOn(def, amount, dtype = 'kinetic', faced = false) {
+  if (dtype !== 'kinetic' && dtype !== 'explosive') return amount;
+  if (faced && def.deflect) amount *= def.deflect;
+  if (def.armor) amount = Math.max(amount * 0.25, amount - def.armor);
+  return amount;
+}
+
 export const TILE = 2; // metres per map tile
 export const TILES = {
   floor:   { ch: '.', name: 'Floor' },

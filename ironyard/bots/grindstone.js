@@ -1,22 +1,24 @@
-// GRINDSTONE — tracked gun-wall. Three machine-gun turrets and a laser behind a row of
-// slopes, the cockpit sunk into the chassis under an armour lid, a shield generator and two
-// reactors on a pair of track units.
-// It reads the other car stud by stud and works out what a burst from where it stands will
-// actually hit: through the cockpit, by stripping the weapons, or by taking the wheels off a
-// brawler (or the pads off a hover craft), whichever is cheapest. It picks its range from what
-// the enemy carries (rushes keg throwers, keeps flamers and blades at arm's length), dodges
-// shells and kegs, digs in when shoved toward a hole, and never parks on lava.
-// In teams it follows a `{ focus: id }` call and makes one when it is the lowest living slot.
-const meta = { name: 'Grindstone', author: 'Rust Hollow Garage', model: 'Opus', notes: 'Tracked MG+laser wall: sunk cockpit, shield; aims at whatever stud ends the fight soonest.' };
+// GRINDSTONE — tracked laser wall. Four lasers behind a row of slopes (beams ignore the slopes
+// and armour the other gun cars hide behind), the cockpit sunk into the chassis under an armour
+// lid with a second armour block behind it, two reactors and a battery to keep the beams lit, on a
+// pair of track units that hang off the core from the front AND from a rear chassis row, so drilling
+// one column no longer drops a whole side of the car.
+// It reads the other car stud by stud and works out what a beam from where it stands will
+// actually hit: through the cockpit, by stripping the guns (preferred against gun batteries), or by
+// taking the legs off a brawler (or the pads off a hover craft), whichever is cheapest. It picks its
+// range from what the enemy carries, rushes cars that outrange it, routes round lava, holes and walls
+// instead of freezing in front of them, backs off a harpoon, steps round mines, dodges shells and kegs.
+// In teams every car names the enemy it is on and prefers one a teammate already shoots.
+const meta = { name: 'Grindstone', author: 'Rust Hollow Garage', model: 'Opus', notes: 'Tracked four-laser wall behind slopes: sunk cockpit, tracks tied in front and rear, beams through armour at whatever stud ends the fight soonest.' };
 
 const design = (ctx, api) => api.util.blueprint('Grindstone', {
   deck: [
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  .  .  .  .  .  .',
+    '.  .  .  .  .  .  .  .  .',
     '.  .  /^ /^ /^ /^ /^ .  .',
-    '.  .  m^ L^ b  m^ m^ .  .',
-    '.  .  b  G  a  b  b  .  .',
-    '.  .  f^ b  b  i  f^ .  .',
+    '.  .  L^ L^ .  L^ L^ .  .',
+    '.  .  .  a  a  e  .  .  .',
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  .  .  .  .  .  .',
@@ -26,11 +28,11 @@ const design = (ctx, api) => api.util.blueprint('Grindstone', {
   chassis: [
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  .  .  .  .  .  .',
-    '.  .  p  p  p  p  p  .  .',
-    '.  :  p  p  p  p  p  :  .',
-    '.  :  p  r  @  r  p  :  .',
-    '.  T  p  p  p  p  p  T  .',
     '.  .  .  .  .  .  .  .  .',
+    '.  .  :  :  :  :  :  .  .',
+    '.  .  :  q  q  q  :  .  .',
+    '.  .  T  r  @  r  T  .  .',
+    '.  .  q> :  a  q> :  .  .',
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  .  .  .  .  .  .',
     '.  .  .  .  .  .  .  .  .',
@@ -38,17 +40,19 @@ const design = (ctx, api) => api.util.blueprint('Grindstone', {
   ],
 }, { paint: { accent: 'sand' } });
 
-let route = null;
+let lastFocus = -1;
+let route = null, stuckT = 0, lastThr = 0, routeUntil = -1, lastSteer = 0, wedgeT = 0, escapeUntil = -1, escDir = -1;
 const MELEE = { saw: 1, spike: 1, plow: 1, piston: 1, harpoon: 1 };
 
 function profile(foe) {
-  const p = { kegs: 0, flame: 0, melee: 0, guns: 0, hover: 0 };
+  const p = { kegs: 0, flame: 0, melee: 0, guns: 0, hover: 0, far: 0 };
   for (const q of foe.parts || []) {
     if (!q.alive) continue;
     if (q.type === 'keg') p.kegs++;
     else if (q.type === 'flamer') p.flame++;
     else if (MELEE[q.type]) p.melee++;
     else if (q.type === 'hover') p.hover++;
+    else if (q.type === 'cannon' || q.type === 'railgun' || q.type === 'missile' || q.type === 'mortar') { p.guns++; p.far++; }
     else if (q.type === 'mg' || q.type === 'cannon' || q.type === 'railgun' || q.type === 'laser' || q.type === 'missile' || q.type === 'mortar') p.guns++;
   }
   return p;
@@ -57,6 +61,7 @@ function profile(foe) {
 // ── targeting: which stud of the enemy does a burst from here actually meet? ──
 const DIRA = { N: 0, W: Math.PI / 2, S: Math.PI, E: -Math.PI / 2 };
 const WEAP = { mg: 1, cannon: 1, railgun: 1, laser: 1, missile: 1, mortar: 1, flamer: 1, harpoon: 1, saw: 1, piston: 1, spike: 0.4, plow: 0.4 };
+const THREAT = { cannon: 3, railgun: 3, laser: 3, missile: 2.5, mortar: 2, flamer: 2, mg: 1, saw: 1.5, piston: 1.5, harpoon: 2.5, spike: 0.4, plow: 0.4 };
 const MOVE = { wheel: 1, bigwheel: 1, track: 1, hover: 1, thruster: 0.5 };
 let gridCache = { id: -1, tick: -1, deck: null, chas: null };
 
@@ -141,9 +146,13 @@ function pickTarget(self, foe, api, tick, beam) {
     if (!p.alive || !WEAP[p.type]) continue;
     const c = rayCost(p);
     nW++; dsum += c;
-    if (c < dmin) { dmin = c; dT = p; }
+    // the gun that hurts us most per hit point in the way: shells and beams get through our slopes, bullets mostly do not
+    const cw = c / (THREAT[p.type] || 1);
+    if (cw < dmin) { dmin = cw; dT = p; }
   }
-  if (dT && dsum * 0.6 < bestCost) { bestCost = dsum * 0.6; pick = dT; }
+  // gun batteries (4+ guns, nothing that only hurts by touch): stripping the guns is usually the quicker kill
+  const sk = foe.parts.filter((p) => WEAP[p.type] >= 1).length >= 4 && !foe.parts.some((p) => p.alive && MELEE[p.type]) ? 0.45 : 0.6;
+  if (dT && dsum * sk < bestCost) { bestCost = dsum * sk; pick = dT; }
   // take its legs away: worth it against cars that can only hurt what they touch
   const pr = profile(foe), shortReach = pr.flame + pr.melee > pr.guns;
   let msum = 0, mmin = 1e9, mT = null;
@@ -209,20 +218,32 @@ function tick(state, api) {
     hasPit = rows.some((r) => r.includes('_')) || true;
   }
   const cmd = { throttle: 0, steer: 0, fire: false };
+  stuckT = Math.abs(lastThr) > 0.5 && self.speed < 0.3 ? stuckT + state.dt : 0;
+  // wedged: asking to turn or creep but neither moving nor turning (nose against a wall or crate)
+  wedgeT = self.speed < 0.3 && Math.abs(self.angVel || 0) < 0.25 && (Math.abs(lastSteer) > 0.5 || Math.abs(lastThr) > 0.15) ? wedgeT + state.dt : 0;
+  if (wedgeT > 1.0) {
+    escapeUntil = state.t + 0.7; wedgeT = 0;
+    const hc = Math.cos(self.heading), hs = Math.sin(self.heading), r = self.radius + 0.8;
+    const fOk = nav.isOpen(self.x + hc * r, self.y + hs * r), bOk = nav.isOpen(self.x - hc * r, self.y - hs * r);
+    escDir = fOk && !bOk ? 1 : -1;
+  }
 
   let foe = null, best = Infinity;
   for (const e of state.enemies) { const d = U.dist(self, e); if (d < best) { best = d; foe = e; } }
   // team play: follow a teammate's call, and make the call when we are the lowest living slot
   const allies = (state.allies || []).filter((a) => a.alive !== false && a.id !== self.id);
   if (allies.length && state.enemies.length) {
-    const call = (state.messages || []).find((m) => m.data && Number.isInteger(m.data.focus));
-    const called = call && state.enemies.find((e) => e.id === call.data.focus);
-    if (called && U.dist(self, called) < 20 && !(best < 5 && foe !== called)) { foe = called; best = U.dist(self, called); }
-    if (allies.every((a) => a.slot > self.slot)) {
-      let pick = null, ps = Infinity;
-      for (const e of state.enemies) { const sc = (e.coreFrac ?? 1) * 20 + e.hpFrac * 10 + U.dist(self, e) * 0.6; if (sc < ps) { ps = sc; pick = e; } }
-      if (pick) cmd.say = { focus: pick.id };
+    // everybody names the car it is shooting; a car others already shoot is worth 5 m of driving
+    let pick = null, ps = Infinity;
+    for (const e of state.enemies) {
+      let sc = U.dist(self, e) + (e.coreFrac ?? 1) * 6;
+      for (const m of state.messages || []) if (m.data && m.data.focus === e.id && U.dist(self, e) < 20) sc -= 5;
+      if (e.id === lastFocus) sc -= 3;
+      if (sc < ps) { ps = sc; pick = e; }
     }
+    if (pick && !(best < 4.5 && pick !== foe)) { foe = pick; best = U.dist(self, pick); }
+    lastFocus = foe ? foe.id : -1;
+    if (foe) cmd.say = { focus: foe.id };
   }
   let goal = foe;
   if (!foe) {
@@ -233,7 +254,8 @@ function tick(state, api) {
   let item = null, ib = Infinity;
   for (const i of state.items) {
     const d = U.dist(self, i);
-    const want = i.type === 'repair' ? (self.hpFrac < 0.6 ? 30 : 6) : i.type === 'shield' || i.type === 'overdrive' ? 6 : 3;
+    const far = !foe || best > 14;
+    const want = i.type === 'repair' ? (self.hpFrac < 0.6 ? 30 : far ? 12 : 6) : i.type === 'overdrive' || i.type === 'emp' ? (far ? 14 : 6) : i.type === 'shield' ? (far ? 10 : 6) : 3;
     if (d < want && d < ib) { ib = d; item = i; }
   }
   if (item && (!foe || best > 10 || item.type === 'repair')) goal = item;
@@ -278,7 +300,7 @@ function tick(state, api) {
       if (allies.some((a) => U.dist(a, b) < 5)) continue;
       const ex = b.x - (b.x - self.x) / db * 0.9, ey = b.y - (b.y - self.y) / db * 0.9;
       if (!nav.los(self.x, self.y, ex, ey)) continue;
-      cmd.aim = { x: b.x, y: b.y }; cmd.aims = undefined;
+      cmd.aim = { x: b.x, y: b.y, angle: Math.atan2(b.y - self.y, b.x - self.x) }; cmd.aims = undefined;
       cmd.fire = self.weapons.filter((w) => w.alive && db < w.range).map((w) => w.i);
       break;
     }
@@ -286,16 +308,20 @@ function tick(state, api) {
     if (self.item && self.item.type === 'mine' && d < 6) cmd.useItem = true;
     if (goal === foe && los && d < 15) {
       const pr = profile(foe);
-      let lo = 3.5, hi = 8.5;
+      let lo = allies.length ? 4.5 : 3.5, hi = allies.length ? 9 : 8.5;
       const legs = foe.parts.some((q) => q.alive && MOVE[q.type]);
       if (!legs && pr.flame + pr.melee > pr.guns) { lo = 8; hi = 11; }
       else if (pr.kegs) { lo = 0; hi = 3; }
+      else if (pr.far && pr.far * 2 >= pr.guns && !pr.flame) { lo = 0; hi = 4; }   // it outranges our lasers: get inside its guns
       else if (pr.flame) { lo = 8; hi = 12; }
-      else if (pr.melee) { lo = 6; hi = 10; }
+      else if (pr.melee && pr.melee >= pr.guns) { lo = 6; hi = 10; }
       const t = U.turnTo(self, cmd.aim.angle);
       cmd.steer = t.steer;
       const err = Math.abs(U.angDiff(cmd.aim.angle, self.heading));
       cmd.throttle = d > hi ? (err < 0.6 ? 1 : 0.2) : d < lo ? -0.8 : 0;
+      // hooked by a harpoon: back straight off, guns still on it; tracks out-pull most cars
+      const hooked = (state.tethers || []).some((t) => t.to === self.id && t.from === foe.id);
+      if (hooked && (pr.melee || pr.flame)) cmd.throttle = -1;
       // do not fight with a hole or lava at our back or under our feet
       const here = hazardDist(api, self.x, self.y);
       const need = self.radius + 1.6;
@@ -303,7 +329,7 @@ function tick(state, api) {
       const back = hazardDist(api, self.x + ux * 2.5, self.y + uy * 2.5);
       if (d < 5.5 && back < need + 1) {
         cmd.throttle = err < 1.2 ? 1 : 0; cmd.brake = 1;   // shoved toward a hole: dig in and shove back
-      } else if (here < need) {
+      } else if (here < need && !(d > hi && here > 1.2)) {
         const spot = saferSpot(self, api, foe);
         if (spot && hazardDist(api, spot.x, spot.y) > here) {
           const dr = U.driveTo(self, spot, { reverse: true });
@@ -312,16 +338,25 @@ function tick(state, api) {
       } else if (cmd.throttle) {
         const dir = Math.sign(cmd.throttle), look = 1.2 + self.speed * 0.6;
         const nx = self.x + Math.cos(self.heading) * dir * look, ny = self.y + Math.sin(self.heading) * dir * look;
-        if (hazardDist(api, nx, ny) < need) cmd.throttle = 0;
+        if (hazardDist(api, nx, ny) < need) {
+          cmd.throttle = 0;
+          // closing in but a hole or lava is in the way: take the route round it instead of freezing
+          if (dir > 0 && d > hi) {
+            const wp = route.next(self, foe.x, foe.y, state.tick);
+            Object.assign(cmd, U.driveTo(self, wp));
+          }
+        }
       }
-      // the straight way in crosses lava or a hole: go round instead
+      // the straight way in crosses lava or a hole, or a wall / barrier stands in it: go round instead
       if (cmd.throttle > 0 && d > hi) {
         const nx = self.x + Math.cos(self.heading) * 3, ny = self.y + Math.sin(self.heading) * 3;
-        if (hazardDist(api, nx, ny) < 1) {
+        if (stuckT > 0.8) routeUntil = state.t + 2.5;
+        if (state.t < routeUntil || hazardDist(api, nx, ny) < 1 || here < need) {
           const wp = route.next(self, foe.x, foe.y, state.tick);
           Object.assign(cmd, U.driveTo(self, wp));
         }
       }
+      if (state.t < escapeUntil) { cmd.throttle = escDir; cmd.steer = 0; cmd.brake = 0; }
       return guard(state, api, cmd);
     }
   }
@@ -333,6 +368,12 @@ function tick(state, api) {
 function bad(nav, x, y) { const t = nav.tileAt(x, y); return t === 'pit' || t === 'lava'; }
 
 function guard(state, api, cmd) {
+  const out = guard0(state, api, cmd);
+  lastThr = out.throttle || 0; lastSteer = out.steer || 0;
+  return out;
+}
+
+function guard0(state, api, cmd) {
   const U = api.util, s = state.self, nav = api.nav;
   // shells about to land and kegs on the ground: try full ahead, stop, full astern (and a hard
   // turn each way) over the next second or two, and keep the one that leaves the most room.
@@ -392,14 +433,35 @@ function guard(state, api, cmd) {
   }
   if (s.hovering) return cmd;
   const c = Math.cos(s.heading), n = Math.sin(s.heading);
+  // an enemy mine on the line we are about to drive: swerve round it
+  const mv = Math.sign(cmd.throttle || 0);
+  if (mv) for (const m of state.mines || []) {
+    const dx = m.x - s.x, dy = m.y - s.y, ahead = (dx * c + dy * n) * mv, side = -dx * n + dy * c;
+    if (ahead > 0 && ahead < 4.5 && Math.abs(side) < s.radius + 0.9) {
+      // driving on: swerve round it. Creeping while turning: just do not creep onto it (keep our steering)
+      if (Math.abs(cmd.throttle) >= 0.5) cmd.steer = (side > 0 ? -1 : 1) * mv;
+      else if (ahead < s.radius + 1.2) cmd.throttle = 0;
+      break;
+    }
+  }
   for (const k of [0.15, 0.3, 0.5, 0.8]) {
     if (!bad(nav, s.x + s.vx * k, s.y + s.vy * k) || bad(nav, s.x, s.y)) continue;
     cmd.throttle = s.vx * c + s.vy * n > 0 ? -1 : 1; cmd.brake = 1;
     return cmd;
   }
   const dir = Math.sign(cmd.throttle || 0);
-  if (dir) for (const d of [0.3, 0.7, 1.1, 1.7, 2.3]) for (const w of [-0.5, 0, 0.5]) {
-    if (bad(nav, s.x + c * d * dir - n * w, s.y + n * d * dir + c * w) && !bad(nav, s.x, s.y)) { cmd.throttle = 0; return cmd; }
+  if (dir && !bad(nav, s.x, s.y)) {
+    const at = (d, w) => bad(nav, s.x + c * d * dir - n * w, s.y + n * d * dir + c * w);
+    for (const d of [0.3, 0.7, 1.1, 1.7, 2.3]) if (at(d, 0)) { cmd.throttle = 0; return cmd; }
+    // a hole or lava only off one side: keep going, edge away from it instead of freezing on the rim
+    let L = false, R = false;
+    for (const d of [0.3, 0.7, 1.1, 1.7, 2.3]) { if (at(d, 0.5)) L = true; if (at(d, -0.5)) R = true; }
+    if (L && R) { cmd.throttle = 0; return cmd; }
+    if (L || R) {
+      if (dir > 0) { cmd.steer = L ? -0.8 : 0.8; cmd.throttle = Math.min(cmd.throttle, 0.6); }
+      else cmd.throttle = 0;
+    }
   }
   return cmd;
 }
+
