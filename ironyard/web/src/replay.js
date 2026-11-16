@@ -5,19 +5,19 @@ const TAU = Math.PI * 2;
 const lerpAng = (a, b, k) => { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; else if (d < -Math.PI) d += TAU; return a + d * k; };
 const TEAM_HEX = [0xf47b20, 0x2086e6];
 
-export function prepReplay(res, IY) {
+export function prepReplay(res, IY, previous = null) {
   const map = IY.MAPS[res.map];
   const fdt = res.frameDt;
   const frames = res.frames;
   const frameAt = (t) => frames[Math.max(0, Math.min(frames.length - 1, Math.floor(t / fdt + 1e-6)))];
   const solid = (p) => !IY.PARTS[p.type].decor;
-  const vehicles = res.vehicles.map((v, id) => {
+  const vehicles = previous?.vehicles || res.vehicles.map((v, id) => {
     const parts = v.design.parts;
     const a = IY.aggregate(parts.filter(solid));
     const weaponIdx = [];
     parts.forEach((p, i) => { const d = IY.PARTS[p.type]; if (d.weapon && d.weapon !== 'melee') weaponIdx.push(i); });
     // odometer: signed distance driven along the hull axis, per frame
-    const odo = new Float32Array(frames.length);
+    const odo = new Array(frames.length).fill(0);
     for (let i = 1; i < frames.length; i++) {
       const p = frames[i - 1].v[id], q = frames[i].v[id];
       odo[i] = odo[i - 1] + (q[0] - p[0]) * Math.cos(q[2]) + (q[1] - p[1]) * Math.sin(q[2]);
@@ -26,22 +26,28 @@ export function prepReplay(res, IY) {
       fireT0: parts.map(() => Infinity), fireT1: parts.map(() => Infinity),   // a piece burns once: from, to
       alive: parts.map(() => true), diedAt: v.deathT === null ? Infinity : v.deathT };
   });
-  const fx = [];      // {k, t, x, y, ...}
-  const items = [];   // {s, type, x, y, t0, t1}
-  const mines = [];   // {id, x, y, team, t0, t1}
-  const tiles = [];   // crates and barrels: {tx, ty, kind, t} — t = when it broke (Infinity if it never did)
+  if (previous) for (const v of vehicles) {
+    for (let i = previous.processedFrames; i < frames.length; i++) {
+      const p = frames[i - 1].v[v.id], q = frames[i].v[v.id];
+      v.odo[i] = v.odo[i - 1] + (q[0] - p[0]) * Math.cos(q[2]) + (q[1] - p[1]) * Math.sin(q[2]);
+    }
+  }
+  const fx = previous?.fx || [];      // {k, t, x, y, ...}
+  const items = previous?.items || [];   // {s, type, x, y, t0, t1}
+  const mines = previous?.mines || [];   // {id, x, y, team, t0, t1}
+  const tiles = previous?.tiles || [];   // crates and barrels: {tx, ty, kind, t} — t = when it broke (Infinity if it never did)
   const T = map.tile;
-  for (let ty = 0; ty < map.h; ty++) for (let tx = 0; tx < map.w; tx++) {
+  if (!previous) for (let ty = 0; ty < map.h; ty++) for (let tx = 0; tx < map.w; tx++) {
     const kind = IY.TILE_NAME[map.tiles[ty * map.w + tx]];
     if (kind === 'crate' || kind === 'barrel') tiles.push({ tx, ty, kind, t: Infinity, x: (tx + 0.5) * T, y: (ty + 0.5) * T });
   }
-  const feed = [];    // {t, text, team}
-  const openItem = {}, openMine = {};
+  const feed = previous?.feed || [];    // {t, text, team}
+  const openItem = previous?.openItem || {}, openMine = previous?.openMine || {};
   const name = (id) => (id >= 0 && vehicles[id] ? vehicles[id].name : null);
   // per cause of death: [what the killer did to the victim, what happened to a victim nobody killed]
   const CAUSE = { fell: ['dropped', 'fell'], burn: ['burned', 'burned up'], ram: ['smashed', 'crashed'], melee: ['shredded', 'was shredded'], kinetic: ['gunned down', 'was gunned down'],
     explosive: ['blew up', 'blew up'], energy: ['melted', 'melted'], fire: ['burned', 'burned up'], wrecked: ['wrecked', 'was wrecked'], torn: ['tore apart', 'was torn apart'] };
-  for (const e of res.events) {
+  for (const e of res.events.slice(previous?.processedEvents || 0)) {
     if (e.k === 'part') {
       const v = vehicles[e.v], p = v.parts[e.i], d = IY.PARTS[p.type];
       const c = v.com[v.com.length - 1];
@@ -90,7 +96,7 @@ export function prepReplay(res, IY) {
     else if (e.k === 'hook') feed.push({ t: e.t, team: vehicles[e.a].team, kind: 'item', text: `${vehicles[e.a].name} hooked ${vehicles[e.b].name}` });
   }
   const duration = frames[frames.length - 1].t;
-  return { res, map, frames, fdt, duration, vehicles, fx, items, mines, tiles, feed, zone: map.zone };
+  return Object.assign(previous || {}, { res, map, frames, fdt, duration, vehicles, fx, items, mines, tiles, feed, zone: map.zone, processedFrames: frames.length, processedEvents: res.events.length, openItem, openMine });
 }
 
 /** Interpolated world state at time t (seconds). */

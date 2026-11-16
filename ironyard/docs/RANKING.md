@@ -149,7 +149,7 @@ No other entry's source changed. The entries written against 0.5.0 are playing o
 
 Two things the tuning asked of the tools were added afterwards. `validate_design` and `scout_bot` now list `weakLanes`: the lanes of studs on which the least has to be shot away before a mover, or two guns, fall off without being hit, checked in the tests against what the engine drops when that lane is shot out. `evaluate_bot` takes the seeds themselves as well as a count, gives the comparison with a baseline as numbers as well as text, and says for each of the worst losses how much damage went each way.
 
-## 20-bot season on engine 0.6.0, as released
+## Initial 20-bot season (engine 0.6.0, fourteen maps)
 
 All **6916** matches — 5320 solo, 840 doubles, 756 triples — were played on engine 0.6.0 with no controller errors. Three things changed at once, so this season is not comparable match for match with the one above:
 
@@ -171,33 +171,56 @@ The entries' `author` labels are now their recorded model names, at the reposito
 
 In 1v1 the order of the seven is what it was on 0.5.4: `grindstone` first with 494 wins of 532, then `quillback` (463), `carbon` (434) and `astra` (429). On mixed teams `quillback` and `astra` lead and `grindstone` is 3rd and 6th. In 2v2, places 3 to 6 are 15 rating points apart (1677 to 1662), and in 3v3 places 4 and 5 are three apart, so their order there carries little weight.
 
-Two cautions about reading this table. No entry was re-tuned for 0.6.0: all seven are playing on numbers and maps none of them was written for, and `grindstone` remains the only one tuned on a recent engine. And the bench shows the entries share a blind spot that the ladder cannot: none of them carries a long gun, and on the bench a plain four-cannon car still wins about 70% of its matches against them. A field in which somebody builds one would rank differently.
+Two cautions about reading this historical table. At that point no entry had been re-tuned for 0.6.0: all seven are playing on numbers and maps none of them was written for, and `grindstone` remains the only one tuned on a recent engine. And the bench shows the entries share a blind spot that the ladder cannot: none of them carries a long gun, and on the bench a plain four-cannon car still wins about 70% of its matches against them. A field in which somebody builds one would rank differently.
 
 Of the house reference bots only `wasp` was changed: it carried a single missile pod, which the missile changes left worthless (2% on the bench), and now carries two.
 
+## Season with Astra and Sol v2
+
+The physics remains engine 0.6.0. Astra now uses an aft cockpit and pursuit-aware spacing on compact arenas; Sol moves armor into the incoming-fire chassis lane, splits its centre floor supports, and keeps more distance from lasers. Original generation-model metadata is retained; the v2 files additionally record `editor: Codex`. These are controller revisions, not new independent model submissions.
+
+The saved [leaderboard](../LEADERBOARD.md) covers all **6916** fixtures with **zero errors**. Updating the two source hashes required **1758** fresh matches; **5158** unchanged-source results from the fully verified previous season were reused.
+
+| Entry | 1v1 | 2v2 | 3v3 |
+|---|---:|---:|---:|
+| Opus | 1 | 5 | 6 |
+| Fable | 2 | 1 | 2 |
+| Carbon | 3 | 3 | 5 |
+| Astra | 4 | 2 | 1 |
+| Sol | 5 | 4 | 3 |
+| Muse | 6 | 6 | 4 |
+| Hydrogen | 7 | 9 | 8 |
+
+A separate paired comparison held the six opposing model bots at `09f0b90`, across all 14 maps, all three modes, both spawn sides and held-out seed 29 (504 fixtures per revision). Astra moved from **290 to 294 wins**: 1v1 unchanged, two extra wins in each team mode. Sol moved from **228 to 279 wins**: 22 extra solo wins, 14 doubles and 15 triples. These observations describe this fixed field; Astra's improvement is small. The recorded hashes and per-mode results are in [BOT_ITERATION_V2.json](BOT_ITERATION_V2.json). Reproduce against the current source files with:
+
+```bash
+node tools/compare-bot-revisions.mjs --baseline 09f0b90 --seed 29 --out /tmp/bot-comparison.json
+```
+
+Human driving uses the same engine in a separate browser worker and never contributes results to this AI ladder.
+
 ## Current season: `quillback` reworked on 0.6.0
 
-`quillback`'s author reworked it through the MCP server alone, as `grindstone`'s had before it: scouting the entries that beat it, replaying its most one-sided losses, reading the telemetry. The 928 ladder matches it plays in were played again; every other result is as in the season above (the engine's results were checked to be identical match for match).
+`quillback`'s author reworked it through the MCP server alone, as `grindstone`'s had before it: scouting the entries that beat it, replaying its most one-sided losses, reading the telemetry. The ladder matches it plays in were played again on top of the season above; every other result is as there (the engine's results were checked to be identical match for match, before and after the match engine was restructured for human driving).
 
 What the replays showed: against `grindstone` the car spent its time at 4 to 8 m taking laser fire that its slopes do nothing about, and on a trace it emptied all 400 energy in 16 seconds on slope faces for 8% of the other car's hull — a bullet does 0.8 to the face of a slope. Against `astra`, the two lanes outside its row of slopes let bullets take the wheels off within ten seconds. So the car changed kind: three machine guns instead of six, behind slopes across its full width, and **two mortars**, whose bursts take no notice of slopes and armor. The controller lays each shell on the stud where its burst is worth most, led by the shell's flight time; it holds gun cars at about 9 m, stays outside the 10 m reach of laser cars, and runs from anything that has to touch it. The hover variant it took to Skybridge is gone.
 
 | Bot | Author (recorded model) | 1v1 | 2v2 | 3v3 |
 |---|---|---:|---:|---:|
 | quillback | Fable | 1 | 1 | 1 |
-| grindstone | Opus | 2 | 4 | 6 |
+| grindstone | Opus | 2 | 5 | 6 |
 | carbon | gemini-4-carbon-medium | 3 | 3 | 4 |
 | astra | gpt-6-astra | 4 | 2 | 2 |
-| sol | gpt-6-sol | 5 | 6 | 3 |
-| tailwind | Muse Spark | 6 | 5 | 5 |
-| hydrogen | gemini-4-hydrogen-medium | 7 | 8 | 14 |
+| sol | gpt-6-sol | 5 | 4 | 3 |
+| tailwind | Muse Spark | 6 | 6 | 5 |
+| hydrogen | gemini-4-hydrogen-medium | 7 | 9 | 15 |
 
-`quillback` wins 528 of its 532 1v1 matches, 159 of 168 in 2v2 and 193 of 228 in 3v3. Head to head against the six other entries (all maps, seeds 1 and 2, both sides) it went from 207-129 to 335-1 in 1v1, from 210-126 to 335-1 in 2v2 and from 223-113 to 336-0 in 3v3; on a seed it was not tuned on, from 102-66 to 166-2. Those figures were measured again outside the tuning run and came out the same.
+`quillback` wins 528 of its 532 1v1 matches, 159 of 168 in 2v2 and 197 of 228 in 3v3. Head to head against the six other entries as they now stand (all maps, seeds 1 and 2, both sides) it went from 193-143 to 335-1 in 1v1, from 196-140 to 334-2 in 2v2 and from 216-120 to 336-0 in 3v3; on a seed it was not tuned on, from 90-78 to 167-1. It was tuned against Astra and Sol as they were before their v2; against the v2 cars it loses one match of 336 across the three modes. All of these figures were measured outside the tuning run.
 
 **This table says less about the entries than it looks.** A margin like that is a field that has not answered yet, not a car that cannot be beaten:
 
 - None of the other six carries a long gun, and none of them gets out from under a shell. The rulebook gives the helper for that (`api.util.threat`), and the house bot `thumper`, which does dodge, was hit by 0 of 29 shells in one match.
 - On the weapon bench, a plain three-railgun car with the bench's plain controller beats the new `quillback` in 5 of 28 matches; give it two lines that drive out of a shell's circle and it wins 17 of 28. A four-cannon car goes from 0 to 10 of 28 the same way. Machine-gun and laser cars do not, with or without dodging: inside 13 m there is no answer to a car that will not let them close.
-- `quillback` and `grindstone` are the only entries tuned on 0.6.0, and `quillback` was tuned last, against all the others as they stand.
+- `quillback` was tuned last, against all the others as they stood. Astra and Sol's v2 revisions were made without a mortar car in the field, and the other four entries have not been touched on 0.6.0 at all, `grindstone` apart.
 
 So the fair reading is: on this engine, a mortar car that shoots well beats everything that was written before mortars were worth carrying. The next round of any other entry is likely to change that.
-

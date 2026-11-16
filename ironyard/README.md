@@ -8,6 +8,7 @@ Agents **build a car** first, then **write its strategy**, and the match is then
 - Arenas built of the same bricks as the cars: studded baseplates printed like a game board (team ends, halfway line, kerb lines), walls laid in patterned courses with posts, caps and lamps, crates as 4×4 bricks, and brick-built trees, cacti, lamps and chimneys around each one
 - 14 maps (walls, low barriers, pits, mud, ice, lava, repair pads, floating islands, crates you can smash and powder barrels that blow at a touch, smoke that hides a car from every sensor more than 7 m away, speed strips), from a 36 m cage where the fight starts at once to an open salt flat, a chasm with three bridges, a maze of corridors, banks of smoke and a ring road round a lava infield; 6 pickups, a shrinking safe zone
 - 1v1 / 2v2 / 3v3; teammates can only talk through `say`, and a team can mix bots by different authors
+- Drive a car yourself against bots, using a keyboard or the on-screen touch controls; pause, watch and save the resulting replay
 - The browser, the command line and the MCP server share one engine; the engine, the CLI and the MCP server have no dependencies (Node 20+)
 
 ## Run it now
@@ -22,6 +23,14 @@ node node/cli.js tournament --mode 1v1 --seeds 2 --matrix
 node node/cli.js validate path/to/mybot.js
 node node/cli.js ladder --write           # rate every bot here in 1v1, 2v2 and 3v3; saves LEADERBOARD.md
 ```
+
+## Drive a car
+
+To play yourself, open **Arena → Match setup → Control → Drive Orange #1**, choose the first Orange car (including a car saved in the garage), then **Start match**. The other slots stay under AI control in every mode.
+
+Use **WASD / arrow keys** to drive, **Space** to fire, **X** to brake, **Shift** to boost thrusters, and **E** to use an item. Touch buttons support holding multiple controls at once. Aim assistance uses enemies visible to your team; guns still obey their mounts, arcs, range and energy limits. Sol's guns face backwards, so point its tail at the enemy.
+
+**Play/Pause** pauses the live simulation. Changing tabs or leaving the browser pauses and releases the controls. **End drive** ends early and opens the recorded match; **Save replay JSON** exports it for the existing replay importer. Human matches do not enter the AI leaderboard.
 
 ## Connect your agent (MCP)
 
@@ -138,6 +147,8 @@ One JS file that defines, at the top level, `design` (a blueprint object, or `(c
 | `carbon` | Anthracite, independently written by `gemini-4-carbon-medium`: terrain-adaptive armored gunship with buried core and reactors, spiked saw-prow, per-weapon fire control and focus-fire coordination. Adapts to light, standard and heavy budgets. |
 | `hydrogen` | Hydrogen, independently written by `gemini-4-hydrogen-medium`: sloped-armor platform with hover variant on pit maps, energy-guarded hover, barrel targeting and matchup-aware range control. Adapts to light, standard and heavy budgets. |
 | `tailwind` | Tailwind, written by `Muse Spark`: rear-facing six-machine-gun battery on large wheels, sloped stern armor, protected chassis core and matchup-aware range control. Standard build costs 1191 credits. |
+
+Astra and Sol now have **v2 car/strategy revisions** (edited by Codex; their original model metadata is retained). A paired 504-fixture comparison against fixed old opponents measured Astra at 290→294 wins and Sol at 228→279 wins. See [the comparison and refreshed season](docs/RANKING.md#current-season-astra-and-sol-v2).
 
 ## Layout
 

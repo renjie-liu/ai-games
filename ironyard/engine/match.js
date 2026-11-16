@@ -61,6 +61,16 @@ function viewOf(buf) {
  * @param {number} [o.maxTime]      stop early (seconds) — used for smoke tests
  */
 export function runMatch(o) {
+  const match = createMatch(o);
+  while (!match.finished) match.step(600);
+  return match.result();
+}
+
+/** Incremental match, sharing exactly the same physics and controllers as runMatch.
+ * `human` lists vehicle ids whose commands come from step(ticks, inputs), never from their bot.
+ * A missing human input idles that vehicle. Optional autoAim only sees the team's normal sensors.
+ */
+export function createMatch(o) {
   const base = typeof o.map === 'string' ? (Object.hasOwn(MAPS, o.map) ? MAPS[o.map] : null) : o.map;
   if (!base) throw new MatchError(`unknown map "${o.map}". Valid: ${Object.keys(MAPS).join(', ')}`);
   const map = liveMap(base);   // this match's own copy when the map has crates or barrels to lose
@@ -156,92 +166,124 @@ export function runMatch(o) {
   }
   if (trace) trace[0] = -1;
 
+  const humans = new Set(o.human || []);
+  for (const id of humans) if (!Number.isInteger(id) || id < 0 || id >= ctl.length) throw new MatchError('invalid human vehicle id');
   const frames = [];
   if (record) frames.push(world.frame());
   const maxTime = o.maxTime ?? Infinity;
   const sinks = ctl.map((c) => c.buf);
-  while (!world.finished && world.t < maxTime) {
-    if (world.tick % rules.decisionEvery === 0) {
-      const obs = world.observeWire(sinks);
-      for (const c of ctl) {
-        const v = world.vehicles[c.id];
-        if (!v.alive) continue;
-        if (v.cutOff) { world.setCommand(v, null); continue; }
-        let said;
-        const t0 = now ? now() : 0;
-        if (trace) { trace[0] = c.id; if (trace.length > 1) trace[1]++; }
-        try { said = textOf(c.port.tick(obs[c.id].messages, obs[c.id].layouts)); } catch (e) { said = '!' + thrown(e); }
-        let cmd = null;
-        if (failed(said)) {
-          v.violations++;
-          if (c.errors.length < 8) c.errors.push(`tick threw at t=${world.t.toFixed(2)}: ${said.slice(1)}`);
-        } else cmd = world.readCommand(c.buf, said && said.length <= rules.sayLimit ? readJson(said) : undefined);
-        if (now) {
-          const el = now() - t0;
-          c.cpuTotal += el; c.calls++;
-          if (el > c.cpuMax) c.cpuMax = el;
-          // Wall-clock load is telemetry, not a gameplay violation. Worker
-          // watchdogs handle controllers that never return.
-        }
-        if (v.violations >= rules.maxViolations && !v.cutOff) {
-          v.cutOff = true;
-          c.errors.push(`controller cut off at t=${world.t.toFixed(2)} after ${v.violations} violations; vehicle idles`);
-          world.event({ k: 'cutoff', v: v.id });
-        }
-        world.setCommand(v, cmd);
-      }
-    }
-    if (trace) trace[0] = -1;
-    world.step();
-    if (record && world.tick % rules.frameEvery === 0) frames.push(world.frame());
-  }
-  if (record && world.tick % rules.frameEvery !== 0) frames.push(world.frame());
-
-  const rnd = (x) => Math.round(x * 10) / 10;
-  const vehicles = world.vehicles.map((v) => {
-    const c = ctl[v.id], s = v.stats;
-    return {
-      id: v.id, team: v.team, slot: c.k, name: v.name, bot: v.botId, author: c.author,
-      alive: v.alive, deathT: v.deathT === null ? null : rnd(v.deathT), deathCause: v.deathCause, killedBy: v.killedBy,
-      hpFrac: Math.round(Math.max(0, v.hpNow / v.hpMax) * 1000) / 1000,
-      coreFrac: Math.round(Math.max(0, v.core.hp / v.core.maxHp) * 1000) / 1000,
-      design: c.design, designStats: c.designStats,
-      stats: {
-        damageDealt: rnd(s.damageDealt), damageTaken: rnd(s.damageTaken),
-        damageByType: Object.fromEntries(Object.entries(s.byType).map(([k, x]) => [k, rnd(x)])),
-        kills: s.kills, partsLost: s.partsLost, partsDestroyed: s.partsDestroyed,
-        shots: rnd(s.shots), hits: rnd(s.hits), accuracy: s.shots > 0 ? Math.round((s.hits / s.shots) * 100) / 100 : null,
-        healing: rnd(s.healing), deflected: rnd(s.deflected), turnedAway: rnd(s.turnedAway), itemsPicked: s.itemsPicked, itemsUsed: s.itemsUsed, rams: s.rams,
-        distance: rnd(s.distance), timeStill: rnd(s.timeStill), timeStunned: rnd(s.timeStunned),
-        timeEnergyStarved: rnd(s.timeEnergyStarved), timeFireOutOfArc: rnd(s.timeFireOutOfArc),
-        timeOutsideZone: rnd(s.timeOutsideZone), timeNoEnemyVisible: rnd(s.timeNoEnemyVisible),
-        timeOn: { mud: rnd(s.timeOn.mud), ice: rnd(s.timeOn.ice), lava: rnd(s.timeOn.lava) },
-        timeBurning: rnd(s.timeBurning), piecesBurnt: s.piecesBurnt, tilesBroken: s.tilesBroken,
-        punches: s.punches, hooks: s.hooks, timeTethered: rnd(s.timeTethered), piecesTorn: s.piecesTorn, kegsThrown: s.kegsThrown,
-      },
-      telemetry: world.telemetry(v),   // raw numbers; summarize() gives the rounded form (telemetry.js, compactTelemetry)
-      cpu: now && c.calls ? { avgMs: Math.round((c.cpuTotal / c.calls) * 1000) / 1000, maxMs: Math.round(c.cpuMax * 100) / 100 } : null,
-      violations: v.violations, cutOff: v.cutOff, errors: c.errors, logs: c.logs,
-    };
-  });
-
-  const teamSummary = [0, 1].map((t) => {
-    const sc = world.teamScore(t);
-    return { bots: ctl.filter((c) => c.team === t).map((c) => c.bot.id), alive: sc.alive, hull: Math.round(sc.hp * 1000) / 1000, damage: rnd(sc.dmg) };
-  });
-
-  return {
-    version: ENGINE_VERSION,
-    map: map.id, mode, seed, swap: !!o.swap, budget,
-    winner: world.finished ? world.winner : null,           // 0, 1, or -1 for a draw
-    reason: world.finished ? world.endReason : 'stopped early',
-    duration: rnd(world.t),
-    teams: teamSummary,
-    vehicles,
-    events: world.events,
-    frames: record ? frames : undefined,
-    frameDt: world.dt * rules.frameEvery,
+  let stopped = false;
+  const finished = () => stopped || world.finished || !(world.t < maxTime);
+  const recordEnd = () => {
+    if (record && world.tick % rules.frameEvery !== 0 && frames[frames.length - 1]?.t !== Math.round(world.t * 100) / 100) frames.push(world.frame());
   };
+  let frameCursor = 0, eventCursor = 0;
+  function step(ticks = 1, inputs = {}) {
+    if (!Number.isInteger(ticks) || ticks < 1 || ticks > 600) throw new MatchError('step needs 1 to 600 physics ticks');
+    for (let n = 0; n < ticks && !finished(); n++) {
+      if (world.tick % rules.decisionEvery === 0) {
+        const obs = world.observeWire(sinks);
+        for (const c of ctl) {
+          const v = world.vehicles[c.id];
+          if (!v.alive) continue;
+          if (humans.has(c.id)) {
+            const raw = { ...(inputs[c.id] || {}) };
+            if (o.autoAim && raw.aim == null) {
+              const sensed = world.observeAll()[c.id];
+              const foe = sensed.enemies.slice().sort((a, b) => Math.hypot(a.x - v.x, a.y - v.y) - Math.hypot(b.x - v.x, b.y - v.y))[0];
+              if (foe) {
+                raw.target = foe.id; raw.aim = { x: foe.x, y: foe.y }; raw.aims = {};
+                for (const w of sensed.self.weapons) raw.aims[w.i] = w.projSpeed ? util.lead(sensed.self, foe, w.projSpeed) : raw.aim;
+              }
+            }
+            world.setCommand(v, raw); continue;
+          }
+          if (v.cutOff) { world.setCommand(v, null); continue; }
+          let said;
+          const t0 = now ? now() : 0;
+          if (trace) { trace[0] = c.id; if (trace.length > 1) trace[1]++; }
+          try { said = textOf(c.port.tick(obs[c.id].messages, obs[c.id].layouts)); } catch (e) { said = '!' + thrown(e); }
+          let cmd = null;
+          if (failed(said)) {
+            v.violations++;
+            if (c.errors.length < 8) c.errors.push(`tick threw at t=${world.t.toFixed(2)}: ${said.slice(1)}`);
+          } else cmd = world.readCommand(c.buf, said && said.length <= rules.sayLimit ? readJson(said) : undefined);
+          if (now) {
+            const el = now() - t0;
+            c.cpuTotal += el; c.calls++;
+            if (el > c.cpuMax) c.cpuMax = el;
+            // Wall-clock load is telemetry, not a gameplay violation. Worker
+            // watchdogs handle controllers that never return.
+          }
+          if (v.violations >= rules.maxViolations && !v.cutOff) {
+            v.cutOff = true;
+            c.errors.push(`controller cut off at t=${world.t.toFixed(2)} after ${v.violations} violations; vehicle idles`);
+            world.event({ k: 'cutoff', v: v.id });
+          }
+          world.setCommand(v, cmd);
+        }
+      }
+      if (trace) trace[0] = -1;
+      world.step();
+      if (record && world.tick % rules.frameEvery === 0) frames.push(world.frame());
+    }
+    if (finished()) recordEnd();
+    return !finished();
+  }
+  function updates() {
+    const update = { frames: frames.slice(frameCursor), events: world.events.slice(eventCursor), duration: world.t, finished: finished() };
+    frameCursor = frames.length; eventCursor = world.events.length;
+    return update;
+  }
+  function result() {
+    const rnd = (x) => Math.round(x * 10) / 10;
+    const vehicles = world.vehicles.map((v) => {
+      const c = ctl[v.id], s = v.stats;
+      return {
+        id: v.id, team: v.team, slot: c.k, name: v.name, bot: v.botId, author: c.author,
+        alive: v.alive, deathT: v.deathT === null ? null : rnd(v.deathT), deathCause: v.deathCause, killedBy: v.killedBy,
+        hpFrac: Math.round(Math.max(0, v.hpNow / v.hpMax) * 1000) / 1000,
+        coreFrac: Math.round(Math.max(0, v.core.hp / v.core.maxHp) * 1000) / 1000,
+        design: c.design, designStats: c.designStats,
+        stats: {
+          damageDealt: rnd(s.damageDealt), damageTaken: rnd(s.damageTaken),
+          damageByType: Object.fromEntries(Object.entries(s.byType).map(([k, x]) => [k, rnd(x)])),
+          kills: s.kills, partsLost: s.partsLost, partsDestroyed: s.partsDestroyed,
+          shots: rnd(s.shots), hits: rnd(s.hits), accuracy: s.shots > 0 ? Math.round((s.hits / s.shots) * 100) / 100 : null,
+          healing: rnd(s.healing), deflected: rnd(s.deflected), turnedAway: rnd(s.turnedAway), itemsPicked: s.itemsPicked, itemsUsed: s.itemsUsed, rams: s.rams,
+          distance: rnd(s.distance), timeStill: rnd(s.timeStill), timeStunned: rnd(s.timeStunned),
+          timeEnergyStarved: rnd(s.timeEnergyStarved), timeFireOutOfArc: rnd(s.timeFireOutOfArc),
+          timeOutsideZone: rnd(s.timeOutsideZone), timeNoEnemyVisible: rnd(s.timeNoEnemyVisible),
+          timeOn: { mud: rnd(s.timeOn.mud), ice: rnd(s.timeOn.ice), lava: rnd(s.timeOn.lava) },
+          timeBurning: rnd(s.timeBurning), piecesBurnt: s.piecesBurnt, tilesBroken: s.tilesBroken,
+          punches: s.punches, hooks: s.hooks, timeTethered: rnd(s.timeTethered), piecesTorn: s.piecesTorn, kegsThrown: s.kegsThrown,
+        },
+        telemetry: world.telemetry(v),   // raw numbers; summarize() gives the rounded form (telemetry.js, compactTelemetry)
+        cpu: now && c.calls ? { avgMs: Math.round((c.cpuTotal / c.calls) * 1000) / 1000, maxMs: Math.round(c.cpuMax * 100) / 100 } : null,
+        violations: v.violations, cutOff: v.cutOff, errors: c.errors, logs: c.logs,
+      };
+    });
+
+    const teamSummary = [0, 1].map((t) => {
+      const sc = world.teamScore(t);
+      return { bots: ctl.filter((c) => c.team === t).map((c) => c.bot.id), alive: sc.alive, hull: Math.round(sc.hp * 1000) / 1000, damage: rnd(sc.dmg) };
+    });
+
+    return {
+      version: ENGINE_VERSION,
+      map: map.id, mode, seed, swap: !!o.swap, budget,
+      winner: world.finished ? world.winner : null,           // 0, 1, or -1 for a draw
+      reason: world.finished ? world.endReason : 'stopped early',
+      duration: rnd(world.t),
+      teams: teamSummary,
+      vehicles,
+      events: world.events,
+      frames: record ? frames : undefined,
+      frameDt: world.dt * rules.frameEvery,
+      ...(humans.size ? { human: [...humans] } : {}),
+    };
+  }
+  return { step, result, updates, stop() { stopped = true; recordEnd(); return result(); }, get finished() { return finished(); } };
 }
 
 /**
