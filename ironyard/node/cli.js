@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   MAPS, MAP_IDS, MODES, PARTS, ITEMS, TILES, BUDGETS, DEFAULT_BUDGET,
-  validateDesign, renderDesign, makeSchedule, standings, describeMap,
+  validateDesign, renderDesign, makeSchedule, standings, describeMap, tournamentResult, tournamentStatus, scoredResult,
 } from '../engine/index.js';
 import { listBots, readBotSource, ROOT } from './loader.js';
 import { ladder, ladderMarkdown, ladderSnapshot, QUEUES } from './ladder.js';
@@ -133,27 +133,31 @@ async function main() {
       const schedule = makeSchedule({ entrants, maps, seeds, focus: args.focus ? botId(args.focus) : null });
       const budget = budgetOf(args.budget);
       console.error(`${schedule.length} matches: ${ids.length} bots x ${maps.length} maps x ${seeds.length} seeds x 2 sides, mode ${mode}`);
+      // Freeze one source per entrant for the entire tournament, including file bots.
+      const sources = Object.fromEntries(ids.map(id => [id, fileBots[id] ?? readBotSource(id)]));
       let done = 0, totalDur = 0;
       const reasons = {};
       const results = await Promise.all(schedule.map(async (m) => {
         let r;
         try {
-          const res = await pool.run({ map: m.map, mode, seed: m.seed, swap: m.swap, budget, teams: withSources(m.teams, fileBots), want: 'score' });
-          r = { ...m, winner: res.winner, hull: [res.teams[0].hull, res.teams[1].hull], reason: res.reason, duration: res.duration };
-          totalDur += res.duration; reasons[res.reason] = (reasons[res.reason] || 0) + 1;
+          const res = await pool.run({ map: m.map, mode, seed: m.seed, swap: m.swap, budget, teams: withSources(m.teams, sources), want: 'score' });
+          r = tournamentResult(m, res);
+          if (scoredResult(r)) { totalDur += res.duration; reasons[res.reason] = (reasons[res.reason] || 0) + 1; }
         } catch (e) {
-          const by = e.detail && e.detail.bot;
-          r = { ...m, winner: by === m.a ? 1 : by === m.b ? 0 : -1, error: e.message, errorBy: by };
+          r = tournamentResult(m, null, e);
         }
         if (++done % 20 === 0) process.stderr.write(`\r${done}/${schedule.length}`);
         return r;
       }));
       process.stderr.write(`\r${done}/${schedule.length}\n`);
       const table = standings(entrants, results);
-      if (args.json) return console.log(JSON.stringify({ mode, maps, seeds, standings: table, results }, null, 2));
+      const status = tournamentStatus(results, schedule.length);
+      if (status.errorCount || !status.complete) process.exitCode = 1;
+      if (args.json) return console.log(JSON.stringify({ mode, maps, seeds, ...status, standings: table, results }, null, 2));
+      console.log(`${status.complete ? 'Complete' : 'Provisional'}: ${status.scoredMatches}/${schedule.length} scored, ${status.unscoredMatches} unscored`);
       console.log('#  bot            pts    W   D   L   win%  hullΔ');
-      table.forEach((r, i) => console.log(`${String(i + 1).padEnd(2)} ${r.id.padEnd(14)} ${String(r.points).padStart(3)}  ${String(r.w).padStart(3)} ${String(r.d).padStart(3)} ${String(r.l).padStart(3)}  ${(r.winRate * 100).toFixed(0).padStart(4)}  ${r.hullDiff.toFixed(1).padStart(6)}`));
-      console.log(`avg match ${(totalDur / Math.max(1, results.length)).toFixed(1)}s; endings: ${Object.entries(reasons).map(([k, n]) => `${k} ${n}`).join(', ')}`);
+      table.forEach((r, i) => console.log(`${String(r.played ? i + 1 : "—").padEnd(2)} ${r.id.padEnd(14)} ${String(r.points).padStart(3)}  ${String(r.w).padStart(3)} ${String(r.d).padStart(3)} ${String(r.l).padStart(3)}  ${(r.winRate * 100).toFixed(0).padStart(4)}  ${r.hullDiff.toFixed(1).padStart(6)}`));
+      console.log(`avg completed match ${(totalDur / Math.max(1, results.filter(r => scoredResult(r) && !r.forfeit).length)).toFixed(1)}s; endings: ${Object.entries(reasons).map(([k, n]) => `${k} ${n}`).join(', ')}`);
       if (args.matrix) {
         console.log('\nwins (row beat column):\n' + ''.padEnd(11) + table.map((r) => r.id.slice(0, 6).padStart(7)).join(''));
         for (const r of table) console.log(r.id.padEnd(11) + table.map((c) => (c.id === r.id ? '   -' : `${r.vs[c.id]?.w ?? 0}/${(r.vs[c.id]?.w ?? 0) + (r.vs[c.id]?.d ?? 0) + (r.vs[c.id]?.l ?? 0)}`).padStart(7)).join(''));

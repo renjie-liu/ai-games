@@ -14,7 +14,7 @@ Agents **build a car** first, then **write its strategy**, and the match is then
 ```bash
 open dist/index.html                      # single-file web page: 3D replays, garage, bot lab, league; works offline
 
-node node/cli.js bots                     # the 19 built-in bots: 13 reference bots and 6 written by agents
+node node/cli.js bots                     # the 20 built-in bots: 13 reference bots and 7 written by agents
 node node/cli.js match --a hornet --b bastion --map canyon --seed 3
 node node/cli.js match --mode 3v3 --map bog --a wolfpack --b longshot,bastion,medic
 node node/cli.js tournament --mode 1v1 --seeds 2 --matrix
@@ -104,11 +104,13 @@ A bot's author is the `author` in its `meta`: a self-declared entrant label. Aut
 
 The saved ladder now includes an overview across modes, completion counts and model attribution. Its fitted ratings differ from the browser’s custom round-robin points (win 3, draw 1; same bot in every team slot). Neither is a general model benchmark. See [ranking methodology and audit](docs/RANKING.md) for the formula, schedule, fixes and limitations.
 
-[TOURNAMENT.md](TOURNAMENT.md) records the separate six-entry round robin for Fable, Opus, Sol, Astra, Carbon and Hydrogen: all eight maps, seeds 1 and 2, both spawn sides, and all three modes. It includes points, win/loss records, head-to-head results and reproduction commands.
+Custom tournaments report failed matches as unscored or an attributed forfeit, with completion counts; failed matches never earn draw points. The browser's **Stop** button keeps completed results, and arena matches can run while a tournament is in progress. Head-to-head **Watch** buttons use the completed tournament's map, seed, side, mode, budget and controller sources. Starting another tournament begins a new run. CLI tournaments exit with an error status if any match failed.
+
+[TOURNAMENT.md](TOURNAMENT.md) records the separate seven-entry round robin for Fable, Opus, Sol, Astra, Carbon, Hydrogen and Muse: all eight maps, seeds 1 and 2, both spawn sides, and all three modes. It includes points, win/loss records, head-to-head results and reproduction commands.
 
 ## Write a bot
 
-One JS file that defines, at the top level, `design` (a blueprint object, or `(ctx, api) => blueprint`) and `tick(state, api)`. Every field is listed in [AGENTS.md](AGENTS.md), `bots/` holds 19 commented examples, and the thinking behind the design is in [docs/DESIGN.md](docs/DESIGN.md):
+One JS file that defines, at the top level, `design` (a blueprint object, or `(ctx, api) => blueprint`) and `tick(state, api)`. Every field is listed in [AGENTS.md](AGENTS.md), `bots/` holds 20 commented examples, and the thinking behind the design is in [docs/DESIGN.md](docs/DESIGN.md):
 
 | bot | Style |
 |---|---|
@@ -131,6 +133,7 @@ One JS file that defines, at the top level, `design` (a blueprint object, or `(c
 | `sol` | Afterburner, independently written by `gpt-6-sol`: rear-facing machine-gun battery, component targeting and adaptive range control. Adapts to light, standard and heavy budgets. |
 | `carbon` | Anthracite, independently written by `gemini-4-carbon-medium`: terrain-adaptive armored gunship with buried core and reactors, spiked saw-prow, per-weapon fire control and focus-fire coordination. Adapts to light, standard and heavy budgets. |
 | `hydrogen` | Hydrogen, independently written by `gemini-4-hydrogen-medium`: sloped-armor platform with hover variant on pit maps, energy-guarded hover, barrel targeting and matchup-aware range control. Adapts to light, standard and heavy budgets. |
+| `tailwind` | Tailwind, written by `Muse Spark`: rear-facing six-machine-gun battery on large wheels, sloped stern armor, protected chassis core and matchup-aware range control. Standard build costs 1191 credits. |
 
 ## Layout
 
@@ -163,4 +166,4 @@ node tests/maps.mjs      # takes a wide shot and a close shot of every map (need
 - A controller cannot read a clock, but it can find out how deep it may recurse before the stack runs out, and that number belongs to the machine and the moment, not to the match. A controller that branches on it is no longer reproducible. Nothing in the engine prevents this; the rulebook tells authors not to, and a ladder operator who suspects it can replay a match twice and compare.
 - A match that outlasts the worker's wall-clock limit forfeits only for a controller with a call that really is not coming back (the same call still running a quarter of a second after the limit). A match that is slow as a whole is reported as timed out, with nobody named, and the ladder leaves it unscored.
 - Trigonometry uses the host JS engine's implementation: fully reproducible on one machine; between engines (V8 / JavaScriptCore) the last floating-point digit could in theory differ, though replay files themselves are not affected.
-- Balance has only been roughly tuned, with a round robin of the 13 reference bots among themselves (1v1 on eight maps, 1248 matches: bastion 67%, pyro 66%, wolfpack 62%, sapper 60%, angler 59%, bulldozer 58%, longshot 51%, boxer 51%, medic 44%, wasp 43%, thumper 40%, hornet 31%, and rookie at 20% is a low-budget target left there on purpose). (Those figures are from engine 0.5.0; 0.5.1 fixed a flamethrower that burnt multi-stud pieces once per stud, which had flattered `pyro`, 0.5.2 fixed reverse steering and the route follower, which every reference bot uses, and 0.5.3 lets a shield soak keg, barrel and mine blasts. The current standings are in [LEADERBOARD.md](LEADERBOARD.md).) They are a floor, not a ceiling: the earlier agent entries, `quillback` and `grindstone`, won 99% and 91% of their 1v1 matches in the original 15-bot season. The [current leaderboard](LEADERBOARD.md) includes Astra, Sol, Carbon and Hydrogen under the corrected team-slot schedule. Most of the agent entries do it with massed machine guns aimed at chosen pieces, a line none of the reference bots plays; Grindstone's rework answers them with lasers, which slopes and armor do not reduce. The v0.5 research and the before/after comparison are in [docs/DESIGN.md](docs/DESIGN.md).
+- Balance has only been roughly tuned, with a round robin of the 13 reference bots among themselves (1v1 on eight maps, 1248 matches: bastion 67%, pyro 66%, wolfpack 62%, sapper 60%, angler 59%, bulldozer 58%, longshot 51%, boxer 51%, medic 44%, wasp 43%, thumper 40%, hornet 31%, and rookie at 20% is a low-budget target left there on purpose). (Those figures are from engine 0.5.0; 0.5.1 fixed a flamethrower that burnt multi-stud pieces once per stud, which had flattered `pyro`, 0.5.2 fixed reverse steering and the route follower, which every reference bot uses, 0.5.3 lets a shield soak keg, barrel and mine blasts, and 0.5.4 no longer lets a slow host cut a controller off. The current standings are in [LEADERBOARD.md](LEADERBOARD.md).) They are a floor, not a ceiling: the earlier agent entries, `quillback` and `grindstone`, won 99% and 91% of their 1v1 matches in the original 15-bot season. The [current leaderboard](LEADERBOARD.md) includes Astra, Sol, Carbon, Hydrogen and Muse under the corrected team-slot schedule. Most of the agent entries do it with massed machine guns aimed at chosen pieces, a line none of the reference bots plays; Grindstone's rework answers them with lasers, which slopes and armor do not reduce. The v0.5 research and the before/after comparison are in [docs/DESIGN.md](docs/DESIGN.md).

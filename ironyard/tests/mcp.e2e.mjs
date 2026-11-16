@@ -238,6 +238,23 @@ async function exercise(client, label) {
   const noBot = await client.callTool({ name: 'scout_bot', arguments: { name: 'nope' } });
   assert.equal(noBot.isError, true); assert.match(text(noBot), /unknown bot "nope"\. Known bots: .*rookie/);
 
+  // A controller can pass the eight-second smoke test and fail later.
+  const late = 'late-' + label;
+  const lateSource = BOT.replace('function tick(state, api) {', 'function tick(state, api) { if (state.t > 9) throw new Error("late fixture failure");');
+  await client.callTool({ name: 'submit_bot', arguments: { name: late, source: lateSource } });
+  const failedTour = JSON.parse(text(await client.callTool({ name: 'run_tournament', arguments: { bots: [late, 'rookie'], maps: ['proving'] } })));
+  assert.equal(failedTour.complete, false); assert.equal(failedTour.unscoredMatches, 2);
+  assert.ok(failedTour.standings.every(r => r.points === 0 && r.d === 0 && r.played === 0 && r.rank === null));
+  const failedEval = JSON.parse(text(await client.callTool({ name: 'evaluate_bot', arguments: { name: late, opponents: ['rookie'], maps: ['proving'] } })));
+  assert.equal(failedEval.matches, 0); assert.equal(failedEval.draws, 0); assert.equal(failedEval.unscoredMatches, 2);
+  assert.equal(failedEval.matchesWithMyRuntimeErrors, 2);
+  // A broken design already on disk is attributable: the healthy opponent wins by forfeit.
+  fs.writeFileSync(path.join(env.IRONYARD_BOTS_DIR, late + '.js'), 'const design = {parts:[]}; function tick(){return {}}');
+  const forfeitEval = JSON.parse(text(await client.callTool({ name: 'evaluate_bot', arguments: { name: 'rookie', opponents: [late], maps: ['proving'] } })));
+  assert.equal(forfeitEval.complete, true); assert.equal(forfeitEval.wins, 2); assert.equal(forfeitEval.draws, 0);
+  assert.equal(forfeitEval.matchesWithMyRuntimeErrors, 0);
+  fs.unlinkSync(path.join(env.IRONYARD_BOTS_DIR, late + '.js'));
+
   const unknown = await client.callTool({ name: 'run_match', arguments: { team_a: ['nope'], team_b: ['rookie'] } });
   assert.equal(unknown.isError, true); assert.match(text(unknown), /unknown bot/);
   // arguments an agent gets nearly right are taken as meant; the rest are refused in words it can act on

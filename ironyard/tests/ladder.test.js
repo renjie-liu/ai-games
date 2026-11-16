@@ -174,3 +174,51 @@ test('the ladder retries a match that could not be played, and scores one a cont
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('a ladder call hashes and runs one source snapshot, then notices edits on the next call', async t => {
+  const fs = (await import('node:fs')).default;
+  const os = await import('node:os'); const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ironyard-source-snapshot-'));
+  const previous = process.env.IRONYARD_LADDER_DIR;
+  process.env.IRONYARD_LADDER_DIR = dir;
+  const originalRead = fs.readFileSync;
+  let changed = false, reads = 0;
+  t.mock.method(fs, 'readFileSync', function (file, ...args) {
+    const source = originalRead.call(this, file, ...args);
+    if (!String(file).endsWith('/bots/rookie.js')) return source;
+    reads++;
+    return changed ? source + '\n// edited during the season\n' : source;
+  });
+  try {
+    const { ladder } = await import('../node/ladder.js?source-snapshot-test');
+    const seen = [];
+    const pool = { run: async spec => {
+      changed = true;
+      for (const bot of spec.teams.flat()) if (bot.id === 'rookie') seen.push(bot.source);
+      return { winner: 0, teams: [{ hull: 1 }, { hull: 0 }], errors: [] };
+    } };
+    const first = await ladder(pool, { queues: ['1v1'] });
+    assert.equal(first.complete, true); assert.equal(reads, 1);
+    assert.ok(seen.length > 0 && seen.every(source => !source.includes('// edited during the season')));
+    const gamesWithRookie = seen.length;
+    seen.length = 0;
+    const second = await ladder(pool, { queues: ['1v1'] });
+    assert.equal(second.complete, true); assert.equal(reads, 2);
+    assert.equal(second.matchesPlayedNow, gamesWithRookie, 'only matches involving the edited source are invalidated');
+    assert.ok(seen.every(source => source.includes('// edited during the season')));
+
+    // A result written before source snapshots were introduced must be recalculated once.
+    const cacheFile = path.join(dir, 'results.json');
+    const cache = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+    const key = Object.keys(cache.results)[0];
+    cache.results[key].checked = 2;
+    fs.writeFileSync(cacheFile, JSON.stringify(cache));
+    const third = await ladder(pool, { queues: ['1v1'] });
+    assert.equal(third.matchesPlayedNow, 1);
+    assert.equal(JSON.parse(fs.readFileSync(cacheFile, 'utf8')).results[key].checked, 3);
+  } finally {
+    t.mock.restoreAll();
+    if (previous === undefined) delete process.env.IRONYARD_LADDER_DIR; else process.env.IRONYARD_LADDER_DIR = previous;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

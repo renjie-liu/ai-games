@@ -10,7 +10,7 @@ import { WRAP_LINES } from './botwrap.js';
 import { compactTelemetry } from './telemetry.js';
 import { insightsFor } from './insights.js';
 
-export const ENGINE_VERSION = '0.5.3';
+export const ENGINE_VERSION = '0.5.4';
 
 export class MatchError extends Error {
   constructor(message, detail) { super(message); this.name = 'MatchError'; this.detail = detail; }
@@ -180,7 +180,8 @@ export function runMatch(o) {
           const el = now() - t0;
           c.cpuTotal += el; c.calls++;
           if (el > c.cpuMax) c.cpuMax = el;
-          if (el > 250) v.violations += 10;
+          // Wall-clock load is telemetry, not a gameplay violation. Worker
+          // watchdogs handle controllers that never return.
         }
         if (v.violations >= rules.maxViolations && !v.cutOff) {
           v.cutOff = true;
