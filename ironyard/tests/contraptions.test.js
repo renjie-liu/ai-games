@@ -100,7 +100,7 @@ test('flamethrower: lights what its stream washes over, not through a wall, not 
   shielded.w.setCommand(shielded.p, { fire: true, aim: { x: shielded.q.x, y: shielded.q.y } });
   shielded.run(1.5);
   assert.equal(shielded.q.burning, 0);
-  assert.ok(shielded.q.shield < 120, 'the shield pays for it');
+  assert.ok(shielded.q.shield < PARTS.shieldgen.shield, 'the shield pays for it');
 
   // on the proving ground a short wall runs from (26, 34) to (30, 36): one car south of it, one north
   const wall = duel(flamer, car(), { gap: 5.2, at: { x: 28, y: 32.4 }, heading: Math.PI / 2 });
@@ -318,7 +318,7 @@ test('crates and barrels: a map that comes apart, and a pathfinder that notices'
   // shots stop at a crate and wear it down; five shells and it is floor
   p.x = 9; p.y = 40; p.th = Math.PI / 2; w.updateCells(p);
   w.setCommand(p, { fire: true });
-  run(1.4 * 4 + 0.3);
+  run(PARTS.cannon.cooldown * 4 + 0.3);
   assert.equal(p.stats.shots, 5);
   assert.equal(p.stats.hits, 0);
   assert.equal(at(4, 22), FLOOR);
@@ -402,6 +402,25 @@ test('armor and slopes: the engine and the published arithmetic give the same an
   assert.equal(hitOn(PARTS.armor, 4), 2); assert.equal(hitOn(PARTS.armor, 1), 0.25); assert.equal(hitOn(PARTS.armor, 22, 'energy'), 22);
 });
 
+test('a rail slug is not turned by a slope, and goes on through three pieces', () => {
+  // the same slope, face on, turns a cannon shell (45% gets through) and lets a rail slug by in full, less its one point of armor
+  const target = car([{ type: 'slope', x: 0, y: 3, z: 0, dir: 'N' }]);
+  const shot = (gun) => {
+    const { w, p, q, run } = duel(car([{ type: gun, x: 0, y: 1, z: 1, dir: 'N' }]), target, { gap: 6 });
+    const slope = piece(q, 'slope');
+    w.setCommand(p, { fire: true, aim: { x: slope.wx, y: slope.wy } });
+    run(0.6);
+    return { taken: q.stats.damageTaken, deflected: q.stats.deflected, hits: p.stats.hits };
+  };
+  const rail = shot('railgun'), shell = shot('cannon'), d = PARTS.railgun;
+  assert.equal(rail.hits, 1); assert.equal(shell.hits, 1);
+  assert.equal(d.noDeflect, true); assert.equal(d.pierce, 3);
+  assert.equal(rail.deflected, 0, 'nothing of the slug is turned away');
+  // slope, then the plate behind it, then the next: each takes half of what the one before was sent
+  assert.equal(rail.taken, (d.dmg - PARTS.slope.armor) + Math.min(PARTS.plate.hp, d.dmg * d.pierceFalloff) + d.dmg * d.pierceFalloff ** 2);
+  assert.ok(Math.abs(shell.deflected - PARTS.cannon.dmg * (1 - PARTS.slope.deflect)) < 1e-9, 'a shell is still turned');
+});
+
 test('a design is made of our parts and our four facings, whatever else its JSON may hold', () => {
   const base = car().parts;
   // an array that reads like a name, and names every object has, are not parts or facings
@@ -477,7 +496,7 @@ test('a shield that soaks a whole burst still lets the shove through, and soaks 
   const { w, p, q } = duel(car(), shielded, { gap: 8 });
   w.explode(q.x - 1.4, q.y, 2, 46, 0.35, 0, p, 7, { shieldable: true });   // a mortar shell: all of it fits in a full bubble
   assert.equal(q.stats.damageTaken, 0, 'nothing gets through');
-  assert.ok(q.shield < 120, 'the bubble paid');
+  assert.ok(q.shield < PARTS.shieldgen.shield, 'the bubble paid');
   assert.ok(q.vx > 1.5, `and it is thrown all the same (${q.vx.toFixed(2)} m/s)`);
   // a cannon shell going off on the wall beside a shielded car: its splash is a burst like any other
   const wall = duel(car([{ type: 'cannon', x: 0, y: 1, z: 1, dir: 'N' }]), shielded, { gap: 8 });
@@ -549,5 +568,5 @@ test('a shield soaks a keg, a barrel or a mine going off outside it, but not a k
   carrier.w.damage(carrier.q, keg, 999, 'kinetic', carrier.p);
   carrier.w.settle();
   assert.ok(carrier.q.stats.damageTaken > keg.maxHp + 100, `its own keg goes off under the shield (${Math.round(carrier.q.stats.damageTaken)} hp gone)`);
-  assert.equal(carrier.q.shield, 120, 'which is not touched');
+  assert.equal(carrier.q.shield, PARTS.shieldgen.shield, 'which is not touched');
 });

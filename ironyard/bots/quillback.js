@@ -10,7 +10,7 @@
 // or the reactor does not cut the car in half.
 const meta = {
   name: 'Quillback',
-  author: 'Tin Lantern Garage',
+  author: 'Fable',
   model: 'Fable',
   notes: 'Rear-facing battery of 6 MGs behind slopes on monster wheels: flees forward from brawlers while stripping their saws, pistons and wheels; backs in on gun cars and drills the core.',
 };

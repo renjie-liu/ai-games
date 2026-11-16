@@ -61,7 +61,8 @@ test('guns: bearings covered, blind arcs, dps by range ahead and astern', () => 
   const lob = check([P('plate4', 0, 0), P('plate', 0, -1), P('wheel', -1, 0), P('wheel', 2, 0), P('core', 0, -1, 1), P('mortar', 0, 0, 1, 'N')]);
   assert.deepEqual(lob.blindArcsDeg, []);
   assert.equal(lob.weapons[0].minRange, 6);
-  assert.deepEqual(lob.dpsByRange, { 2: 0, 6: 10, 10: 10, 14: 10, 18: 10, 22: 10 });
+  const lobDps = Math.round(PARTS.mortar.dmg / PARTS.mortar.cooldown);
+  assert.deepEqual(lob.dpsByRange, { 2: 0, 6: lobDps, 10: lobDps, 14: lobDps, 18: lobDps, 22: lobDps });
   assert.ok(lob.insights.some((s) => /No gun bears on a target 2 m dead ahead/.test(s)), lob.insights.join(' | '));
 
   // no gun at all: every bearing is blind, and the contact weapons are named

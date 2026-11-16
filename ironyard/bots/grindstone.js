@@ -9,7 +9,7 @@
 // range from what the enemy carries, rushes cars that outrange it, routes round lava, holes and walls
 // instead of freezing in front of them, backs off a harpoon, steps round mines, dodges shells and kegs.
 // In teams every car names the enemy it is on and prefers one a teammate already shoots.
-const meta = { name: 'Grindstone', author: 'Rust Hollow Garage', model: 'Opus', notes: 'Tracked four-laser wall behind slopes: sunk cockpit, tracks tied in front and rear, beams through armour at whatever stud ends the fight soonest.' };
+const meta = { name: 'Grindstone', author: 'Opus', model: 'Opus', notes: 'Tracked four-laser wall behind slopes: sunk cockpit, tracks tied in front and rear, beams through armour at whatever stud ends the fight soonest.' };
 
 const design = (ctx, api) => api.util.blueprint('Grindstone', {
   deck: [

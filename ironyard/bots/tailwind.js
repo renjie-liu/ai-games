@@ -2,11 +2,10 @@
 // stern machine guns do the work, drilling straight at the enemy core: one
 // column of shielding stripped at a time, then the core itself. Slopes shield
 // the guns, the core sleeps on the chassis under an armour lid, three
-// reactors keep the battery fed. Author: Renjie Liu. Written by Muse
-// (Muse Spark).
+// reactors keep the battery fed. Written by Muse (Muse Spark).
 const meta = {
   name: 'Tailwind',
-  author: 'Renjie Liu',
+  author: 'Muse Spark',
   model: 'Muse Spark',
   notes: 'Rear-facing six-gun battery on monster wheels; core-only aim, matchup range control, barrel sniping.',
 };

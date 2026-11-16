@@ -1,7 +1,7 @@
 // HYDROGEN — adaptive multi-role combat vehicle for Light/Standard/Heavy budgets.
 const meta = {
   name: 'Hydrogen',
-  author: 'Hydrogen',
+  author: 'gemini-4-hydrogen-medium',
   model: 'gemini-4-hydrogen-medium',
   notes: 'Adaptive sloped-armor platform with hover variant for pit maps, energy-guarded hover, barrel targeting, and matchup-aware range control.',
 };

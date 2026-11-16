@@ -1,6 +1,6 @@
 const meta = {
   name: 'Afterburner',
-  author: 'Sol',
+  author: 'gpt-6-sol',
   model: 'gpt-6-sol',
   notes: 'Rear facing six gun battery on wide monster wheels; adjusts range to opposing weapons and keeps the cockpit below armor.',
 };

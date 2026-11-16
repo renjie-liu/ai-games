@@ -226,7 +226,8 @@ export class World {
   damage(v, p, amount, dtype, src, shotAng, cause, via) {
     if (!p.alive || !v.alive || !(amount > 0)) return 0;
     const def = p.def;
-    if (def.deflect && shotAng !== undefined && (dtype === 'kinetic' || dtype === 'explosive')
+    // a slope turns a shot that meets its face — except a rail slug, which is going too fast to be turned (def.noDeflect)
+    if (def.deflect && shotAng !== undefined && (dtype === 'kinetic' || dtype === 'explosive') && !(via && via.def && via.def.noDeflect)
       && Math.cos(shotAng - (v.th + DIR_ANGLE[p.dir])) < -0.5) {
       v.stats.deflected += amount * (1 - def.deflect);
       amount *= def.deflect;

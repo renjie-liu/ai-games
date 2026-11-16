@@ -19,6 +19,8 @@ function partRow(p) {
     bits.push(p.energyShot ? `${p.energyShot} energy/shot` : `${p.energyUse} energy/s`);
     if (p.splash) bits.push(p.weapon === 'lob' ? `blast ${p.splash.r} m, up to ${p.splash.max} pieces` : `splash ${p.splash.r} m x${p.splash.f}`);
     if (p.rope) bits.push(`cable holds ${p.rope.hold} s, reels in ${p.rope.reel} m/s down to ${p.rope.min} m`, `pulled tight it tears the hooked piece at ${p.rope.tear} hp/s`);
+    if (p.pierce) bits.push(`goes through ${p.pierce} pieces`);
+    if (p.noDeflect) bits.push('slopes do not turn it');
     if (p.recoil) bits.push(`recoil ${p.recoil} N·s`);
     bits.push(p.dtype);
   }
@@ -54,7 +56,7 @@ export function rulesMarkdown() {
   const after = (d, def, faced) => Math.round(hitOn(def, d, 'kinetic', faced) * 10) / 10;
   const hitTable = ['| weapon | one hit | on a plain piece | on armor | on a slope, face on | on a slope, from elsewhere |', '|---|---|---:|---:|---:|---:|',
     ...Object.values(PARTS).filter((p) => p.weapon && p.weapon !== 'hook' && p.dmg && (p.dtype === 'kinetic' || p.dtype === 'explosive')).map((p) =>
-      `| ${p.id} | ${p.dmg}${p.salvo ? ' x' + p.salvo : ''} ${p.dtype} | ${p.dmg} | ${after(p.dmg, PARTS.armor, false)} | ${after(p.dmg, PARTS.slope, p.weapon !== 'lob')} | ${after(p.dmg, PARTS.slope, false)} |`)].join('\n');
+      `| ${p.id} | ${p.dmg}${p.salvo ? ' x' + p.salvo : ''} ${p.dtype} | ${p.dmg} | ${after(p.dmg, PARTS.armor, false)} | ${after(p.dmg, PARTS.slope, p.weapon !== 'lob' && !p.noDeflect)} | ${after(p.dmg, PARTS.slope, false)} |`)].join('\n');
   const partTables = Object.entries(cats).map(([cat, title]) =>
     `**${title}**\n\n| type | glyph | studs | cost | mass kg | hp | placement | numbers | notes |\n|---|---|---|---|---|---|---|---|---|\n` +
     Object.values(PARTS).filter((p) => p.cat === cat).map(partRow).join('\n')).join('\n\n');
@@ -144,7 +146,8 @@ What happens under fire:
 * Slopes: a kinetic or explosive hit arriving against the slope's facing (within 60°) only does ${Math.round(PARTS.slope.deflect * 100)}%.
 * **What a hit is worth** after the piece it lands on has had its say (armor takes ${PARTS.armor.armor} off every kinetic or explosive hit, never
   more than three quarters of it; a slope struck on its face lets ${Math.round(PARTS.slope.deflect * 100)}% through and then takes ${PARTS.slope.armor} off). Lasers, flame and saws are not reduced by either.
-  A mortar round comes down from above and the splash of any burst has no direction: a slope's face deflects neither:
+  A mortar round comes down from above and the splash of any burst has no direction: a slope's face deflects neither. Nor does it turn
+  a rail slug, which only loses the slope's armor point:
 
 ${hitTable}
 
