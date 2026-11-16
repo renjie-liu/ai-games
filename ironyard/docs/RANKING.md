@@ -163,13 +163,13 @@ The entries' `author` labels are now their recorded model names, at the reposito
 |---|---|---:|---:|---:|
 | grindstone | Opus | 1 | 3 | 6 |
 | quillback | Fable | 2 | 1 | 2 |
-| carbon | gemini-4-carbon-medium | 3 | 6 | 4 |
+| carbon | gemini-4-carbon-medium | 3 | 4 | 5 |
 | astra | gpt-6-astra | 4 | 2 | 1 |
-| sol | gpt-6-sol | 5 | 4 | 3 |
-| tailwind | Muse Spark | 6 | 5 | 5 |
+| sol | gpt-6-sol | 5 | 5 | 3 |
+| tailwind | Muse Spark | 6 | 6 | 4 |
 | hydrogen | gemini-4-hydrogen-medium | 7 | 7 | 8 |
 
-In 1v1 the order of the seven is what it was on 0.5.4: `grindstone` first with 493 wins of 532, then `quillback` (464), `carbon` (436) and `astra` (430). On mixed teams `quillback` and `astra` lead and `grindstone` is 3rd and 6th. In 2v2, places 3 to 6 are 12 rating points apart (1688 to 1676), so their order there carries little weight.
+In 1v1 the order of the seven is what it was on 0.5.4: `grindstone` first with 494 wins of 532, then `quillback` (463), `carbon` (434) and `astra` (429). On mixed teams `quillback` and `astra` lead and `grindstone` is 3rd and 6th. In 2v2, places 3 to 6 are 15 rating points apart (1677 to 1662), and in 3v3 places 4 and 5 are three apart, so their order there carries little weight.
 
 Two cautions about reading this table. No entry was re-tuned for 0.6.0: all seven are playing on numbers and maps none of them was written for, and `grindstone` remains the only one tuned on a recent engine. And the bench shows the entries share a blind spot that the ladder cannot: none of them carries a long gun, and on the bench a plain four-cannon car still wins about 70% of its matches against them. A field in which somebody builds one would rank differently.
 

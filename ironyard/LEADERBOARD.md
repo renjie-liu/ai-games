@@ -12,29 +12,29 @@ Each mode is a separate ranking; there is no combined overall or model ranking. 
 |---|---|---|---:|---:|---:|
 | `grindstone` | Opus | Opus | 1 | 3 | 6 |
 | `quillback` | Fable | Fable | 2 | 1 | 2 |
-| `carbon` | gemini-4-carbon-medium | gemini-4-carbon-medium | 3 | 6 | 4 |
+| `carbon` | gemini-4-carbon-medium | gemini-4-carbon-medium | 3 | 4 | 5 |
 | `astra` | gpt-6-astra | gpt-6-astra | 4 | 2 | 1 |
-| `sol` | gpt-6-sol | gpt-6-sol | 5 | 4 | 3 |
-| `tailwind` | Muse Spark | Muse Spark | 6 | 5 | 5 |
+| `sol` | gpt-6-sol | gpt-6-sol | 5 | 5 | 3 |
+| `tailwind` | Muse Spark | Muse Spark | 6 | 6 | 4 |
 | `hydrogen` | gemini-4-hydrogen-medium | gemini-4-hydrogen-medium | 7 | 7 | 8 |
-| `sapper` | ironyard | Not recorded | 8 | 12 | 12 |
+| `sapper` | ironyard | Not recorded | 8 | 13 | 12 |
 | `angler` | ironyard | Not recorded | 9 | 8 | 13 |
 | `longshot` | ironyard | Not recorded | 10 | 9 | 7 |
-| `boxer` | ironyard | Not recorded | 11 | 14 | 17 |
-| `bulldozer` | ironyard | Not recorded | 12 | 13 | 14 |
-| `bastion` | ironyard | Not recorded | 13 | 15 | 11 |
+| `boxer` | ironyard | Not recorded | 11 | 15 | 17 |
+| `bulldozer` | ironyard | Not recorded | 12 | 14 | 14 |
+| `bastion` | ironyard | Not recorded | 13 | 16 | 11 |
 | `wolfpack` | ironyard | Not recorded | 14 | 10 | 18 |
-| `pyro` | ironyard | Not recorded | 15 | 11 | 9 |
-| `thumper` | ironyard | Not recorded | 16 | 17 | 10 |
-| `wasp` | ironyard | Not recorded | 17 | 16 | 15 |
+| `pyro` | ironyard | Not recorded | 15 | 11 | 10 |
+| `thumper` | ironyard | Not recorded | 16 | 17 | 9 |
+| `wasp` | ironyard | Not recorded | 17 | 12 | 15 |
 | `medic` | ironyard | Not recorded | 18 | 18 | 19 |
 | `hornet` | ironyard | Not recorded | 19 | 19 | 16 |
 | `rookie` | ironyard | Not recorded | 20 | 20 | 20 |
 
 ## How to read the rankings
 
-- **1v1:** every pair plays all eight maps from both spawn sides, with seed 1.
-- **2v2 / 3v3:** 40 deterministic mixed-team rounds, balanced across authors where possible. Each pairing rotates through every team slot, from both spawn sides. Some entrants sit out each round, so game counts and map exposure differ.
+- **1v1:** every pair plays all 14 maps from both spawn sides, with seed 1.
+- **2v2 / 3v3:** 42 deterministic mixed-team rounds, going round the maps in turn, balanced across authors where possible. Each pairing rotates through every team slot, from both spawn sides. Some entrants sit out each round, so game counts differ.
 - **Rating:** a joint logistic fit to all results, with a 1500 anchor equivalent to two draws. Team strength is the sum of individual ratings above 1500. Wins count 1, draws 0.5, losses 0. Opponent and teammate strength matter; raw win rate does not determine rank.
 - **Ordering:** unrounded rating, then win rate, then bot id. Displayed ratings are rounded. Bots with zero games are unranked. Author tables sort by the author’s best bot, then mean rating.
 - **Scope:** these are fixed-season results, not confidence intervals or a general model benchmark. Team synergy is approximated as additive. Close scores and small samples warrant more seeds/rounds.
@@ -48,39 +48,39 @@ See [ranking methodology and audit](docs/RANKING.md) for details, error handling
 
 | # | bot | author | rating | played | W | D | L | win % |
 |---:|---|---|---:|---:|---:|---:|---:|---:|
-| 1 | `grindstone` | Opus | 2030 | 532 | 493 | 0 | 39 | 93 |
-| 2 | `quillback` | Fable | 1921 | 532 | 464 | 0 | 68 | 87 |
-| 3 | `carbon` | gemini-4-carbon-medium | 1839 | 532 | 436 | 0 | 96 | 82 |
-| 4 | `astra` | gpt-6-astra | 1823 | 532 | 430 | 0 | 102 | 81 |
-| 5 | `sol` | gpt-6-sol | 1686 | 532 | 370 | 0 | 162 | 70 |
-| 6 | `tailwind` | Muse Spark | 1617 | 532 | 334 | 0 | 198 | 63 |
-| 7 | `hydrogen` | gemini-4-hydrogen-medium | 1555 | 532 | 299 | 0 | 233 | 56 |
-| 8 | `sapper` | ironyard | 1502 | 532 | 267 | 0 | 265 | 50 |
-| 9 | `angler` | ironyard | 1475 | 532 | 250 | 1 | 281 | 47 |
-| 10 | `longshot` | ironyard | 1454 | 532 | 238 | 0 | 294 | 45 |
+| 1 | `grindstone` | Opus | 2034 | 532 | 494 | 0 | 38 | 93 |
+| 2 | `quillback` | Fable | 1917 | 532 | 463 | 0 | 69 | 87 |
+| 3 | `carbon` | gemini-4-carbon-medium | 1832 | 532 | 434 | 0 | 98 | 82 |
+| 4 | `astra` | gpt-6-astra | 1819 | 532 | 429 | 0 | 103 | 81 |
+| 5 | `sol` | gpt-6-sol | 1688 | 532 | 371 | 0 | 161 | 70 |
+| 6 | `tailwind` | Muse Spark | 1619 | 532 | 335 | 0 | 197 | 63 |
+| 7 | `hydrogen` | gemini-4-hydrogen-medium | 1557 | 532 | 300 | 0 | 232 | 56 |
+| 8 | `sapper` | ironyard | 1505 | 532 | 269 | 0 | 263 | 51 |
+| 9 | `angler` | ironyard | 1470 | 532 | 247 | 1 | 284 | 46 |
+| 10 | `longshot` | ironyard | 1453 | 532 | 237 | 0 | 295 | 45 |
 | 11 | `boxer` | ironyard | 1444 | 532 | 232 | 0 | 300 | 44 |
-| 12 | `bulldozer` | ironyard | 1438 | 532 | 228 | 0 | 304 | 43 |
-| 13 | `bastion` | ironyard | 1397 | 532 | 203 | 0 | 329 | 38 |
-| 14 | `wolfpack` | ironyard | 1382 | 532 | 194 | 0 | 338 | 37 |
-| 15 | `pyro` | ironyard | 1373 | 532 | 189 | 0 | 343 | 36 |
-| 16 | `thumper` | ironyard | 1367 | 532 | 185 | 0 | 347 | 35 |
-| 17 | `wasp` | ironyard | 1351 | 532 | 176 | 0 | 356 | 33 |
-| 18 | `medic` | ironyard | 1323 | 532 | 160 | 0 | 372 | 30 |
-| 19 | `hornet` | ironyard | 1259 | 532 | 126 | 0 | 406 | 24 |
-| 20 | `rookie` | ironyard | 1051 | 532 | 45 | 1 | 486 | 9 |
+| 12 | `bulldozer` | ironyard | 1436 | 532 | 227 | 0 | 305 | 43 |
+| 13 | `bastion` | ironyard | 1395 | 532 | 202 | 0 | 330 | 38 |
+| 14 | `wolfpack` | ironyard | 1385 | 532 | 196 | 0 | 336 | 37 |
+| 15 | `pyro` | ironyard | 1377 | 532 | 191 | 0 | 341 | 36 |
+| 16 | `thumper` | ironyard | 1372 | 532 | 188 | 0 | 344 | 35 |
+| 17 | `wasp` | ironyard | 1355 | 532 | 178 | 0 | 354 | 34 |
+| 18 | `medic` | ironyard | 1313 | 532 | 154 | 0 | 378 | 29 |
+| 19 | `hornet` | ironyard | 1256 | 532 | 124 | 0 | 408 | 23 |
+| 20 | `rookie` | ironyard | 1063 | 532 | 48 | 1 | 483 | 9 |
 
 ### Authors — ordered by best bot
 
 | author | bots | best bot | best rating | mean rating |
 |---|---:|---|---:|---:|
-| Opus | 1 | `grindstone` | 2030 | 2030 |
-| Fable | 1 | `quillback` | 1921 | 1921 |
-| gemini-4-carbon-medium | 1 | `carbon` | 1839 | 1839 |
-| gpt-6-astra | 1 | `astra` | 1823 | 1823 |
-| gpt-6-sol | 1 | `sol` | 1686 | 1686 |
-| Muse Spark | 1 | `tailwind` | 1617 | 1617 |
-| gemini-4-hydrogen-medium | 1 | `hydrogen` | 1555 | 1555 |
-| ironyard | 13 | `sapper` | 1502 | 1370 |
+| Opus | 1 | `grindstone` | 2034 | 2034 |
+| Fable | 1 | `quillback` | 1917 | 1917 |
+| gemini-4-carbon-medium | 1 | `carbon` | 1832 | 1832 |
+| gpt-6-astra | 1 | `astra` | 1819 | 1819 |
+| gpt-6-sol | 1 | `sol` | 1688 | 1688 |
+| Muse Spark | 1 | `tailwind` | 1619 | 1619 |
+| gemini-4-hydrogen-medium | 1 | `hydrogen` | 1557 | 1557 |
+| ironyard | 13 | `sapper` | 1505 | 1371 |
 
 ## 2v2
 
@@ -88,39 +88,39 @@ See [ranking methodology and audit](docs/RANKING.md) for details, error handling
 
 | # | bot | author | rating | played | W | D | L | win % |
 |---:|---|---|---:|---:|---:|---:|---:|---:|
-| 1 | `quillback` | Fable | 1811 | 168 | 131 | 0 | 37 | 78 |
-| 2 | `astra` | gpt-6-astra | 1717 | 168 | 114 | 0 | 54 | 68 |
-| 3 | `grindstone` | Opus | 1688 | 168 | 97 | 0 | 71 | 58 |
-| 4 | `sol` | gpt-6-sol | 1683 | 168 | 106 | 0 | 62 | 63 |
-| 5 | `tailwind` | Muse Spark | 1677 | 168 | 101 | 0 | 67 | 60 |
-| 6 | `carbon` | gemini-4-carbon-medium | 1676 | 168 | 97 | 0 | 71 | 58 |
-| 7 | `hydrogen` | gemini-4-hydrogen-medium | 1522 | 168 | 59 | 0 | 109 | 35 |
-| 8 | `angler` | ironyard | 1506 | 168 | 76 | 0 | 92 | 45 |
-| 9 | `longshot` | ironyard | 1499 | 168 | 93 | 0 | 75 | 55 |
-| 10 | `wolfpack` | ironyard | 1455 | 168 | 78 | 0 | 90 | 46 |
-| 11 | `pyro` | ironyard | 1441 | 168 | 88 | 0 | 80 | 52 |
-| 12 | `sapper` | ironyard | 1436 | 168 | 71 | 0 | 97 | 42 |
-| 13 | `bulldozer` | ironyard | 1434 | 168 | 84 | 0 | 84 | 50 |
-| 14 | `boxer` | ironyard | 1420 | 168 | 81 | 0 | 87 | 48 |
-| 15 | `bastion` | ironyard | 1416 | 168 | 75 | 0 | 93 | 45 |
-| 16 | `wasp` | ironyard | 1397 | 168 | 83 | 0 | 85 | 49 |
-| 17 | `thumper` | ironyard | 1364 | 168 | 63 | 0 | 105 | 38 |
-| 18 | `medic` | ironyard | 1335 | 168 | 70 | 0 | 98 | 42 |
-| 19 | `hornet` | ironyard | 1325 | 168 | 65 | 0 | 103 | 39 |
-| 20 | `rookie` | ironyard | 1281 | 168 | 48 | 0 | 120 | 29 |
+| 1 | `quillback` | Fable | 1797 | 168 | 130 | 0 | 38 | 77 |
+| 2 | `astra` | gpt-6-astra | 1725 | 168 | 117 | 0 | 51 | 70 |
+| 3 | `grindstone` | Opus | 1677 | 168 | 95 | 0 | 73 | 56 |
+| 4 | `carbon` | gemini-4-carbon-medium | 1674 | 168 | 98 | 0 | 70 | 58 |
+| 5 | `sol` | gpt-6-sol | 1673 | 168 | 104 | 0 | 64 | 62 |
+| 6 | `tailwind` | Muse Spark | 1662 | 168 | 99 | 0 | 69 | 59 |
+| 7 | `hydrogen` | gemini-4-hydrogen-medium | 1521 | 168 | 59 | 0 | 109 | 35 |
+| 8 | `angler` | ironyard | 1510 | 168 | 78 | 0 | 90 | 46 |
+| 9 | `longshot` | ironyard | 1503 | 168 | 95 | 0 | 73 | 56 |
+| 10 | `wolfpack` | ironyard | 1448 | 168 | 76 | 0 | 92 | 45 |
+| 11 | `pyro` | ironyard | 1437 | 168 | 87 | 0 | 81 | 52 |
+| 12 | `wasp` | ironyard | 1435 | 168 | 89 | 0 | 79 | 53 |
+| 13 | `sapper` | ironyard | 1433 | 168 | 70 | 0 | 98 | 42 |
+| 14 | `bulldozer` | ironyard | 1430 | 168 | 83 | 0 | 85 | 49 |
+| 15 | `boxer` | ironyard | 1423 | 168 | 81 | 0 | 87 | 48 |
+| 16 | `bastion` | ironyard | 1409 | 168 | 74 | 0 | 94 | 44 |
+| 17 | `thumper` | ironyard | 1364 | 168 | 62 | 0 | 106 | 37 |
+| 18 | `medic` | ironyard | 1359 | 168 | 74 | 0 | 94 | 44 |
+| 19 | `hornet` | ironyard | 1308 | 168 | 61 | 0 | 107 | 36 |
+| 20 | `rookie` | ironyard | 1285 | 168 | 48 | 0 | 120 | 29 |
 
 ### Authors — ordered by best bot
 
 | author | bots | best bot | best rating | mean rating |
 |---|---:|---|---:|---:|
-| Fable | 1 | `quillback` | 1811 | 1811 |
-| gpt-6-astra | 1 | `astra` | 1717 | 1717 |
-| Opus | 1 | `grindstone` | 1688 | 1688 |
-| gpt-6-sol | 1 | `sol` | 1683 | 1683 |
-| Muse Spark | 1 | `tailwind` | 1677 | 1677 |
-| gemini-4-carbon-medium | 1 | `carbon` | 1676 | 1676 |
-| gemini-4-hydrogen-medium | 1 | `hydrogen` | 1522 | 1522 |
-| ironyard | 13 | `angler` | 1506 | 1408 |
+| Fable | 1 | `quillback` | 1797 | 1797 |
+| gpt-6-astra | 1 | `astra` | 1725 | 1725 |
+| Opus | 1 | `grindstone` | 1677 | 1677 |
+| gemini-4-carbon-medium | 1 | `carbon` | 1674 | 1674 |
+| gpt-6-sol | 1 | `sol` | 1673 | 1673 |
+| Muse Spark | 1 | `tailwind` | 1662 | 1662 |
+| gemini-4-hydrogen-medium | 1 | `hydrogen` | 1521 | 1521 |
+| ironyard | 13 | `angler` | 1510 | 1411 |
 
 ## 3v3
 
@@ -128,36 +128,36 @@ See [ranking methodology and audit](docs/RANKING.md) for details, error handling
 
 | # | bot | author | rating | played | W | D | L | win % |
 |---:|---|---|---:|---:|---:|---:|---:|---:|
-| 1 | `astra` | gpt-6-astra | 1843 | 204 | 140 | 0 | 64 | 69 |
-| 2 | `quillback` | Fable | 1750 | 228 | 135 | 0 | 93 | 59 |
-| 3 | `sol` | gpt-6-sol | 1665 | 198 | 116 | 0 | 82 | 59 |
-| 4 | `carbon` | gemini-4-carbon-medium | 1652 | 222 | 103 | 0 | 119 | 46 |
-| 5 | `tailwind` | Muse Spark | 1642 | 222 | 111 | 0 | 111 | 50 |
-| 6 | `grindstone` | Opus | 1591 | 216 | 99 | 0 | 117 | 46 |
-| 7 | `longshot` | ironyard | 1539 | 240 | 147 | 0 | 93 | 61 |
-| 8 | `hydrogen` | gemini-4-hydrogen-medium | 1498 | 234 | 84 | 0 | 150 | 36 |
-| 9 | `pyro` | ironyard | 1487 | 228 | 109 | 0 | 119 | 48 |
-| 10 | `thumper` | ironyard | 1484 | 228 | 126 | 0 | 102 | 55 |
-| 11 | `bastion` | ironyard | 1478 | 216 | 116 | 0 | 100 | 54 |
-| 12 | `sapper` | ironyard | 1473 | 228 | 118 | 0 | 110 | 52 |
-| 13 | `angler` | ironyard | 1458 | 240 | 116 | 0 | 124 | 48 |
-| 14 | `bulldozer` | ironyard | 1443 | 228 | 124 | 0 | 104 | 54 |
-| 15 | `wasp` | ironyard | 1416 | 228 | 129 | 0 | 99 | 57 |
-| 16 | `hornet` | ironyard | 1407 | 234 | 135 | 0 | 99 | 58 |
-| 17 | `boxer` | ironyard | 1365 | 252 | 112 | 0 | 140 | 44 |
-| 18 | `wolfpack` | ironyard | 1352 | 222 | 103 | 0 | 119 | 46 |
-| 19 | `medic` | ironyard | 1265 | 228 | 75 | 0 | 153 | 33 |
+| 1 | `astra` | gpt-6-astra | 1832 | 204 | 138 | 0 | 66 | 68 |
+| 2 | `quillback` | Fable | 1754 | 228 | 135 | 0 | 93 | 59 |
+| 3 | `sol` | gpt-6-sol | 1663 | 198 | 115 | 0 | 83 | 58 |
+| 4 | `tailwind` | Muse Spark | 1643 | 222 | 110 | 0 | 112 | 50 |
+| 5 | `carbon` | gemini-4-carbon-medium | 1640 | 222 | 100 | 0 | 122 | 45 |
+| 6 | `grindstone` | Opus | 1600 | 216 | 102 | 0 | 114 | 47 |
+| 7 | `longshot` | ironyard | 1538 | 240 | 147 | 0 | 93 | 61 |
+| 8 | `hydrogen` | gemini-4-hydrogen-medium | 1506 | 234 | 88 | 0 | 146 | 38 |
+| 9 | `thumper` | ironyard | 1498 | 228 | 130 | 0 | 98 | 57 |
+| 10 | `pyro` | ironyard | 1483 | 228 | 108 | 0 | 120 | 47 |
+| 11 | `bastion` | ironyard | 1476 | 216 | 115 | 0 | 101 | 53 |
+| 12 | `sapper` | ironyard | 1471 | 228 | 120 | 0 | 108 | 53 |
+| 13 | `angler` | ironyard | 1469 | 240 | 119 | 0 | 121 | 50 |
+| 14 | `bulldozer` | ironyard | 1447 | 228 | 125 | 0 | 103 | 55 |
+| 15 | `wasp` | ironyard | 1396 | 228 | 123 | 0 | 105 | 54 |
+| 16 | `hornet` | ironyard | 1393 | 234 | 131 | 0 | 103 | 56 |
+| 17 | `boxer` | ironyard | 1377 | 252 | 115 | 0 | 137 | 46 |
+| 18 | `wolfpack` | ironyard | 1355 | 222 | 104 | 0 | 118 | 47 |
+| 19 | `medic` | ironyard | 1257 | 228 | 73 | 0 | 155 | 32 |
 | 20 | `rookie` | ironyard | 1253 | 240 | 70 | 0 | 170 | 29 |
 
 ### Authors — ordered by best bot
 
 | author | bots | best bot | best rating | mean rating |
 |---|---:|---|---:|---:|
-| gpt-6-astra | 1 | `astra` | 1843 | 1843 |
-| Fable | 1 | `quillback` | 1750 | 1750 |
-| gpt-6-sol | 1 | `sol` | 1665 | 1665 |
-| gemini-4-carbon-medium | 1 | `carbon` | 1652 | 1652 |
-| Muse Spark | 1 | `tailwind` | 1642 | 1642 |
-| Opus | 1 | `grindstone` | 1591 | 1591 |
-| ironyard | 13 | `longshot` | 1539 | 1417 |
-| gemini-4-hydrogen-medium | 1 | `hydrogen` | 1498 | 1498 |
+| gpt-6-astra | 1 | `astra` | 1832 | 1832 |
+| Fable | 1 | `quillback` | 1754 | 1754 |
+| gpt-6-sol | 1 | `sol` | 1663 | 1663 |
+| Muse Spark | 1 | `tailwind` | 1643 | 1643 |
+| gemini-4-carbon-medium | 1 | `carbon` | 1640 | 1640 |
+| Opus | 1 | `grindstone` | 1600 | 1600 |
+| ironyard | 13 | `longshot` | 1538 | 1416 |
+| gemini-4-hydrogen-medium | 1 | `hydrogen` | 1506 | 1506 |
