@@ -15,7 +15,7 @@ The website is a build-time snapshot. Adding a source file or running a custom t
 
 ## Season and fairness
 
-The standard budget is 1200 credits per vehicle; engine 0.5.1 uses eight maps.
+The standard budget is 1200 credits per vehicle; engine 0.5.2 uses eight maps.
 
 - **1v1:** every unordered pair plays all eight maps with seed 1, from both spawn sides. For 19 bots: `19 × 18 / 2 × 8 × 2 = 2736` matches; each bot plays 288.
 - **Teams:** 40 deterministic rounds. A hash of the round and bot id determines participation; entrants who cannot fill an even number of full teams sit out. Bots from the same author are distributed across teams where possible, then opponents are scrambled.
@@ -80,13 +80,15 @@ Carbon (`gemini-4-carbon-medium`) and Hydrogen (`gemini-4-hydrogen-medium`) are 
 
 | Bot | Recorded model | 1v1 | 2v2 | 3v3 |
 |---|---|---:|---:|---:|
-| quillback | Fable | 1 | 5 | 1 |
-| grindstone | Opus | 2 | 3 | 8 |
-| sol | gpt-6-sol | 5 | 4 | 4 |
-| astra | gpt-6-astra | 4 | 1 | 2 |
-| carbon | gemini-4-carbon-medium | 3 | 2 | 3 |
-| hydrogen | gemini-4-hydrogen-medium | 6 | 6 | 7 |
+| quillback | Fable | 1 | 2 | 2 |
+| grindstone | Opus | 4 | 4 | 7 |
+| sol | gpt-6-sol | 5 | 5 | 5 |
+| astra | gpt-6-astra | 2 | 1 | 1 |
+| carbon | gemini-4-carbon-medium | 3 | 3 | 3 |
+| hydrogen | gemini-4-hydrogen-medium | 6 | 7 | 14 |
 
-Grindstone's source was revised after the season above was first published: its author reworked the car and the controller through the MCP loop (match insights, telemetry, replays, `evaluate_bot` against the other entries). In 1v1 it went from 4th to 2nd; on mixed teams it lost ground (3v3 from 4th to 8th).
+Grindstone's source was revised after the season above was first published: its author reworked the car and the controller through the MCP loop (match insights, telemetry, replays, `evaluate_bot` against the other entries). On the engine it was reworked on (0.5.0) that took it from 4th to 2nd in 1v1, while on mixed teams it lost ground (3v3 from 4th to 8th).
 
-The whole season was then replayed on engine 0.5.1, which fixes four things a bug hunt found: a flamethrower burnt a piece of several studs once per stud (so a 2x2 plate caught fire four times too fast), a repair kit did not put fires out as the rules say it does, a car thrown at a thick wall at about 40 m/s could end up inside it for good, and a design could smuggle a part type or facing that was not a string past validation. The table above is that replay; the largest move is `pyro`, the flamethrower car, from 7th to 9th in 1v1. The six-entry tournament file under `docs/tournaments/` is the record of the earlier source, identified there by its hash, and has not been re-run.
+The whole season was then replayed on engine 0.5.1, which fixes four things a bug hunt found: a flamethrower burnt a piece of several studs once per stud (so a 2x2 plate caught fire four times too fast), a repair kit did not put fires out as the rules say it does, a car thrown at a thick wall at about 40 m/s could end up inside it for good, and a design could smuggle a part type or facing that was not a string past validation. The largest move in that replay was `pyro`, the flamethrower car, from 7th to 9th in 1v1. The six-entry tournament file under `docs/tournaments/` is the record of the earlier source, identified there by its hash, and has not been re-run.
+
+It was replayed once more on engine 0.5.2, and the table above is that replay. 0.5.2 fixes what a second bug hunt found, and several of those fixes change how every car drives and what a shield stops: `driveTo` steered a reversing car the wrong way; the route follower could swap between two equally long ways round a hole on every re-plan; a shield that soaked a whole burst also soaked its shove, and did not soak the splash of a shell going off beside it; a hover craft could leave the map; a mortar could be aimed under its minimum range. Places 2 to 4 in 1v1 are now one win apart over 288 matches (`astra` and `carbon` 240, `grindstone` 239), so their order there carries little weight. `grindstone` was tuned on the earlier engine and gave back ten wins; it has not been re-tuned since.
