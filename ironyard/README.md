@@ -119,7 +119,7 @@ The saved ladder now includes an overview across modes, completion counts and mo
 
 Custom tournaments report failed matches as unscored or an attributed forfeit, with completion counts; failed matches never earn draw points. The browser's **Stop** button keeps completed results, and arena matches can run while a tournament is in progress. Head-to-head **Watch** buttons use the completed tournament's map, seed, side, mode, budget and controller sources. Starting another tournament begins a new run. CLI tournaments exit with an error status if any match failed.
 
-[TOURNAMENT.md](TOURNAMENT.md) records the separate seven-entry round robin for Fable, Opus, Sol, Astra, Carbon, Hydrogen and Muse: all eight maps, seeds 1 and 2, both spawn sides, and all three modes. It includes points, win/loss records, head-to-head results and reproduction commands.
+[TOURNAMENT.md](TOURNAMENT.md) records the separate seven-entry round robin for Fable, Opus, Sol, Astra, Carbon, Hydrogen and Muse: all fourteen maps, seeds 1 and 2, both spawn sides, and all three modes. The 2026-11-17 rerun covers 3528 fresh matches and includes points, win/loss records, head-to-head results and reproduction commands. Its overview also shows the seven entries' ranks in the full 20-bot ladder; [download both leaderboards as CSV](docs/tournaments/rankings-2026-11-17.csv).
 
 ## Write a bot
 
@@ -148,7 +148,7 @@ One JS file that defines, at the top level, `design` (a blueprint object, or `(c
 | `hydrogen` | Hydrogen, independently written by `gemini-4-hydrogen-medium`: sloped-armor platform with hover variant on pit maps, energy-guarded hover, barrel targeting and matchup-aware range control. Adapts to light, standard and heavy budgets. |
 | `tailwind` | Tailwind, written by `Muse Spark`: rear-facing six-machine-gun battery on large wheels, sloped stern armor, protected chassis core and matchup-aware range control. Standard build costs 1191 credits. |
 
-Astra and Sol now have **v2 car/strategy revisions** (edited by Codex; their original model metadata is retained). A paired 504-fixture comparison against fixed old opponents measured Astra at 290→294 wins and Sol at 228→279 wins. See [the comparison and refreshed season](docs/RANKING.md#current-season-astra-and-sol-v2).
+Astra and Sol now have **v2 car/strategy revisions** (edited by Codex; their original model metadata is retained). A paired 504-fixture comparison against fixed old opponents measured Astra at 290→294 wins and Sol at 228→279 wins. See [the comparison and refreshed season](docs/RANKING.md#season-with-astra-and-sol-v2).
 
 ## Layout
 

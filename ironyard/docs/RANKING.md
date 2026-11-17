@@ -95,7 +95,7 @@ Carbon (`gemini-4-carbon-medium`) and Hydrogen (`gemini-4-hydrogen-medium`) are 
 
 Muse Spark’s `tailwind` joins unchanged from [PR #8](https://github.com/renjie-liu/ai-games/pull/8). All **4560** ladder matches completed without controller errors: 3040 solo, 800 doubles and 720 triples. Adding this entrant changes both the solo field and mixed-team schedule. The separate seven-entry, same-bot-team tournament is documented in [TOURNAMENT.md](../TOURNAMENT.md).
 
-On 2026-11-16, all 4560 matches were rerun under engine 0.5.1 after the timing and tournament reliability fixes. No match errors occurred. Every rank, displayed rating, win/draw/loss count and author table exactly matched the previous 0.5.0 snapshot. The seven-entry tournament report remains its historical 0.5.0 run.
+On 2026-11-16, all 4560 matches were rerun under engine 0.5.1 after the timing and tournament reliability fixes. No match errors occurred. Every rank, displayed rating, win/draw/loss count and author table exactly matched the previous 0.5.0 snapshot. The seven-entry tournament at that time is preserved in [the historical 0.5.0 report](https://github.com/renjie-liu/ai-games/blob/413aea518c08696c44bf9a6a6590e0812633c608/ironyard/TOURNAMENT.md); [TOURNAMENT.md](../TOURNAMENT.md) now records the latest 0.6.0 run.
 
 | Bot | Recorded model | 1v1 | 2v2 | 3v3 |
 |---|---|---:|---:|---:|
@@ -200,6 +200,8 @@ node tools/compare-bot-revisions.mjs --baseline 09f0b90 --seed 29 --out /tmp/bot
 Human driving uses the same engine in a separate browser worker and never contributes results to this AI ladder.
 
 ## Current season: `quillback` reworked on 0.6.0
+
+Verified again on **2026-11-17 (Asia/Shanghai)** at [`413aea5`](https://github.com/renjie-liu/ai-games/commit/413aea518c08696c44bf9a6a6590e0812633c608): all **6916 matches** were replayed from an empty cache, with **zero reported controller errors**. The complete saved snapshot — ranks, displayed ratings, win/draw/loss records and author tables — was reproduced exactly, and the bundled website contains that same snapshot. All 97 unit tests passed. The separate **3528-match seven-version tournament** was also rerun on all fourteen maps, seeds 1 and 2, from both sides, with no errors or unscored games. See [both ranking overviews and head-to-head tables](../TOURNAMENT.md), [raw tournament results and source hashes](tournaments/seven-models-2026-11-17.json), and [the combined CSV](tournaments/rankings-2026-11-17.csv).
 
 `quillback`'s author reworked it through the MCP server alone, as `grindstone`'s had before it: scouting the entries that beat it, replaying its most one-sided losses, reading the telemetry. The ladder matches it plays in were played again on top of the season above; every other result is as there (the engine's results were checked to be identical match for match, before and after the match engine was restructured for human driving).
 

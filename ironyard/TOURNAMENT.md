@@ -1,108 +1,129 @@
-# Seven-entry tournament — 2026-11-15
+# Ironyard — seven-version tournament
 
-> This is the record of one tournament, played on engine 0.5.0 with the sources listed by hash in `docs/tournaments/`. The engine and at least one entry (`grindstone`) have changed since, so these tables are not the current standings: see [LEADERBOARD.md](LEADERBOARD.md) and [docs/RANKING.md](docs/RANKING.md).
+Verified 2026-11-17 (Asia/Shanghai) at [`413aea5`](https://github.com/renjie-liu/ai-games/commit/413aea518c08696c44bf9a6a6590e0812633c608), engine 0.6.0. **3528 fresh matches; all completed, zero reported controller errors.**
 
-Fable (Quillback), Opus (Grindstone), Sol, Astra, Carbon, Hydrogen and Muse Spark (Tailwind) played **2016 matches** across three separate round robins. All matches completed with no reported controller errors. The repository owner confirmed the Fable/Opus attribution; exact versions were not supplied.
+Fable is Quillback, Opus is Grindstone, and Muse is Tailwind. This run includes the reworked two-mortar Quillback and Astra/Sol v2. Model labels describe the source metadata; Astra/Sol v2 additionally record Codex as editor.
 
-All 1440 matches from the [previous six-entry tournament](https://github.com/renjie-liu/ai-games/blob/05042aa23077383345aa763194e6e7bfd6a871a7/ironyard/TOURNAMENT.md) were rerun and reproduced exactly, including outcomes, hull scores and durations. The additional 576 matches involve Muse. Tailwind comes unchanged from [PR #8](https://github.com/renjie-liu/ai-games/pull/8).
+## Two separate leaderboards
 
-## Format
+The [20-bot ladder](LEADERBOARD.md) fits ratings over all results. Its team queues mix different bots and rotate slots. This seven-entry tournament fills each team with one version and sorts by points. Each mode has its own ranking; there is no combined overall rank.
 
-- Engine 0.5.0, Node v24.22.1; 1200 credits per vehicle.
-- Seven entrants, all eight maps, seeds 1 and 2, both spawn sides.
-- 672 matches per mode: 21 pairings × 8 maps × 2 seeds × 2 sides. Each entrant plays 192 matches, with 32 against each opponent.
-- In 2v2 and 3v3, one entrant fills every slot on its own team; its design/controller can still vary by slot.
-- Win = 3 points, draw = 1, loss = 0. Ties use accumulated hull difference, then bot id.
-- Each mode is ranked separately. These results describe the submitted programs against this seven-entry field; they do not measure general model capability.
-- This tournament is separate from the 20-bot mixed-team [saved ladder](LEADERBOARD.md). It does not replace its ratings.
-
-## Rank overview
+### Complete ladder — seven model entries shown
 
 | Entry | Bot | 1v1 | 2v2 | 3v3 |
 |---|---|---:|---:|---:|
-| Fable | `quillback` | 1 | 2 | 1 |
-| Sol | `sol` | 2 | 5 | 4 |
-| Astra | `astra` | 3 | 1 | 2 |
-| Carbon | `carbon` | 4 | 3 | 5 |
-| Muse | `tailwind` | 5 | 4 | 3 |
-| Opus | `grindstone` | 6 | 6 | 6 |
-| Hydrogen | `hydrogen` | 7 | 7 | 7 |
+| Fable | `quillback` | 1 | 1 | 1 |
+| Opus | `grindstone` | 2 | 5 | 6 |
+| Carbon | `carbon` | 3 | 3 | 4 |
+| Astra | `astra` | 4 | 2 | 2 |
+| Sol | `sol` | 5 | 4 | 3 |
+| Muse | `tailwind` | 6 | 6 | 5 |
+| Hydrogen | `hydrogen` | 7 | 9 | 15 |
+
+These ranks are out of all 20 bots, including the 13 reference bots. A fresh 6916-match rerun reproduced the saved snapshot exactly.
+
+### Seven-version tournament
+
+| Entry | 1v1 | 2v2 | 3v3 |
+|---|---:|---:|---:|
+| Fable | 1 | 1 | 1 |
+| Opus | 2 | 2 | 2 |
+| Sol | 3 | 5 | 3 |
+| Carbon | 4 | 3 | 6 |
+| Astra | 5 | 4 | 4 |
+| Muse | 6 | 6 | 5 |
+| Hydrogen | 7 | 7 | 7 |
+
+## Format
+
+- 1200 credits per vehicle; all 14 maps; seeds 1 and 2; both spawn sides.
+- 1176 matches per mode: 21 pairings × 14 maps × 2 seeds × 2 sides. Each entry plays 336 games, 56 against each opponent.
+- In 2v2 and 3v3, one source fills every team slot. Slot-dependent designs and controllers remain allowed.
+- Win = 3 points; draw = 1; loss = 0. Ties use cumulative remaining-hull difference (rounded to two decimals), then bot id.
+- Reported controller errors are checked by the shared tournament result validator; this run has no errors or unscored games.
+- Results measure these submitted programs against this field, not general model capability.
 
 ## 1v1
 
 | Rank | Entry | Points | W | D | L | Win % | Hull difference |
 |---:|---|---:|---:|---:|---:|---:|---:|
-| 1 | Fable | 399 | 133 | 0 | 59 | 69.3 | 53.88 |
-| 2 | Sol | 375 | 125 | 0 | 67 | 65.1 | 37.71 |
-| 3 | Astra | 360 | 120 | 0 | 72 | 62.5 | 41.00 |
-| 4 | Carbon | 339 | 113 | 0 | 79 | 58.9 | 10.79 |
-| 5 | Muse | 327 | 109 | 0 | 83 | 56.8 | 17.58 |
-| 6 | Opus | 183 | 61 | 0 | 131 | 31.8 | -41.17 |
-| 7 | Hydrogen | 33 | 11 | 0 | 181 | 5.7 | -119.79 |
+| 1 | Fable | 1005 | 335 | 0 | 1 | 99.7 | 288.17 |
+| 2 | Opus | 717 | 239 | 0 | 97 | 71.1 | 106.64 |
+| 3 | Sol | 522 | 174 | 0 | 162 | 51.8 | -16.56 |
+| 4 | Carbon | 510 | 170 | 0 | 166 | 50.6 | -13.11 |
+| 5 | Astra | 399 | 133 | 0 | 203 | 39.6 | -49.77 |
+| 6 | Muse | 309 | 103 | 0 | 233 | 30.7 | -104.56 |
+| 7 | Hydrogen | 66 | 22 | 0 | 314 | 6.5 | -210.81 |
 
-Head to head: row versus column, **W-D-L**, 32 matches per pairing.
+### 1v1 head-to-head
 
-| Entry | Fable | Sol | Astra | Carbon | Muse | Opus | Hydrogen |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Fable | — | 21-0-11 | 11-0-21 | 27-0-5 | 20-0-12 | 24-0-8 | 30-0-2 |
-| Sol | 11-0-21 | — | 21-0-11 | 9-0-23 | 25-0-7 | 30-0-2 | 29-0-3 |
-| Astra | 21-0-11 | 11-0-21 | — | 17-0-15 | 11-0-21 | 32-0-0 | 28-0-4 |
-| Carbon | 5-0-27 | 23-0-9 | 15-0-17 | — | 22-0-10 | 17-0-15 | 31-0-1 |
-| Muse | 12-0-20 | 7-0-25 | 21-0-11 | 10-0-22 | — | 27-0-5 | 32-0-0 |
-| Opus | 8-0-24 | 2-0-30 | 0-0-32 | 15-0-17 | 5-0-27 | — | 31-0-1 |
-| Hydrogen | 2-0-30 | 3-0-29 | 4-0-28 | 1-0-31 | 0-0-32 | 1-0-31 | — |
+Each cell is the row entrant’s wins–draws–losses.
+
+| Entry | Fable | Opus | Sol | Carbon | Astra | Muse | Hydrogen |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Fable | — | 56–0–0 | 56–0–0 | 56–0–0 | 56–0–0 | 56–0–0 | 55–0–1 |
+| Opus | 0–0–56 | — | 49–0–7 | 27–0–29 | 52–0–4 | 56–0–0 | 55–0–1 |
+| Sol | 0–0–56 | 7–0–49 | — | 20–0–36 | 43–0–13 | 54–0–2 | 50–0–6 |
+| Carbon | 0–0–56 | 29–0–27 | 36–0–20 | — | 10–0–46 | 43–0–13 | 52–0–4 |
+| Astra | 0–0–56 | 4–0–52 | 13–0–43 | 46–0–10 | — | 14–0–42 | 56–0–0 |
+| Muse | 0–0–56 | 0–0–56 | 2–0–54 | 13–0–43 | 42–0–14 | — | 46–0–10 |
+| Hydrogen | 1–0–55 | 1–0–55 | 6–0–50 | 4–0–52 | 0–0–56 | 10–0–46 | — |
 
 ## 2v2
 
 | Rank | Entry | Points | W | D | L | Win % | Hull difference |
 |---:|---|---:|---:|---:|---:|---:|---:|
-| 1 | Astra | 447 | 149 | 0 | 43 | 77.6 | 145.39 |
-| 2 | Fable | 423 | 141 | 0 | 51 | 73.4 | 120.69 |
-| 3 | Carbon | 327 | 109 | 0 | 83 | 56.8 | 22.31 |
-| 4 | Muse | 285 | 95 | 0 | 97 | 49.5 | -9.43 |
-| 5 | Sol | 258 | 86 | 0 | 106 | 44.8 | -36.80 |
-| 6 | Opus | 186 | 62 | 0 | 130 | 32.3 | -82.80 |
-| 7 | Hydrogen | 90 | 30 | 0 | 162 | 15.6 | -159.36 |
+| 1 | Fable | 1002 | 334 | 0 | 2 | 99.4 | 544.52 |
+| 2 | Opus | 678 | 226 | 0 | 110 | 67.3 | 170.06 |
+| 3 | Carbon | 501 | 167 | 0 | 169 | 49.7 | -25.65 |
+| 4 | Astra | 474 | 158 | 0 | 178 | 47.0 | -47.70 |
+| 5 | Sol | 465 | 155 | 0 | 181 | 46.1 | -95.35 |
+| 6 | Muse | 327 | 109 | 0 | 227 | 32.4 | -179.13 |
+| 7 | Hydrogen | 81 | 27 | 0 | 309 | 8.0 | -366.74 |
 
-Head to head: row versus column, **W-D-L**, 32 matches per pairing.
+### 2v2 head-to-head
 
-| Entry | Astra | Fable | Carbon | Muse | Sol | Opus | Hydrogen |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Astra | — | 25-0-7 | 16-0-16 | 21-0-11 | 25-0-7 | 31-0-1 | 31-0-1 |
-| Fable | 7-0-25 | — | 30-0-2 | 25-0-7 | 23-0-9 | 26-0-6 | 30-0-2 |
-| Carbon | 16-0-16 | 2-0-30 | — | 19-0-13 | 22-0-10 | 20-0-12 | 30-0-2 |
-| Muse | 11-0-21 | 7-0-25 | 13-0-19 | — | 15-0-17 | 26-0-6 | 23-0-9 |
-| Sol | 7-0-25 | 9-0-23 | 10-0-22 | 17-0-15 | — | 24-0-8 | 19-0-13 |
-| Opus | 1-0-31 | 6-0-26 | 12-0-20 | 6-0-26 | 8-0-24 | — | 29-0-3 |
-| Hydrogen | 1-0-31 | 2-0-30 | 2-0-30 | 9-0-23 | 13-0-19 | 3-0-29 | — |
+Each cell is the row entrant’s wins–draws–losses.
+
+| Entry | Fable | Opus | Carbon | Astra | Sol | Muse | Hydrogen |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Fable | — | 56–0–0 | 55–0–1 | 55–0–1 | 56–0–0 | 56–0–0 | 56–0–0 |
+| Opus | 0–0–56 | — | 24–0–32 | 48–0–8 | 46–0–10 | 52–0–4 | 56–0–0 |
+| Carbon | 1–0–55 | 32–0–24 | — | 15–0–41 | 35–0–21 | 34–0–22 | 50–0–6 |
+| Astra | 1–0–55 | 8–0–48 | 41–0–15 | — | 26–0–30 | 28–0–28 | 54–0–2 |
+| Sol | 0–0–56 | 10–0–46 | 21–0–35 | 30–0–26 | — | 46–0–10 | 48–0–8 |
+| Muse | 0–0–56 | 4–0–52 | 22–0–34 | 28–0–28 | 10–0–46 | — | 45–0–11 |
+| Hydrogen | 0–0–56 | 0–0–56 | 6–0–50 | 2–0–54 | 8–0–48 | 11–0–45 | — |
 
 ## 3v3
 
 | Rank | Entry | Points | W | D | L | Win % | Hull difference |
 |---:|---|---:|---:|---:|---:|---:|---:|
-| 1 | Fable | 432 | 144 | 0 | 48 | 75.0 | 191.59 |
-| 2 | Astra | 408 | 136 | 0 | 56 | 70.8 | 126.49 |
-| 3 | Muse | 327 | 109 | 0 | 83 | 56.8 | 48.84 |
-| 4 | Sol | 327 | 109 | 0 | 83 | 56.8 | 18.26 |
-| 5 | Carbon | 243 | 81 | 0 | 111 | 42.2 | -55.23 |
-| 6 | Opus | 234 | 78 | 0 | 114 | 40.6 | -49.91 |
-| 7 | Hydrogen | 45 | 15 | 0 | 177 | 7.8 | -280.03 |
+| 1 | Fable | 1008 | 336 | 0 | 0 | 100.0 | 782.48 |
+| 2 | Opus | 525 | 175 | 0 | 161 | 52.1 | 8.12 |
+| 3 | Sol | 510 | 170 | 0 | 166 | 50.6 | -61.88 |
+| 4 | Astra | 507 | 169 | 0 | 167 | 50.3 | -14.64 |
+| 5 | Muse | 495 | 165 | 0 | 171 | 49.1 | -66.98 |
+| 6 | Carbon | 384 | 128 | 0 | 208 | 38.1 | -148.65 |
+| 7 | Hydrogen | 99 | 33 | 0 | 303 | 9.8 | -498.44 |
 
-Head to head: row versus column, **W-D-L**, 32 matches per pairing.
+### 3v3 head-to-head
 
-| Entry | Fable | Astra | Muse | Sol | Carbon | Opus | Hydrogen |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Fable | — | 13-0-19 | 22-0-10 | 23-0-9 | 29-0-3 | 25-0-7 | 32-0-0 |
-| Astra | 19-0-13 | — | 16-0-16 | 16-0-16 | 26-0-6 | 27-0-5 | 32-0-0 |
-| Muse | 10-0-22 | 16-0-16 | — | 14-0-18 | 18-0-14 | 26-0-6 | 25-0-7 |
-| Sol | 9-0-23 | 16-0-16 | 18-0-14 | — | 14-0-18 | 23-0-9 | 29-0-3 |
-| Carbon | 3-0-29 | 6-0-26 | 14-0-18 | 18-0-14 | — | 11-0-21 | 29-0-3 |
-| Opus | 7-0-25 | 5-0-27 | 6-0-26 | 9-0-23 | 21-0-11 | — | 30-0-2 |
-| Hydrogen | 0-0-32 | 0-0-32 | 7-0-25 | 3-0-29 | 3-0-29 | 2-0-30 | — |
+Each cell is the row entrant’s wins–draws–losses.
+
+| Entry | Fable | Opus | Sol | Astra | Muse | Carbon | Hydrogen |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Fable | — | 56–0–0 | 56–0–0 | 56–0–0 | 56–0–0 | 56–0–0 | 56–0–0 |
+| Opus | 0–0–56 | — | 31–0–25 | 28–0–28 | 37–0–19 | 28–0–28 | 51–0–5 |
+| Sol | 0–0–56 | 25–0–31 | — | 29–0–27 | 34–0–22 | 34–0–22 | 48–0–8 |
+| Astra | 0–0–56 | 28–0–28 | 27–0–29 | — | 15–0–41 | 44–0–12 | 55–0–1 |
+| Muse | 0–0–56 | 19–0–37 | 22–0–34 | 41–0–15 | — | 36–0–20 | 47–0–9 |
+| Carbon | 0–0–56 | 28–0–28 | 22–0–34 | 12–0–44 | 20–0–36 | — | 46–0–10 |
+| Hydrogen | 0–0–56 | 5–0–51 | 8–0–48 | 1–0–55 | 9–0–47 | 10–0–46 | — |
 
 ## Reproduce and inspect
 
-Execution used the same `makeSchedule`, `MatchPool` and `standings` routines as the CLI, checking each returned controller error list before accepting a match. The settings can be reproduced from the `ironyard/` directory:
+Run from the `ironyard/` directory at the commit above:
 
 ```bash
 node node/cli.js tournament --bots quillback,grindstone,sol,astra,carbon,hydrogen,tailwind --mode 1v1 --maps all --seeds 2 --budget 1200 --json > tournament-1v1.json
@@ -110,14 +131,16 @@ node node/cli.js tournament --bots quillback,grindstone,sol,astra,carbon,hydroge
 node node/cli.js tournament --bots quillback,grindstone,sol,astra,carbon,hydrogen,tailwind --mode 3v3 --maps all --seeds 2 --budget 1200 --json > tournament-3v3.json
 ```
 
-[Raw results, standings and source hashes](docs/tournaments/seven-models-2026-11-15.json) include every map, seed, side, outcome, hull score, ending reason and reported controller error list.
+[Raw matches and source hashes](docs/tournaments/seven-models-2026-11-17.json) · [CSV of both leaderboards](docs/tournaments/rankings-2026-11-17.csv).
+
+Previous engine-0.5.0 tables remain in [the historical report](https://github.com/renjie-liu/ai-games/blob/413aea518c08696c44bf9a6a6590e0812633c608/ironyard/TOURNAMENT.md) and [raw historical results](docs/tournaments/seven-models-2026-11-15.json).
 
 | Entry | Recorded model | Source SHA-256 |
 |---|---|---|
-| Fable | Fable | `a036f97bab1cda23c03a66b78c2b6a715d72b9559546970e86548d523053783d` |
-| Opus | Opus | `afa5449beb2a10224d2ae236cd999c2bc22b9bd3bc49d6ac58de324da998a685` |
-| Sol | gpt-6-sol | `baff6aff0b7d1f1f012bdb6d88e671211725a2bb9390b913e1c1f96a3242202c` |
-| Astra | gpt-6-astra | `b862bf32f015b1f50ea94731b25db2258a7a356bff4492a8a9290d79717934da` |
-| Carbon | gemini-4-carbon-medium | `bf41cf9bf8482472a128aa048090e2a91e6b1beb0a1b029caea42b9e9deec8fd` |
-| Hydrogen | gemini-4-hydrogen-medium | `2ad278cbf12954bb84052dfbe02c0f3e0744ec44f8c14448815ddb32297ecd94` |
-| Muse | Muse Spark | `a45ed88191cdc189480a4b2110f621a935d43e6260268784e1c82f8287022247` |
+| Fable | Fable | `39cf00a3169b0d61f482df329e614bee07e264f203025a7ee4a17087a1fa51f6` |
+| Opus | Opus | `e172fae3e036fceb9293a1fe65b5babeca2aa4b7163954f107a68261bbd80861` |
+| Sol | gpt-6-sol | `1688beec9619d2055459376afe800aea1e56843c35b753444488ffc4602241d7` |
+| Astra | gpt-6-astra | `5e26d76bfabe6cfcb80d08fd19ffb74a7551355cc59eee428f449d62e29da27b` |
+| Carbon | gemini-4-carbon-medium | `63bbaaa5c28d13897abe9dc04a4dc4ba8ccd1f5deb6901094089fa05a3d44c3b` |
+| Hydrogen | gemini-4-hydrogen-medium | `fa06bab72619796ef4a450e2bde18a79876d50685fb6302cf6e2fb51eb99f546` |
+| Muse | Muse Spark | `64508535243e41c7dfe25aab5b6dd274c0f5d7f9a37ea80caee8962f288319c8` |
