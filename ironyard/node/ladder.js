@@ -7,6 +7,8 @@
 //
 // Matches are deterministic, so a result is kept under a key made of the match and of the
 // source of every bot in it: bringing the ladder up to date only plays what is not on file.
+import { rate, RATING_METHOD } from '../engine/ratings.js';
+export { rate } from '../engine/ratings.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -19,7 +21,7 @@ export const QUEUES = ['1v1', '2v2', '3v3'];
 // rounds per team queue: at least 40, and a whole number of times round the maps, so that every map is played equally often
 export const TEAM_ROUNDS = Math.ceil(40 / MAP_IDS.length) * MAP_IDS.length;
 export const LADDER_METHOD = 'mixed-slot-rotation-v2';
-const SEED = 1, START = 1500, PRIOR = 2;
+const SEED = 1;
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const storeFile = () => path.join(LADDER_DIR, 'results.json');
 export const RESULT_CHECK = 3; // v2 did not freeze source files to the hashes used for cache keys.
@@ -95,71 +97,6 @@ export function schedule(queue, entrants) {
 export const keyOf = (m, hashOf) => `${m.mode}|${m.map}|${m.seed}|${m.swap ? 1 : 0}|${m.teams[0].join('+')}|${m.teams[1].join('+')}|`
   + sha(ENGINE_VERSION + [...m.teams[0], ...m.teams[1]].map((id) => hashOf[id]).join('')).slice(0, 10);
 
-/**
- * Ratings from a season's results: the ratings under which the results are most likely, where
- * a side's chance of winning is 1 / (1 + 10^(-d/400)) for a lead of d, a team's strength is
- * what its members add up to (each counts for its rating less 1500, so a bot rated 1700 is worth
- * 200 points to any team it is on, as it is in 1v1), and a draw is half a win. Every bot also counts as having drawn
- * twice against a 1500 — enough to keep a bot that has only ever won, or only ever lost, on
- * the scale. All matches are weighed together, so the order they were played in does not matter
- * and two bots with the same record against the same field get the same rating.
- */
-export function rate(entrants, matches, results) {
-  const ids = entrants.map((e) => e.id), index = new Map(ids.map((id, i) => [id, i]));
-  const row = Object.fromEntries(entrants.map((e) => [e.id, { id: e.id, author: e.author, model: e.model ?? null, kind: e.kind, played: 0, w: 0, d: 0, l: 0 }]));
-  const played = matches.filter((m) => rankedResult(results[m.key])).map((m) => ({ teams: m.teams, s: results[m.key].w === 0 ? 1 : results[m.key].w === 1 ? 0 : 0.5 }));
-  const samples = played.map(({ teams, s }) => {
-    const weights = new Map();
-    for (const [side, team] of teams.entries()) for (const id of team) {
-      const r = row[id]; r.played++;
-      if (s === 0.5) r.d++; else if ((s === 1) === (side === 0)) r.w++; else r.l++;
-      const i = index.get(id); weights.set(i, (weights.get(i) || 0) + (side === 0 ? 1 : -1));
-    }
-    return { x: [...weights].filter(([, w]) => w), y: s };
-  });
-  const z = ids.map(() => 0), SCALE = 400 / Math.LN10;
-  const logistic = (x) => 1 / (1 + Math.exp(-x));
-  const softplus = (x) => Math.max(0, x) + Math.log1p(Math.exp(-Math.abs(x)));
-  const dot = (x, values) => x.reduce((sum, [i, w]) => sum + w * values[i], 0);
-  const loss = (values) => samples.reduce((sum, { x, y }) => { const a = dot(x, values); return sum + softplus(a) - y * a; },
-    values.reduce((sum, a) => sum + PRIOR * (softplus(a) - 0.5 * a), 0));
-  // Full Newton steps fit the joint team likelihood. Diagonal-only simultaneous
-  // updates ignore teammate correlations and can stop before the fit converges.
-  for (let it = 0; it < 80 && samples.length; it++) {
-    const g = z.map((a) => PRIOR * (logistic(a) - 0.5));
-    const h = z.map((a, i) => z.map((_, j) => i === j ? PRIOR * logistic(a) * (1 - logistic(a)) : 0));
-    for (const { x, y } of samples) {
-      const p = logistic(dot(x, z)), v = p * (1 - p);
-      for (const [i, wi] of x) {
-        g[i] += wi * (p - y);
-        for (const [j, wj] of x) h[i][j] += wi * wj * v;
-      }
-    }
-    if (Math.max(...g.map(Math.abs)) < 1e-9) break;
-    // Cholesky factorisation: the 1500-rating prior makes the Hessian positive definite.
-    const l = z.map(() => z.map(() => 0));
-    for (let i = 0; i < z.length; i++) for (let j = 0; j <= i; j++) {
-      let v = h[i][j]; for (let k = 0; k < j; k++) v -= l[i][k] * l[j][k];
-      l[i][j] = i === j ? Math.sqrt(Math.max(v, 1e-12)) : v / l[j][j];
-    }
-    const tmp = [], step = [];
-    for (let i = 0; i < z.length; i++) { let v = g[i]; for (let j = 0; j < i; j++) v -= l[i][j] * tmp[j]; tmp[i] = v / l[i][i]; }
-    for (let i = z.length - 1; i >= 0; i--) { let v = tmp[i]; for (let j = i + 1; j < z.length; j++) v -= l[j][i] * step[j]; step[i] = v / l[i][i]; }
-    const before = loss(z), descent = g.reduce((sum, v, i) => sum + v * step[i], 0);
-    let scale = 1;
-    while (scale > 1e-8 && loss(z.map((a, i) => a - scale * step[i])) > before - 1e-4 * scale * descent) scale *= 0.5;
-    if (scale <= 1e-8) break;
-    for (let i = 0; i < z.length; i++) z[i] -= scale * step[i];
-    if (Math.max(...step.map((v) => Math.abs(v * scale * SCALE))) < 0.0001) break;
-  }
-  const ratings = Object.fromEntries(ids.map((id, i) => [id, START + z[i] * SCALE]));
-  return Object.values(row)
-    .map((x) => ({ ...x, rating: Math.round(ratings[x.id]), winRate: x.played ? Math.round((x.w / x.played) * 1000) / 1000 : 0 }))
-    // Rounding is for display only; zero-game entries have no rank.
-    .sort((a, b) => Number(b.played > 0) - Number(a.played > 0) || (Math.abs(ratings[b.id] - ratings[a.id]) > 1e-7 ? ratings[b.id] - ratings[a.id] : 0) || (b.played ? b.w / b.played : 0) - (a.played ? a.w / a.played : 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-    .map((x, k) => ({ rank: x.played ? k + 1 : null, ...x }));
-}
-
 /** The same table by author: how many bots, the best of them, and the mean of their ratings. */
 export function byAuthor(rows) {
   const g = {};
@@ -219,7 +156,7 @@ export async function ladder(pool, { queues = QUEUES, play = true, budgetMs = In
     fs.mkdirSync(LADDER_DIR, { recursive: true });
     fs.writeFileSync(storeFile(), JSON.stringify(store));
   }
-  const out = { engine: ENGINE_VERSION, method: LADDER_METHOD, budget: DEFAULT_BUDGET, maps: MAP_IDS, soloSeed: SEED, teamRounds: TEAM_ROUNDS, entrants: entrants.length, matchesPlayedNow: ran, complete: true, queues: {} };
+  const out = { engine: ENGINE_VERSION, method: LADDER_METHOD, ratingMethod: RATING_METHOD, budget: DEFAULT_BUDGET, maps: MAP_IDS, soloSeed: SEED, teamRounds: TEAM_ROUNDS, entrants: entrants.length, matchesPlayedNow: ran, complete: true, queues: {} };
   for (const q of queues) {
     const ms = seasons[q], attempted = ms.filter((m) => store.results[m.key]?.checked === RESULT_CHECK), done = attempted.filter((m) => rankedResult(store.results[m.key]));
     for (const m of attempted) if (store.results[m.key].err) errors.push(`${q} ${m.map} ${m.teams[0].join('+')} vs ${m.teams[1].join('+')}: ${store.results[m.key].err}`);
@@ -233,7 +170,7 @@ export async function ladder(pool, { queues = QUEUES, play = true, budgetMs = In
 
 /** Compact, versioned browser snapshot; the original seven row fields stay compatible. */
 export function ladderSnapshot(board) {
-  return { engine: board.engine, method: board.method, budget: board.budget, maps: board.maps, soloSeed: board.soloSeed,
+  return { engine: board.engine, method: board.method, ratingMethod: board.ratingMethod ?? RATING_METHOD, budget: board.budget, maps: board.maps, soloSeed: board.soloSeed,
     teamRounds: board.teamRounds, entrants: board.entrants, complete: board.complete,
     queues: Object.fromEntries(Object.entries(board.queues).map(([q, t]) => [q, {
       matches: t.matches, onFile: t.onFile, errorCount: t.errorCount,
@@ -257,13 +194,13 @@ export function ladderMarkdown(board) {
   lines.push('', '## How to read the rankings', '',
     `- **1v1:** every pair plays all ${(board.maps || MAP_IDS).length} maps from both spawn sides, with seed ${board.soloSeed ?? SEED}.`,
     `- **2v2 / 3v3:** ${board.teamRounds ?? TEAM_ROUNDS} deterministic mixed-team rounds, going round the maps in turn, balanced across authors where possible. Each pairing rotates through every team slot, from both spawn sides. Some entrants sit out each round, so game counts differ.`,
-    '- **Rating:** a joint logistic fit to all results, with a 1500 anchor equivalent to two draws. Team strength is the sum of individual ratings above 1500. Wins count 1, draws 0.5, losses 0. Opponent and teammate strength matter; raw win rate does not determine rank.',
+    '- **Strength (Elo scale):** a joint logistic fit to all results, with a 1500 anchor equivalent to two draws. Team strength is the sum of individual ratings above 1500. Wins count 1, draws 0.5, losses 0. Opponent and teammate strength matter; raw win rate does not determine rank.',
     '- **Ordering:** unrounded rating, then win rate, then bot id. Displayed ratings are rounded. Bots with zero games are unranked. Author tables sort by the author’s best bot, then mean rating.',
     '- **Scope:** these are fixed-season results, not confidence intervals or a general model benchmark. Team synergy is approximated as additive. Close scores and small samples warrant more seeds/rounds.',
-    '- **Custom tournaments:** the browser’s round robin uses 3 points per win, 1 per draw and hull difference as a tie-break. One bot fills its entire team; those results do not update this mixed-team ladder.',
+    '- **Custom tournaments:** use the same batch strength fit and ordering, rating each whole entrant once per match. One bot fills its entire team by default; those results stay separate from this mixed-team ladder. Scores from different fields or modes are not directly comparable.',
     '', 'See [ranking methodology and audit](docs/RANKING.md) for details, error handling and limitations.', '');
   for (const [q, t] of Object.entries(board.queues)) {
-    lines.push(`## ${q}`, '', `${t.onFile} of ${t.matches} matches on file${t.errorCount ? `; **${t.errorCount} contain errors**` : ''}.`, '', '| # | bot | author | rating | played | W | D | L | win % |', '|---:|---|---|---:|---:|---:|---:|---:|---:|');
+    lines.push(`## ${q}`, '', `${t.onFile} of ${t.matches} matches on file${t.errorCount ? `; **${t.errorCount} contain errors**` : ''}.`, '', '| # | bot | author | strength (Elo scale) | played | W | D | L | win % |', '|---:|---|---|---:|---:|---:|---:|---:|---:|');
     for (const r of t.standings) lines.push(`| ${r.rank ?? '—'} | \`${r.id}\` | ${cell(r.author)} | ${r.rating} | ${r.played} | ${r.w} | ${r.d} | ${r.l} | ${Math.round(r.winRate * 100)} |`);
     lines.push('', '### Authors — ordered by best bot', '', '| author | bots | best bot | best rating | mean rating |', '|---|---:|---|---:|---:|');
     for (const a of t.authors) lines.push(`| ${cell(a.author)} | ${a.bots} | \`${a.best}\` | ${a.bestRating} | ${a.meanRating} |`);

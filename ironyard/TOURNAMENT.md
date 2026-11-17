@@ -4,9 +4,11 @@ Verified 2026-11-17 (Asia/Shanghai) through Ironyard MCP at [`92e7e56`](https://
 
 This field includes Astra and Sol v3, developed through MCP scouting, replay analysis and paired validation. Their original generation-model attribution is retained with `editor: Codex`. See [the v3 iteration report](docs/MCP_ITERATION_V3.md) for the builds and the separate held-out comparison. Fable is Quillback, Opus is Grindstone, and Muse is Tailwind.
 
+Re-scored on 2026-11-17 with the shared **Strength (Elo scale)** algorithm. All ranks remain unchanged on this balanced round robin; the numeric strength ratings replace the former 3/1/0 points.
+
 ## Two separate leaderboards
 
-The [20-bot ladder](LEADERBOARD.md) fits ratings over all results; its team queues mix different bots and rotate slots. This seven-entry tournament fills each team with one version and sorts by points. Each mode has its own ranking.
+The [20-bot ladder](LEADERBOARD.md) fits ratings over all results; its team queues mix different bots and rotate slots. This seven-entry tournament fills each team with one version and uses the same batch fit to rate each whole entrant once per match. Both display **Strength (Elo scale)**, but their scores measure different things and are not directly comparable. Each mode has its own ranking.
 
 ### Complete ladder — seven model entries shown
 
@@ -39,21 +41,21 @@ Ranks are out of all 20 bots, including 13 reference bots. All 6916 fixtures are
 - 1200 credits per vehicle; all 14 maps; seeds 1 and 2; both spawn sides.
 - 1176 matches per mode: 21 pairings × 14 maps × 2 seeds × 2 sides. Each entry plays 336 games, 56 against each opponent.
 - In 2v2 and 3v3, one source fills every team slot. Slot-dependent designs and controllers remain allowed.
-- Win = 3 points; draw = 1; loss = 0. Ties use cumulative remaining-hull difference (rounded to two decimals), then bot id.
-- Three fresh MCP `run_tournament` calls produced these standings and head-to-head counts. No errors, forfeits or unscored games occurred.
+- Strength uses a Bradley–Terry batch fit on the Elo scale, anchored at 1500 by two prior draws per entrant. Win = 1, draw = 0.5, loss = 0. Sort by unrounded strength, raw win rate, then bot id; hull difference does not affect rank.
+- Three fresh MCP `run_tournament` calls produced the recorded outcomes and head-to-head counts. The strength ratings below were subsequently fitted from those counts without replaying battles. No errors, forfeits or unscored games occurred.
 - These results describe the submitted programs against this field. The seed-73 comparison in the iteration report instead holds the opposing programs at their old revisions.
 
 ## 1v1
 
-| Rank | Entry | Points | W | D | L | Win % | Hull difference |
+| Rank | Entry | Strength (Elo scale) | Played | W | D | L | Win % |
 |---:|---|---:|---:|---:|---:|---:|---:|
-| 1 | Sol | 849 | 283 | 0 | 53 | 84.2 | 197.68 |
-| 2 | Fable | 774 | 258 | 0 | 78 | 76.8 | 156.55 |
-| 3 | Astra | 741 | 247 | 0 | 89 | 73.5 | 133.21 |
-| 4 | Opus | 465 | 155 | 0 | 181 | 46.1 | -36.80 |
-| 5 | Carbon | 390 | 130 | 0 | 206 | 38.7 | -72.09 |
-| 6 | Muse | 186 | 62 | 0 | 274 | 18.5 | -178.65 |
-| 7 | Hydrogen | 123 | 41 | 0 | 295 | 12.2 | -199.90 |
+| 1 | Sol | 1829 | 336 | 283 | 0 | 53 | 84.2 |
+| 2 | Fable | 1751 | 336 | 258 | 0 | 78 | 76.8 |
+| 3 | Astra | 1718 | 336 | 247 | 0 | 89 | 73.5 |
+| 4 | Opus | 1464 | 336 | 155 | 0 | 181 | 46.1 |
+| 5 | Carbon | 1395 | 336 | 130 | 0 | 206 | 38.7 |
+| 6 | Muse | 1189 | 336 | 62 | 0 | 274 | 18.5 |
+| 7 | Hydrogen | 1114 | 336 | 41 | 0 | 295 | 12.2 |
 
 ### 1v1 head-to-head
 
@@ -71,15 +73,15 @@ Each cell is the row entrant’s wins–draws–losses.
 
 ## 2v2
 
-| Rank | Entry | Points | W | D | L | Win % | Hull difference |
+| Rank | Entry | Strength (Elo scale) | Played | W | D | L | Win % |
 |---:|---|---:|---:|---:|---:|---:|---:|
-| 1 | Fable | 846 | 282 | 0 | 54 | 83.9 | 365.97 |
-| 2 | Sol | 786 | 262 | 0 | 74 | 78.0 | 273.85 |
-| 3 | Astra | 759 | 253 | 0 | 83 | 75.3 | 247.95 |
-| 4 | Opus | 447 | 149 | 0 | 187 | 44.3 | -70.87 |
-| 5 | Carbon | 363 | 121 | 0 | 215 | 36.0 | -135.32 |
-| 6 | Muse | 228 | 76 | 0 | 260 | 22.6 | -305.23 |
-| 7 | Hydrogen | 99 | 33 | 0 | 303 | 9.8 | -376.36 |
+| 1 | Fable | 1837 | 336 | 282 | 0 | 54 | 83.9 |
+| 2 | Sol | 1772 | 336 | 262 | 0 | 74 | 78.0 |
+| 3 | Astra | 1745 | 336 | 253 | 0 | 83 | 75.3 |
+| 4 | Opus | 1446 | 336 | 149 | 0 | 187 | 44.3 |
+| 5 | Carbon | 1366 | 336 | 121 | 0 | 215 | 36.0 |
+| 6 | Muse | 1230 | 336 | 76 | 0 | 260 | 22.6 |
+| 7 | Hydrogen | 1075 | 336 | 33 | 0 | 303 | 9.8 |
 
 ### 2v2 head-to-head
 
@@ -97,15 +99,15 @@ Each cell is the row entrant’s wins–draws–losses.
 
 ## 3v3
 
-| Rank | Entry | Points | W | D | L | Win % | Hull difference |
+| Rank | Entry | Strength (Elo scale) | Played | W | D | L | Win % |
 |---:|---|---:|---:|---:|---:|---:|---:|
-| 1 | Fable | 924 | 308 | 0 | 28 | 91.7 | 618.05 |
-| 2 | Sol | 822 | 274 | 0 | 62 | 81.5 | 428.67 |
-| 3 | Astra | 702 | 234 | 0 | 102 | 69.6 | 268.18 |
-| 4 | Opus | 366 | 122 | 0 | 214 | 36.3 | -221.36 |
-| 5 | Muse | 315 | 105 | 0 | 231 | 31.3 | -298.92 |
-| 6 | Carbon | 303 | 101 | 0 | 235 | 30.1 | -259.19 |
-| 7 | Hydrogen | 96 | 32 | 0 | 304 | 9.5 | -535.44 |
+| 1 | Fable | 2021 | 336 | 308 | 0 | 28 | 91.7 |
+| 2 | Sol | 1877 | 336 | 274 | 0 | 62 | 81.5 |
+| 3 | Astra | 1728 | 336 | 234 | 0 | 102 | 69.6 |
+| 4 | Opus | 1358 | 336 | 122 | 0 | 214 | 36.3 |
+| 5 | Muse | 1307 | 336 | 105 | 0 | 231 | 31.2 |
+| 6 | Carbon | 1295 | 336 | 101 | 0 | 235 | 30.1 |
+| 7 | Hydrogen | 1060 | 336 | 32 | 0 | 304 | 9.5 |
 
 ### 3v3 head-to-head
 
@@ -123,7 +125,13 @@ Each cell is the row entrant’s wins–draws–losses.
 
 ## Reproduce and inspect
 
-From `ironyard/` at the commit above:
+Re-score the preserved MCP summary without running matches:
+
+```bash
+node tools/rescore-tournament.mjs docs/tournaments/seven-models-v3-2026-11-17.json /tmp/seven-models-strength.json
+```
+
+To replay the battles, run from `ironyard/` with the listed source hashes and engine 0.6.0. Current code returns strength ratings; the original battle commit above returned legacy points:
 
 ```bash
 node node/cli.js tournament --bots quillback,grindstone,sol,astra,carbon,hydrogen,tailwind --mode 1v1 --maps all --seeds 2 --budget 1200 --json > tournament-1v1.json
@@ -131,7 +139,7 @@ node node/cli.js tournament --bots quillback,grindstone,sol,astra,carbon,hydroge
 node node/cli.js tournament --bots quillback,grindstone,sol,astra,carbon,hydrogen,tailwind --mode 3v3 --maps all --seeds 2 --budget 1200 --json > tournament-3v3.json
 ```
 
-[MCP tournament results and source hashes](docs/tournaments/seven-models-v3-2026-11-17.json) · [CSV of both leaderboards](docs/tournaments/rankings-v3-2026-11-17.csv).
+[Original MCP tournament results and source hashes](docs/tournaments/seven-models-v3-2026-11-17.json) · [Re-scored strength ratings](docs/tournaments/seven-models-v3-strength-2026-11-17.json) · [CSV of both leaderboards](docs/tournaments/rankings-strength-2026-11-17.csv).
 
 The [previous v2 report](https://github.com/renjie-liu/ai-games/blob/80fd5eb03be3bc332207454b90bb9bd031c16e3a/ironyard/TOURNAMENT.md) and [its raw results](docs/tournaments/seven-models-2026-11-17.json) remain available. The [engine-0.5.0 report](https://github.com/renjie-liu/ai-games/blob/413aea518c08696c44bf9a6a6590e0812633c608/ironyard/TOURNAMENT.md) is historical.
 

@@ -43,6 +43,7 @@ const selectQueue = async q => page.evaluate(q => [...document.querySelectorAll(
 await selectQueue('2v2');
 assert.equal(await page.$eval('#lb-table tbody tr td:nth-child(4)', n => n.textContent), snapshot.queues['2v2'].standings[0][7] || 'Not recorded');
 assert.match(await text('#lb-note'), /every team slot/);
+assert.match(await text('#lb-table'), /Strength \(Elo scale\)/);
 await page.evaluate(() => [...document.querySelectorAll('#lb-by button')].find(b => b.textContent === 'By author').click());
 assert.match(await text('#lb-note'), /ordered by their best bot/);
 await page.evaluate(() => { window.__LADDER.queues['2v2'].onFile = 0; });
@@ -145,6 +146,9 @@ assert.match(await text('#lg-count'), /^18 matches/);
 await page.click('#lg-run');
 await page.waitForFunction(() => !document.getElementById('lg-result').hidden, { timeout: 60000 });
 assert.equal(await page.$$eval('#lg-table tbody tr', (r) => r.length), 3);
+assert.match(await text('#lg-table'), /Strength \(Elo scale\)/);
+assert.match(await text('#lg-table'), /Played/);
+assert.ok(await page.$$eval('#lg-table tbody tr', rows => rows.every(r => Number.isFinite(Number(r.cells[2].textContent)) && Number(r.cells[3].textContent) > 0)));
 assert.match(await text('#lg-msg'), /Complete.*18\/18 scored; 0 unscored/);
 const watched = await page.evaluate(() => [...document.querySelectorAll('#lg-h2h tbody tr')].find(r => r.querySelector('th').textContent === 'my-test-car').querySelector('button').title);
 const matchSettings = /Watch (\w+), seed (\d+)/.exec(watched);
@@ -195,7 +199,7 @@ await page.evaluate(s => {
 await tab('league'); await page.click('#lg-run');
 await page.waitForFunction(() => !window.__ironyard.state.league.running);
 assert.match(await text('#lg-msg'), /Provisional.*0\/2 scored; 2 unscored/);
-assert.ok(await page.$$eval('#lg-table tbody tr', rows => rows.every(r => r.cells[2].textContent === '0' && r.cells[4].textContent === '0' && r.cells[8].textContent === '2')));
+assert.ok(await page.$$eval('#lg-table tbody tr', rows => rows.every(r => r.cells[0].textContent === '—' && r.cells[2].textContent === '—' && r.cells[3].textContent === '0' && r.cells[5].textContent === '0' && r.cells[8].textContent === '2')));
 assert.equal(await page.$$eval('#lg-h2h button', bs => bs.length), 0);
 await page.evaluate(() => { delete window.__ironyard.state.custom['late-failure']; });
 

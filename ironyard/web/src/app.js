@@ -673,9 +673,9 @@ function renderLadder() {
     num = i => i >= 3;
   } else {
     const q = data.queues[LB.queue], byBot = LB.by === 'bot';
-    head = byBot ? ['#', 'Bot', 'Author', 'Recorded model', 'Rating', 'Played', 'W', 'D', 'L', 'Win %'] : ['#', 'Author', 'Bots', 'Best bot', 'Best rating', 'Mean rating'];
+    head = byBot ? ['#', 'Bot', 'Author', 'Recorded model', IY.RATING_LABEL, 'Played', 'W', 'D', 'L', 'Win %'] : ['#', 'Author', 'Bots', 'Best bot', 'Best rating', 'Mean rating'];
     rows = byBot
-      ? q.standings.map((r, i) => [rank(r, i), botLabel(r[0]), r[1], r[7] || 'Not recorded', r[2], r[3], r[4], r[5], r[6], r[3] ? Math.round(r[4] / r[3] * 100) : 0])
+      ? q.standings.map((r, i) => [rank(r, i), botLabel(r[0]), r[1], r[7] || 'Not recorded', r[3] ? r[2] : '—', r[3], r[4], r[5], r[6], r[3] ? Math.round(r[4] / r[3] * 100) : 0])
       : q.authors.map(([author, bots, best, bestRating, meanRating], i) => [i + 1, author, bots, botLabel(best), bestRating, meanRating]);
     num = i => byBot ? i === 0 || i >= 4 : i === 0 || i === 2 || i >= 4;
   }
@@ -688,7 +688,7 @@ function renderLadder() {
       : LB.queue === '1v1'
         ? `Every pair, all ${(data.maps || IY.MAP_IDS).length} maps, seed ${data.soloSeed ?? 1}, both spawn sides. Rating fits all results with a 1500 anchor; rank uses unrounded rating, not win percentage.`
         : `${data.teamRounds ?? 40} mixed-team rounds; each pairing plays every team slot from both spawn sides. Rating estimates individual contribution, accounting for teammates and opponents. Game counts differ.`;
-  $('lb-note').textContent = `${notes} This is a saved snapshot; custom tournaments below do not change it.${errors ? ' Match errors require review before comparing scores.' : ''}`;
+  $('lb-note').textContent = `${notes} Strength uses the Elo scale with a 1500 anchor, fitted to all outcomes together; match order does not matter. This is a saved snapshot; custom tournaments use the same scoring but rate whole teams separately. Scores across modes or fields are not directly comparable.${errors ? ' Match errors require review before comparing scores.' : ''}`;
 }
 
 function renderLeagueSetup() {
@@ -735,10 +735,10 @@ async function runLeague() {
     const scored = results.filter(IY.scoredResult);
     const dur = scored.reduce((s, r) => s + (r.duration || 0), 0) / Math.max(1, scored.length);
     $('lg-meta').textContent = `${mode} · ${status.scoredMatches}/${schedule.length} scored · ${status.unscoredMatches} unscored · avg ${dur.toFixed(0)}s`;
-    $('lg-table').replaceChildren(el('table', {}, el('thead', {}, el('tr', {}, ...['#', 'bot', 'Pts', 'W', 'D', 'L', 'Win %', 'Hull diff', 'Unscored'].map((h, i) => el('th', { class: i >= 2 ? 'n' : '', text: h })))),
-      el('tbody', {}, ...table.map((r, i) => el('tr', {}, el('td', { class: 'n', text: r.played ? i + 1 : "—" }), el('td', {}, el('b', { text: names[r.id] }), el('div', { class: 'note', text: r.id })),
-        el('td', { class: 'n', text: r.points }), el('td', { class: 'n', text: r.w }), el('td', { class: 'n', text: r.d }), el('td', { class: 'n', text: r.l }),
-        el('td', { class: 'n', text: Math.round(r.winRate * 100) + '%' }), el('td', { class: 'n', text: (r.hullDiff > 0 ? '+' : '') + r.hullDiff.toFixed(1) }), el('td', { class: 'n', text: r.unscored }))))));
+    $('lg-table').replaceChildren(el('table', {}, el('thead', {}, el('tr', {}, ...['#', 'Bot', IY.RATING_LABEL, 'Played', 'W', 'D', 'L', 'Win %', 'Unscored'].map((h, i) => el('th', { class: i >= 2 ? 'n' : '', text: h })))),
+      el('tbody', {}, ...table.map(r => el('tr', {}, el('td', { class: 'n', text: r.rank ?? '—' }), el('td', {}, el('b', { text: names[r.id] }), el('div', { class: 'note', text: r.id })),
+        el('td', { class: 'n', text: r.played ? r.rating : '—' }), el('td', { class: 'n', text: r.played }), el('td', { class: 'n', text: r.w }), el('td', { class: 'n', text: r.d }), el('td', { class: 'n', text: r.l }),
+        el('td', { class: 'n', text: Math.round(r.winRate * 100) + '%' }), el('td', { class: 'n', text: r.unscored }))))));
     $('lg-h2h').replaceChildren(el('table', {}, el('thead', {}, el('tr', {}, el('th', {}), ...table.map((c) => el('th', { text: c.id.slice(0, 7) })))),
       el('tbody', {}, ...table.map((r) => el('tr', {}, el('th', { text: r.id }), ...table.map((c) => {
         if (c.id === r.id) return el('td', { class: 'h2h', text: '·' });

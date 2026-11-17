@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   MAPS, MAP_IDS, MODES, PARTS, ITEMS, TILES, BUDGETS, DEFAULT_BUDGET,
-  validateDesign, renderDesign, makeSchedule, standings, describeMap, tournamentResult, tournamentStatus, scoredResult,
+  validateDesign, renderDesign, makeSchedule, standings, describeMap, tournamentResult, tournamentStatus, scoredResult, RATING_METHOD,
 } from '../engine/index.js';
 import { listBots, readBotSource, ROOT } from './loader.js';
 import { ladder, ladderMarkdown, ladderSnapshot, QUEUES } from './ladder.js';
@@ -153,10 +153,11 @@ async function main() {
       const table = standings(entrants, results);
       const status = tournamentStatus(results, schedule.length);
       if (status.errorCount || !status.complete) process.exitCode = 1;
-      if (args.json) return console.log(JSON.stringify({ mode, maps, seeds, ...status, standings: table, results }, null, 2));
+      if (args.json) return console.log(JSON.stringify({ mode, maps, seeds, ratingMethod: RATING_METHOD, ...status, standings: table, results }, null, 2));
       console.log(`${status.complete ? 'Complete' : 'Provisional'}: ${status.scoredMatches}/${schedule.length} scored, ${status.unscoredMatches} unscored`);
-      console.log('#  bot            pts    W   D   L   win%  hullΔ');
-      table.forEach((r, i) => console.log(`${String(r.played ? i + 1 : "—").padEnd(2)} ${r.id.padEnd(14)} ${String(r.points).padStart(3)}  ${String(r.w).padStart(3)} ${String(r.d).padStart(3)} ${String(r.l).padStart(3)}  ${(r.winRate * 100).toFixed(0).padStart(4)}  ${r.hullDiff.toFixed(1).padStart(6)}`));
+      console.log('Strength (Elo scale): batch fit, 1500 anchor; each whole entrant is rated once per match.');
+      console.log('#  bot            strength  played    W   D   L   win%');
+      table.forEach(r => console.log(`${String(r.rank ?? '—').padEnd(2)} ${r.id.padEnd(14)} ${String(r.played ? r.rating : '—').padStart(8)} ${String(r.played).padStart(7)}  ${String(r.w).padStart(3)} ${String(r.d).padStart(3)} ${String(r.l).padStart(3)}  ${(r.winRate * 100).toFixed(0).padStart(4)}`));
       console.log(`avg completed match ${(totalDur / Math.max(1, results.filter(r => scoredResult(r) && !r.forfeit).length)).toFixed(1)}s; endings: ${Object.entries(reasons).map(([k, n]) => `${k} ${n}`).join(', ')}`);
       if (args.matrix) {
         console.log('\nwins (row beat column):\n' + ''.padEnd(11) + table.map((r) => r.id.slice(0, 6).padStart(7)).join(''));
@@ -172,9 +173,10 @@ async function main() {
       const board = await ladder(pool, { queues: mode ? [mode] : QUEUES });
       if (args.json) return console.log(JSON.stringify(board));
       console.log(`${board.entrants} bots, ${board.matchesPlayedNow} matches played just now (the rest were on file)`);
+      console.log('Strength (Elo scale): batch fit, 1500 anchor; mixed teams estimate individual contribution.');
       for (const [q, t] of Object.entries(board.queues)) {
-        console.log(`\n${q} — ${t.onFile} matches\n` + '#'.padStart(3) + '  ' + 'bot'.padEnd(16) + 'author'.padEnd(16) + 'rating'.padStart(7) + 'played'.padStart(8) + '  W-D-L'.padEnd(14) + 'win%'.padStart(5));
-        for (const r of t.standings) console.log(String(r.rank ?? '—').padStart(3) + '  ' + r.id.padEnd(16) + r.author.slice(0, 15).padEnd(16) + String(r.rating).padStart(7) + String(r.played).padStart(8) + ('  ' + r.w + '-' + r.d + '-' + r.l).padEnd(14) + String(Math.round(r.winRate * 100)).padStart(5));
+        console.log(`\n${q} — ${t.onFile} matches\n` + '#'.padStart(3) + '  ' + 'bot'.padEnd(16) + 'author'.padEnd(16) + 'strength'.padStart(9) + 'played'.padStart(8) + '  W-D-L'.padEnd(14) + 'win%'.padStart(5));
+        for (const r of t.standings) console.log(String(r.rank ?? '—').padStart(3) + '  ' + r.id.padEnd(16) + r.author.slice(0, 15).padEnd(16) + String(r.played ? r.rating : '—').padStart(9) + String(r.played).padStart(8) + ('  ' + r.w + '-' + r.d + '-' + r.l).padEnd(14) + String(Math.round(r.winRate * 100)).padStart(5));
       }
       if (board.errors) console.log(`\nmatches that could not be played, e.g.: ${board.errors[0]}`);
       if (args.write) {

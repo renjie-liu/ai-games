@@ -241,6 +241,9 @@ async function exercise(client, label) {
 
   const tour = JSON.parse(text(await client.callTool({ name: 'run_tournament', arguments: { bots: [name, 'rookie', 'wasp'], maps: ['proving'] } })));
   assert.equal(tour.matches, 6); assert.equal(tour.standings.length, 3);
+  assert.equal(tour.ratingMethod, 'bradley-terry-elo-v1');
+  assert.equal(board.ratingMethod, tour.ratingMethod);
+  assert.ok(tour.standings.every(r => Number.isFinite(r.rating) && r.played === 4));
 
   // a scouting report: the vehicle, and a record that says how much of it is on file (here no 1v1 has been played)
   const scout = JSON.parse(text(await client.callTool({ name: 'scout_bot', arguments: { name: 'rookie' } })));
@@ -289,7 +292,7 @@ async function exercise(client, label) {
   assert.match(p.messages[0].content.text, /hover sniper/);
   const res = await client.readResource({ uri: 'ironyard://rules' });
   assert.match(res.contents[0].text, /Ironyard/);
-  console.log(`${label}: ok — ${name} vs rookie on canyon: ${m1.result} (${m1.reason}, ${m1.duration}s); eval ${ev.wins}W ${ev.draws}D ${ev.losses}L; standings ${tour.standings.map((s) => s.bot + ' ' + s.points).join(', ')}`);
+  console.log(`${label}: ok — ${name} vs rookie on canyon: ${m1.result} (${m1.reason}, ${m1.duration}s); eval ${ev.wins}W ${ev.draws}D ${ev.losses}L; standings ${tour.standings.map((s) => s.bot + ' ' + s.rating).join(', ')}`);
 }
 
 // stdio

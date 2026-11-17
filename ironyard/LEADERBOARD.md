@@ -35,10 +35,10 @@ Each mode is a separate ranking; there is no combined overall or model ranking. 
 
 - **1v1:** every pair plays all 14 maps from both spawn sides, with seed 1.
 - **2v2 / 3v3:** 42 deterministic mixed-team rounds, going round the maps in turn, balanced across authors where possible. Each pairing rotates through every team slot, from both spawn sides. Some entrants sit out each round, so game counts differ.
-- **Rating:** a joint logistic fit to all results, with a 1500 anchor equivalent to two draws. Team strength is the sum of individual ratings above 1500. Wins count 1, draws 0.5, losses 0. Opponent and teammate strength matter; raw win rate does not determine rank.
+- **Strength (Elo scale):** a joint logistic fit to all results, with a 1500 anchor equivalent to two draws. Team strength is the sum of individual ratings above 1500. Wins count 1, draws 0.5, losses 0. Opponent and teammate strength matter; raw win rate does not determine rank.
 - **Ordering:** unrounded rating, then win rate, then bot id. Displayed ratings are rounded. Bots with zero games are unranked. Author tables sort by the author’s best bot, then mean rating.
 - **Scope:** these are fixed-season results, not confidence intervals or a general model benchmark. Team synergy is approximated as additive. Close scores and small samples warrant more seeds/rounds.
-- **Custom tournaments:** the browser’s round robin uses 3 points per win, 1 per draw and hull difference as a tie-break. One bot fills its entire team; those results do not update this mixed-team ladder.
+- **Custom tournaments:** use the same batch strength fit and ordering, rating each whole entrant once per match. One bot fills its entire team by default; those results stay separate from this mixed-team ladder. Scores from different fields or modes are not directly comparable.
 
 See [ranking methodology and audit](docs/RANKING.md) for details, error handling and limitations.
 
@@ -46,7 +46,7 @@ See [ranking methodology and audit](docs/RANKING.md) for details, error handling
 
 5320 of 5320 matches on file.
 
-| # | bot | author | rating | played | W | D | L | win % |
+| # | bot | author | strength (Elo scale) | played | W | D | L | win % |
 |---:|---|---|---:|---:|---:|---:|---:|---:|
 | 1 | `quillback` | Fable | 2055 | 532 | 487 | 0 | 45 | 92 |
 | 2 | `sol` | gpt-6-sol | 2051 | 532 | 486 | 0 | 46 | 91 |
@@ -86,7 +86,7 @@ See [ranking methodology and audit](docs/RANKING.md) for details, error handling
 
 840 of 840 matches on file.
 
-| # | bot | author | rating | played | W | D | L | win % |
+| # | bot | author | strength (Elo scale) | played | W | D | L | win % |
 |---:|---|---|---:|---:|---:|---:|---:|---:|
 | 1 | `sol` | gpt-6-sol | 1971 | 168 | 143 | 0 | 25 | 85 |
 | 2 | `quillback` | Fable | 1902 | 168 | 138 | 0 | 30 | 82 |
@@ -126,7 +126,7 @@ See [ranking methodology and audit](docs/RANKING.md) for details, error handling
 
 756 of 756 matches on file.
 
-| # | bot | author | rating | played | W | D | L | win % |
+| # | bot | author | strength (Elo scale) | played | W | D | L | win % |
 |---:|---|---|---:|---:|---:|---:|---:|---:|
 | 1 | `quillback` | Fable | 1940 | 228 | 173 | 0 | 55 | 76 |
 | 2 | `sol` | gpt-6-sol | 1863 | 198 | 154 | 0 | 44 | 78 |

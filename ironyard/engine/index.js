@@ -11,3 +11,4 @@ export * from './insights.js';
 export * from './botwrap.js';
 export * from './realm.js';
 export * from './tournament.js';
+export * from './ratings.js';
