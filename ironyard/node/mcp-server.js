@@ -13,7 +13,7 @@ import readline from 'node:readline';
 import crypto from 'node:crypto';
 import {
   MAPS, MAP_IDS, MODES, PARTS, ITEMS, TILES, TILE, RULES, BUDGETS, DEFAULT_BUDGET, CELL, GRID_HX, GRID_HY, GRID_W, GRID_L, PAINTS, DECOR_LIMIT,
-  validateDesign, parseBlueprint, renderDesign, makeSchedule, standings, summarize, FLAG, ENGINE_VERSION, tournamentResult, tournamentStatus, scoredResult,
+  validateDesign, parseBlueprint, renderDesign, makeSchedule, standings, summarize, FLAG, ENGINE_VERSION, tournamentResult, tournamentStatus, scoredResult, RATING_METHOD,
 } from '../engine/index.js';
 import { ladder, QUEUES } from './ladder.js';
 import { rulesMarkdown } from '../engine/rulesdoc.js';
@@ -372,7 +372,7 @@ const TOOLS = [
   {
     name: 'run_tournament',
     title: 'Round robin',
-    description: 'Round-robin between several bots (each fills its whole team) over maps x seeds x both sides. Returns standings, head-to-head results and completion counts. Attributed controller failures forfeit; runtime errors or unattributed failures are unscored, not draws.',
+    description: 'Round-robin between several bots (each fills its whole team) over maps x seeds x both sides. Returns batch-fitted strength ratings on the Elo scale, standings, head-to-head results and completion counts. Each whole entrant is rated once per match; points and hullDiff are legacy diagnostics, not ranking inputs. Attributed controller failures forfeit; runtime errors or unattributed failures are unscored, not draws.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -404,8 +404,8 @@ const TOOLS = [
       }));
       const table = standings(entrants, results);
       return {
-        mode, maps, seeds: seeds.length, matches: results.length, ...tournamentStatus(results, schedule.length),
-        standings: table.map((r, i) => ({ rank: r.played ? i + 1 : null, bot: r.id, played: r.played, unscored: r.unscored, points: r.points, w: r.w, d: r.d, l: r.l, winRate: r.winRate, hullDiff: r.hullDiff })),
+        mode, maps, seeds: seeds.length, ratingMethod: RATING_METHOD, matches: results.length, ...tournamentStatus(results, schedule.length),
+        standings: table.map(r => ({ rank: r.rank, rating: r.rating, bot: r.id, played: r.played, unscored: r.unscored, points: r.points, w: r.w, d: r.d, l: r.l, winRate: r.winRate, hullDiff: r.hullDiff })),
         headToHead: Object.fromEntries(table.map((r) => [r.id, Object.fromEntries(Object.entries(r.vs).map(([k, v]) => [k, `${v.w}-${v.d}-${v.l}`]))])),
         errors: results.filter((r) => r.error).slice(0, 3).map((r) => r.error),
       };
@@ -414,7 +414,7 @@ const TOOLS = [
   {
     name: 'leaderboard',
     title: 'Leaderboard',
-    description: 'The standing ladder of every bot on this server, built-in and submitted, rated in three queues. 1v1 is a full round robin on every map from both sides. 2v2 and 3v3 are played on mixed teams: each round the bots are dealt into teams, keeping bots by the same author (the `author` in a bot\'s `meta`) apart where the numbers allow, and each pairing rotates every bot through every slot from both spawn sides. A team-queue rating estimates individual contribution. Returns rank, recorded model, rating, W-D-L and win rate per bot, and the same grouped by author (ordered by best bot). Zero-game entrants are unranked; unknown model attribution stays empty. Only matches that are not on file are played, and a call plays for about 40 seconds at most: when `complete` is false the tables are from the season so far, and calling again carries on. Pass `mode` to bring one queue up to date.',
+    description: 'The standing ladder of every bot on this server, built-in and submitted, rated in three queues. 1v1 is a full round robin on every map from both sides. 2v2 and 3v3 are played on mixed teams: each round the bots are dealt into teams, keeping bots by the same author (the `author` in a bot\'s `meta`) apart where the numbers allow, and each pairing rotates every bot through every slot from both spawn sides. A team-queue rating estimates individual contribution. Uses the same batch fit on the Elo scale as run_tournament; mixed-team scores estimate individual contribution and are not directly comparable to whole-team tournament ratings. Returns rank, recorded model, rating, W-D-L and win rate per bot, and the same grouped by author (ordered by best bot). Zero-game entrants are unranked; unknown model attribution stays empty. Only matches that are not on file are played, and a call plays for about 40 seconds at most: when `complete` is false the tables are from the season so far, and calling again carries on. Pass `mode` to bring one queue up to date.',
     inputSchema: {
       type: 'object',
       properties: {

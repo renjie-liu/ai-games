@@ -1,4 +1,5 @@
 // Scheduling and standings. Running the matches is up to the caller.
+import { rate } from './ratings.js';
 
 /**
  * @param {object} o
@@ -61,7 +62,16 @@ export function standings(entrants, results) {
     else { A.d++; B.d++; A.points++; B.points++; va.d++; vb.d++; }
     if (r.hull) { A.hullDiff += r.hull[0] - r.hull[1]; B.hullDiff += r.hull[1] - r.hull[0]; }
   }
-  return Object.values(row)
-    .map((x) => ({ ...x, hullDiff: Math.round(x.hullDiff * 100) / 100, winRate: x.played ? Math.round((x.w / x.played) * 1000) / 1000 : 0 }))
-    .sort((p, q) => Number(q.played > 0) - Number(p.played > 0) || q.points - p.points || q.hullDiff - p.hullDiff || (p.id < q.id ? -1 : 1));
+  // A tournament rates the whole entrant, even when its bot fills several slots.
+  // Use only valid scored outcomes; hull and legacy 3/1/0 points are diagnostics.
+  const matches = [], outcomes = {};
+  for (const r of results) {
+    if (!row[r.a] || !row[r.b] || r.a === r.b || !scoredResult(r)) continue;
+    const key = String(matches.length);
+    matches.push({ key, teams: [[r.a], [r.b]] });
+    outcomes[key] = { w: r.winner };
+  }
+  return rate(entrants, matches, outcomes)
+    .map(({ id, rating, rank }) => ({ ...row[id], rating, rank }))
+    .map((x) => ({ ...x, hullDiff: Math.round(x.hullDiff * 100) / 100, winRate: x.played ? Math.round((x.w / x.played) * 1000) / 1000 : 0 }));
 }

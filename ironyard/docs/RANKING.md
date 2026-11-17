@@ -6,8 +6,8 @@ Ironyard ranks **submitted bot programs**, separately for 1v1, 2v2 and 3v3. A ra
 
 | | Saved ladder | Custom browser / CLI tournament |
 |---|---|---|
-| Order | Fitted individual rating | Points, then hull difference |
-| Result value | Win 1; draw 0.5; loss 0 | Win 3 points; draw 1; loss 0 |
+| Order | Fitted individual strength | Fitted whole-entrant strength |
+| Result value | Win 1; draw 0.5; loss 0 | Win 1; draw 0.5; loss 0 |
 | Team modes | Different bots on mixed teams | One bot fills a whole team by default |
 | Update | `node node/cli.js ladder --write`, then `npm run build` | Runs locally; does not update the saved ladder |
 
@@ -27,7 +27,7 @@ Total: **6916 matches**. Participation and opponents are not perfectly equal in 
 
 ## Rating formula
 
-This is a regularized Bradley–Terry-style logistic fit, **not sequential Elo updates**. All results are fitted together, so their arrival order does not change the answer.
+Both competitions use **Strength (Elo scale)** (`bradley-terry-elo-v1`), implemented once in `engine/ratings.js`. This is a regularized Bradley–Terry-style logistic fit, **not sequential Elo updates**. All results are fitted together, so their arrival order does not change the answer.
 
 For a team A, `strength(A) = sum(rating(bot) - 1500)`. The estimated chance that A beats B is:
 
@@ -35,7 +35,9 @@ For a team A, `strength(A) = sum(rating(bot) - 1500)`. The estimated chance that
 P(A beats B) = 1 / (1 + 10^((strength(B) - strength(A)) / 400))
 ```
 
-Each bot also has a prior equivalent to two draws against a fixed 1500-rated opponent. This anchors disconnected schedules and keeps undefeated bots finite. The solver minimizes the joint negative log likelihood, including the full teammate covariance Hessian, with damped Newton steps and a loss-decreasing line search.
+For a custom tournament, each entrant is the whole competing squad, regardless of how many vehicles or different bot programs it contains. It contributes one rating per side per match: `strength(entrant) = rating(entrant) - 1500`. Repeating a bot across two or three slots never multiplies its observations or rating. This measures squad performance, while the mixed-team ladder estimates individual contribution; their rating numbers, and different modes or fields, are not directly comparable.
+
+Each rated bot or whole entrant also has a prior equivalent to two draws against a fixed 1500-rated opponent. This anchors disconnected schedules and keeps undefeated bots finite. The solver minimizes the joint negative log likelihood, including the full teammate covariance Hessian, with damped Newton steps and a loss-decreasing line search.
 
 Only match outcomes enter the fit. Damage, hull remaining and survival affect the game engine's winner/tiebreak decision, but do not add ladder points separately. Team outcomes count for each member; the model estimates their contributions jointly. It assumes additive strength and cannot fully represent role synergy or counter-matchups.
 
@@ -45,7 +47,7 @@ Sort by **unrounded rating**, then raw win percentage, then bot id. Display rati
 
 Worker results are checked for controller exceptions and a finished match. A failure reliably attributed to one bot is a forfeit for that side and is prominently reported. An unattributed failure is **unscored**, not a draw, and is retried on the next call. A match that finished but in which a controller threw is scored as the engine played it (the rules let a controller throw: it idles for that tick) and is reported with its error — leaving it unscored would let a bot throw once whenever it was losing and never have a loss on file. `ladder --write` refuses an incomplete or error-containing season.
 
-Custom browser, CLI and MCP tournaments are stricter on one point: a finished match in which a controller threw is left unscored there, as an unfinished one is, so a table made by hand never ranks a bot on matches it broke in (fix the bot and run it again); a thrown exception attributed to exactly one team is a forfeit. Only clean results and attributed forfeits earn points. Completion counts distinguish scheduled, attempted, scored, unscored and remaining games. CLI tournaments return a nonzero exit code if any errors occur. Browser tournaments can be stopped, preserving completed results as provisional standings; restarting creates a fresh tournament.
+Custom browser, CLI and MCP tournaments are stricter on one point: a finished match in which a controller threw is left unscored there, as an unfinished one is, so a table made by hand never ranks a bot on matches it broke in (fix the bot and run it again); a thrown exception attributed to exactly one team is a forfeit. Only clean results and attributed forfeits enter tournament ratings. Completion counts distinguish scheduled, attempted, scored, unscored and remaining games. CLI tournaments return a nonzero exit code if any errors occur. Browser tournaments can be stopped, preserving completed results as provisional standings; restarting creates a fresh tournament.
 
 Per-decision wall-clock timing is telemetry only. Engine 0.5.1 removes the old 250 ms penalty that could cut off a healthy controller when the host was busy. Worker watchdogs and memory limits still protect the host; a triggered watchdog is reported as a failure, rather than silently changing the simulated battle. See the [0.5.1 review](REVIEW-2026-11-16.md).
 
@@ -247,4 +249,14 @@ Sol moves from **5 / 4 / 3** to **2 / 1 / 2**. Astra moves from **4 / 2 / 2** to
 
 The independent seed-73 comparison held the six opposing sources at `80fd5eb`, rather than updating both cars at once. Over 504 fixtures per revision, Astra improved from **243 to 417 wins**, and Sol from **249 to 423**; every mode improved. All 2016 paired-validation matches completed without errors. See [the MCP responses and source hashes](BOT_ITERATION_V3.json).
 
-The separate same-version-team competition is in [TOURNAMENT.md](../TOURNAMENT.md), with the current sources installed together. Its points and opponents differ from this mixed-team ladder and from the fixed-field revision comparison.
+The separate same-version-team competition is in [TOURNAMENT.md](../TOURNAMENT.md), with the current sources installed together. Its team composition and opponents differ from this mixed-team ladder and from the fixed-field revision comparison. It now uses the same strength-rating algorithm, applied to whole entrants.
+
+## Shared strength scoring (2026-11-17)
+
+The browser, CLI and MCP custom tournaments now use the ladder's existing batch-fit solver. They sort by unrounded strength, raw win rate, then entrant id (with the same numerical tie tolerance as the ladder). Hull difference no longer breaks ranking ties. UI labels read **Strength (Elo scale)**; played counts and win rates remain visible. Entries with no scored games display neither a rank nor a rating; API rows retain a prior rating of 1500 and `rank: null`.
+
+The JSON APIs expose `ratingMethod`, `rating` and `rank`. Legacy `points` (3/1/0) and `hullDiff` remain diagnostic fields for existing clients and historical comparisons; neither determines rank. A stopped or error-containing tournament remains provisional.
+
+The [current seven-version report](../TOURNAMENT.md) was re-scored from all 3528 recorded outcomes. Original MCP summaries are preserved and the derived artifact records their SHA-256. No battles were replayed for this scoring change. Head-to-head counts suffice because only outcomes enter the batch likelihood; the conversion does not infer maps, seeds, hull margins or individual replays. The full 6916-match ladder retains all prior ratings and ranks.
+
+The seven-version ordering also stays the same: every entrant met each opponent equally often and there were no draws or tied win totals. Changing the scoring algorithm need not change ranks on such a balanced complete round robin; it supplies a common strength scale and accounts for uneven or partial schedules.
