@@ -41,7 +41,7 @@ function look(res, id) {
 /**
  * The findings for one vehicle as [{ kind, text }], at most six, most important first. `kind` is a
  * stable key (outcome, terrain, immobile, weapons_lost, silent_guns, energy_starved, too_close, wrong_range,
- * flanked, stuck, parked, fire, low_accuracy, damage_source) for counting across matches.
+ * flanked, stuck, parked, fire, turned, low_accuracy, damage_source) for counting across matches.
  * Takes a match result (runMatch) or its summary (summarize): both give the same findings.
  */
 export function insightList(res, id) {
@@ -157,6 +157,13 @@ export function insightList(res, id) {
   if (burning >= 5 || burnt >= 2) {
     const lit = t.taken.top.find((x) => x.weapon === 'fire' && x.by !== null);
     say('fire', `burned for ${f1(burning)} s: ${bw.fire || 0} fire damage, ${burnt} piece${burnt === 1 ? '' : 's'} lost to fire${lit ? (lit.by === v.id ? ' (set alight by a blast of its own)' : ` (lit by ${who(lit.by)})`) : ''}`);
+  }
+
+  // hits that land and are turned: the other side's slopes and armor took most of what its guns carried
+  const turned = st.turnedAway || 0;
+  if (turned >= 150 && turned >= 0.5 * (dealt + turned)) {
+    say('turned', `slopes and armor took ${pct(turned / (dealt + turned))}% of what its hits carried (${Math.round(turned)} of ${Math.round(dealt + turned)} damage turned away): `
+      + 'aim at pieces that are neither, come at a slope from behind its face, or carry what they do not stop (a mortar, a laser, a rail slug, fire)');
   }
 
   // shots that do not land

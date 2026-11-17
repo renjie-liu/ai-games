@@ -89,6 +89,11 @@ What happens under fire:
 | missile | 28 x2 explosive | 28 | 26 | 11.6 | 27 |
 | mortar | 46 explosive | 46 | 44 | 45 | 45 |
 
+* **A blast** — a mortar shell, a keg, a barrel, a mine, the splash of a shell or a missile — reaches the stud columns within its radius and
+  hurts the top piece of each (a mine, from below: the bottom piece), nearest first, as many pieces as the tables give. The piece at the
+  centre takes the full damage, one at the edge about a third of it. So where a shell lands on a car matters: lay it on the stud whose
+  neighbours are worth most.
+* **Range** is the distance a shot flies from the muzzle. Shots do not inherit their shooter's speed: running away does not lengthen your reach, nor chasing shorten it.
 * Decor is not solid: shots pass through it, and it is shaken off when the piece under it takes 20 damage.
 * **Fire.** Every piece has heat. Flamethrowers and lava raise it steadily. Every blast raises it too: the burst of a cannon shell, a missile or a
   mortar round gives each piece it damages up to 0.35 heat (times that piece's `burn`, less towards the edge of the burst), so three
@@ -751,8 +756,9 @@ state = {
     weapons: [{ i, type, dir, alive, ready, cooldown, angle, mountAngle, arc, range, minRange, projSpeed, dmg }],
   },
   allies:  [{ id, slot, name, alive, x, y, heading, vx, vy, speed, hpFrac, coreFrac, energyFrac, mass, radius, shield, burning, item, parts, ... }],
-  enemies: [ same shape — ONLY enemies your team can currently see; parts[] shows their layout (with z) and damage: every piece
-             they started with stays in the list, the ones shot off with alive: false ],
+  enemies: [ same shape as allies — ONLY enemies your team can currently see ],
+             // another vehicle's parts[] is { i, type, x, y, z, dir, alive, burning, hpFrac, wx, wy }: hpFrac (0..1), not hp and maxHp —
+             // api.parts[type].hp is what a whole one has. Every piece it started with stays in the list, the ones shot off with alive: false
   enemiesAlive,                      // how many are left, seen or not
   lastSeen: [{ id, x, y, t, alive }],   // where each enemy was last seen; left out once your team has been to the spot and found it empty
   projectiles: [{ kind: 'bullet' | 'shell' | 'missile' | 'mortar' | 'hook', x, y, vx, vy, landsAt?, landsIn? }],  // enemy shots in sensor range, nearest first (max 24)
@@ -794,27 +800,30 @@ A mortar shell in `projectiles` tells you where and when it lands — drive out 
 }
 ```
 
-The mortar lands its shell on the **point** you aim at, so give it `{ x, y }` (a bare angle drops the shell 12 m out).
+The mortar lands its shell on the **point** you aim at, so give it `{ x, y }` (a bare angle drops the shell 12 m out). A point nearer than its
+minimum range, or beyond its range, is moved along the same line to the nearest it can reach: the mortar still fires.
 Missing or invalid fields count as 0 / off (for a number, `true` counts as full). The command is read once,
 when `tick` returns. If `tick` throws, the vehicle idles for that step and the match report quotes the
 message with the line of your file; after 40 exceptions the controller is cut off for the rest of
-the match. A tick should take well under 3 ms; one that never returns forfeits the match.
+the match. A tick should take well under 3 ms: that is advice, measured and reported (`cpu` in the match report) and never
+enforced — a slow tick costs nothing in the match. Only a tick that never returns forfeits it.
 Do not build on running out of stack or memory: how deep a call can nest is a property of the machine, not of the
 match, and a controller that measures it has given up the promise that the same files and seed play the same match.
 
 ### Helpers: `api`
-* `api.util.driveTo(self, point, { reverse, stopDist, speed })` → `{ throttle, steer, brake }` pursuit controller.
+* `api.util.driveTo(self, point, { reverse, stopDist, speed })` → `{ throttle, steer, brake }` pursuit controller. Also `driveTo(self, x, y, opts)`.
 * `api.util.turnTo(self, angle)` → `{ throttle: 0, steer }`.
 * `api.util.lead(from, target, projectileSpeed)` → `{ x, y, angle, t }` intercept point (pass it as `aim`).
   `target` only needs `x, y, vx, vy`, so you can lead a single piece: `{ x: part.wx, y: part.wy, vx: foe.vx, vy: foe.vy }`.
 * `api.util.angDiff(a, b)`, `angleTo(from, to)`, `dist(a, b)`, `clamp(x, lo, hi)`, `blueprint(name, { deck, chassis }, { paint })`.
 * `api.util.threat(state, margin = 1.2)` → `null`, or `{ x, y, r, in, away }` for the keg or mortar shell whose blast you are in or
   nearly in: where, how big, in how many seconds, and a point just outside it to drive to (`driveTo(self, t.away, { reverse: true })`).
-* `api.nav.follower()` → object with `next(self, goalX, goalY, state.tick)` returning the next waypoint of an A* route
-  (cached, re-planned twice a second, sized to your hull, keeps to the way round an obstacle it has chosen, backs out when wedged). Keep one per controller.
+* `api.nav.follower(opts)` → object with `next(self, goalX, goalY, state.tick)` returning the next waypoint of an A* route
+  (cached, re-planned twice a second, sized to your hull, keeps to the way round an obstacle it has chosen, backs out when wedged), and
+  `reset()`. Keep one per controller. `opts`: the `path` options below, `replanTicks` (30: ticks between plans) and `replanDist` (3: metres the goal may move before a new plan).
 * `api.nav.path(x0, y0, x1, y1, { hover, margin, mudCost, iceCost, lavaCost })` → waypoints.
-* `api.nav.los(x0, y0, x1, y1)` (can a shot get through?), `api.nav.clear(x0, y0, x1, y1, { margin, hover })` (can I drive it?),
-  `api.nav.tileAt(x, y)`, `api.nav.isOpen(x, y, hover)`, `api.nav.clearance(x, y)` → `{ wall, pit }` metres.
+* `api.nav.los(x0, y0, x1, y1)` (can a shot get through?), `api.nav.clear(x0, y0, x1, y1, { margin, hover, avoid })` (can I drive it? `avoid`: tile names that count as blocked, e.g. `['lava']`),
+  `api.nav.tileAt(x, y)`, `api.nav.tileAtCell(tx, ty)` (by tile index), `api.nav.isOpen(x, y, hover)`, `api.nav.clearance(x, y)` → `{ wall, pit }` metres.
 * `api.map` — `{ id, w, h, tile, width, height, center, rows, spawns, itemSpawns, pads, items }`.
 * `api.parts`, `api.items`, `api.tiles`, `api.rules` — these tables, as data. `api.rng()` — seeded random in [0, 1). `api.log(...)` — shows up in match reports.
 

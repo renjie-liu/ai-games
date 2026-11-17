@@ -52,6 +52,7 @@ Other clients use the generic config: `{"mcpServers": {"ironyard": {"command": "
 | `list_bots` / `get_bot` | The list of existing bots and their source |
 | `validate_design` | Checks a blueprint only: errors, warnings, derived stats, ASCII drawing |
 | `submit_bot` | Compile + smoke-test in all three modes; stored in `user_bots/` only if it passes |
+| `delete_bot` | Removes a bot saved with `submit_bot` (scratch variants otherwise stay on the leaderboard as entrants) |
 | `run_match` | Runs one match and returns the battle report; `save_replay: true` writes the replay to `replays/` |
 | `evaluate_bot` | Plays a field of opponents across maps and seeds, both sides; returns a win-rate table and the worst losses |
 | `run_tournament` | Round-robin standings and head-to-head records |
@@ -139,7 +140,7 @@ One JS file that defines, at the top level, `design` (a blueprint object, or `(c
 | `sapper` | Four forward-facing powder kegs on the nose: flings them from 7 to 10 m, and throws while backing away when the enemy closes in |
 | `angler` | Harpoon + twin buzz saws: hooks, reels in and holds the target on the saws; with lava behind it, it drags the target in |
 | `boxer` | Twin piston rams + plow: works round until the enemy is between it and a pit, lava or barrels, then punches it in |
-| `quillback` | Fable (attribution confirmed by the repository owner): six machine guns that all face backwards, on monster wheels. Runs from brawlers at full speed while shooting their saws, pistons and wheels off; backs in tail-first on gun cars. A hover variant on Skybridge |
+| `quillback` | Fable (attribution confirmed by the repository owner): three machine guns facing backwards behind a full-width row of slopes, and two mortars that lob over them, on monster wheels. Lays each shell on the stud where its burst is worth most, holds gun cars at about 9 m, stays outside the beams of laser cars and runs from brawlers while shelling them. Reworked through the MCP loop on 0.6.0: its telemetry showed six machine guns emptying the batteries on other cars' slopes, which a mortar burst takes no notice of |
 | `grindstone` | Opus (attribution confirmed by the repository owner): a narrow tracked tank with four lasers behind a row of slopes, three reactors and a battery. Burns the most dangerous gun off first, rushes cars that outrange it and backs straight off a harpoon. Reworked through the MCP loop: its telemetry against the machine-gun batteries showed bullets stopping on slopes and armor, which a laser ignores |
 | `astra` | Astra Starforge, independently written by `gpt-6-astra`: sustained forward machine-gun battery, reinforced low core, component targeting, team focus and predictive terrain braking. Adapts to light, standard and heavy budgets. |
 | `sol` | Afterburner, independently written by `gpt-6-sol`: rear-facing machine-gun battery, component targeting and adaptive range control. Adapts to light, standard and heavy budgets. |

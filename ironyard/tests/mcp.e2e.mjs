@@ -56,7 +56,7 @@ async function exercise(client, label) {
   const info = client.getServerVersion();
   assert.equal(info.name, 'ironyard');
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((t) => t.name).sort(), ['evaluate_bot', 'get_bot', 'get_replay', 'get_rules', 'leaderboard', 'list_bots', 'list_maps', 'list_parts', 'list_replays', 'run_match', 'run_tournament', 'scout_bot', 'submit_bot', 'validate_design']);
+  assert.deepEqual(tools.map((t) => t.name).sort(), ['delete_bot', 'evaluate_bot', 'get_bot', 'get_replay', 'get_rules', 'leaderboard', 'list_bots', 'list_maps', 'list_parts', 'list_replays', 'run_match', 'run_tournament', 'scout_bot', 'submit_bot', 'validate_design']);
 
   const rules = text(await client.callTool({ name: 'get_rules', arguments: {} }));
   assert.match(rules, /controller contract/); assert.match(rules, /railgun/);
@@ -200,6 +200,18 @@ async function exercise(client, label) {
   const held = JSON.parse(text(await client.callTool({ name: 'evaluate_bot', arguments: { name, maps: ['proving'], opponents: ['hornet'], seeds: [3] } })));
   assert.deepEqual(held.seeds, [3]); assert.equal(held.matches, 2);
   assert.ok(held.worstLosses.every((l) => l.seed === 3));
+  // where the losses are, by opponent and by map, adds up to the losses
+  assert.equal(Object.values(ev.lossesByOpponentAndMap).flatMap((m) => Object.values(m)).reduce((x, y) => x + y, 0), ev.losses);
+  assert.ok(Object.keys(ev.lossesByOpponentAndMap).every((o) => ['rookie', 'bulldozer', 'hornet'].includes(o)));
+  // a scratch variant can be saved and removed again; a built-in cannot be removed
+  const scratch = 'scratch-' + label;
+  await client.callTool({ name: 'submit_bot', arguments: { name: scratch, source: BOT } });
+  const gone = JSON.parse(text(await client.callTool({ name: 'delete_bot', arguments: { name: scratch } })));
+  assert.equal(gone.deleted, scratch); assert.ok(!gone.savedBots.includes(scratch) && gone.savedBots.includes(name));
+  const twice = await client.callTool({ name: 'delete_bot', arguments: { name: scratch } });
+  assert.equal(twice.isError, true); assert.match(text(twice), /no saved bot/);
+  const builtin = await client.callTool({ name: 'delete_bot', arguments: { name: 'rookie' } });
+  assert.equal(builtin.isError, true); assert.match(text(builtin), /built-in bot and cannot be deleted/);
   const lots = await client.callTool({ name: 'evaluate_bot', arguments: { name, seeds: 'lots' } });
   assert.equal(lots.isError, true); assert.match(text(lots), /"seeds" must be a whole number 1\.\.5 or a list of 1\.\.5 of them/);
   const self = await client.callTool({ name: 'evaluate_bot', arguments: { name, maps: ['proving'], opponents: ['hornet'], baseline: name } });
@@ -313,7 +325,7 @@ async function exercise(client, label) {
     assert.equal((await ping({ authorization: 'Bearer open-sesame' })).status, 200);
     const client = new Client({ name: 'e2e', version: '1.0.0' });
     await client.connect(new StreamableHTTPClientTransport(new URL(url), { requestInit: { headers: { authorization: 'Bearer open-sesame' } } }));
-    assert.equal((await client.listTools()).tools.length, 14);
+    assert.equal((await client.listTools()).tools.length, 15);
     await client.close();
     console.log('http with a token: ok');
   } finally { child.kill(); }

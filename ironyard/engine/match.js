@@ -250,7 +250,7 @@ export function createMatch(o) {
           damageByType: Object.fromEntries(Object.entries(s.byType).map(([k, x]) => [k, rnd(x)])),
           kills: s.kills, partsLost: s.partsLost, partsDestroyed: s.partsDestroyed,
           shots: rnd(s.shots), hits: rnd(s.hits), accuracy: s.shots > 0 ? Math.round((s.hits / s.shots) * 100) / 100 : null,
-          healing: rnd(s.healing), deflected: rnd(s.deflected), itemsPicked: s.itemsPicked, itemsUsed: s.itemsUsed, rams: s.rams,
+          healing: rnd(s.healing), deflected: rnd(s.deflected), turnedAway: rnd(s.turnedAway), itemsPicked: s.itemsPicked, itemsUsed: s.itemsUsed, rams: s.rams,
           distance: rnd(s.distance), timeStill: rnd(s.timeStill), timeStunned: rnd(s.timeStunned),
           timeEnergyStarved: rnd(s.timeEnergyStarved), timeFireOutOfArc: rnd(s.timeFireOutOfArc),
           timeOutsideZone: rnd(s.timeOutsideZone), timeNoEnemyVisible: rnd(s.timeNoEnemyVisible),

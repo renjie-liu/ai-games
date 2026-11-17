@@ -210,8 +210,8 @@ test('fire discipline: how long an enemy was in reach, and what the guns were do
   lobbed.run(6);
   const lt = lobbed.w.telemetry(lobbed.p);
   assert.equal(lt.fire.timeNoLineOfSight, 0); close(lt.fire.timeTargetInReach, 6);
-  assert.deepEqual([lt.weapons[0].shots, lt.weapons[0].hits], [2, 2], 'a shell whose blast hurt somebody is a hit, though stats.hits never counted mortars');
-  assert.equal(lobbed.p.stats.hits, 0);
+  assert.deepEqual([lt.weapons[0].shots, lt.weapons[0].hits], [2, 2], 'a shell whose blast hurt somebody is a hit');
+  assert.equal(lobbed.p.stats.hits, 2, 'and the vehicle\'s own count agrees with its weapons\' (it used to leave mortars out)');
   close(lt.weapons[0].damage, lobbed.p.stats.damageDealt); assert.ok(lt.weapons[0].damage > 40);
 });
 
@@ -265,6 +265,20 @@ test('insights: the findings a situation should give, by kind and in words', () 
   assert.ok(wall.w.telemetry(wall.p).move.timeStuck >= 6, String(wall.w.telemetry(wall.p).move.timeStuck));
   assert.ok(kinds(report(wall.w), 0).includes('stuck'));
   assert.ok(!kinds(report(wall.w), 1).includes('stuck'), 'standing still without trying to move is not being stuck');
+
+  // bullets on the face of a slope: four fifths of each is turned away, and the shooter's report says so
+  const glacis = car([{ type: 'slope', x: -1, y: 3, z: 0, dir: 'N' }, { type: 'slope', x: 0, y: 3, z: 0, dir: 'N' }, { type: 'slope', x: 1, y: 3, z: 0, dir: 'N' }]);
+  const gunner = car([{ type: 'mg', x: -1, y: 1, z: 1, dir: 'N' }, { type: 'mg', x: 0, y: 1, z: 1, dir: 'N' }, { type: 'mg', x: 1, y: 1, z: 1, dir: 'N' }]);
+  const face = duel(gunner, glacis, { gap: 6 });
+  const mid = face.q.parts.filter((x) => x.type === 'slope')[1];
+  face.w.setCommand(face.p, { fire: true, aim: { x: mid.wx, y: mid.wy } });
+  face.run(5);
+  const shooter = face.p.stats;
+  assert.ok(shooter.turnedAway > 150 && shooter.turnedAway > shooter.damageDealt, `${shooter.turnedAway} turned, ${shooter.damageDealt} dealt`);
+  assert.ok(shooter.turnedAway > face.q.stats.deflected && face.q.stats.deflected > 0.5 * shooter.turnedAway, 'what the slopes turned, and the point of armor each takes on top');
+  const told = insightList(report(face.w), 0).find((x) => x.kind === 'turned');
+  assert.match(told.text, /^slopes and armor took \d+% of what its hits carried \(\d+ of \d+ damage turned away\)/);
+  assert.ok(!kinds(report(face.w), 1).includes('turned'), 'the car being shot at has nothing to say about that');
 
   // standing still by its own command, with a gun and an enemy too far away to use it on: that is said too
   const armed = car([{ type: 'mg', x: 0, y: 1, z: 1, dir: 'N' }]);

@@ -175,9 +175,7 @@ Two cautions about reading this historical table. At that point no entry had bee
 
 Of the house reference bots only `wasp` was changed: it carried a single missile pod, which the missile changes left worthless (2% on the bench), and now carries two.
 
-
-
-## Current season: Astra and Sol v2
+## Season with Astra and Sol v2
 
 The physics remains engine 0.6.0. Astra now uses an aft cockpit and pursuit-aware spacing on compact arenas; Sol moves armor into the incoming-fire chassis lane, splits its centre floor supports, and keeps more distance from lasers. Original generation-model metadata is retained; the v2 files additionally record `editor: Codex`. These are controller revisions, not new independent model submissions.
 
@@ -200,3 +198,29 @@ node tools/compare-bot-revisions.mjs --baseline 09f0b90 --seed 29 --out /tmp/bot
 ```
 
 Human driving uses the same engine in a separate browser worker and never contributes results to this AI ladder.
+
+## Current season: `quillback` reworked on 0.6.0
+
+`quillback`'s author reworked it through the MCP server alone, as `grindstone`'s had before it: scouting the entries that beat it, replaying its most one-sided losses, reading the telemetry. The ladder matches it plays in were played again on top of the season above; every other result is as there (the engine's results were checked to be identical match for match, before and after the match engine was restructured for human driving).
+
+What the replays showed: against `grindstone` the car spent its time at 4 to 8 m taking laser fire that its slopes do nothing about, and on a trace it emptied all 400 energy in 16 seconds on slope faces for 8% of the other car's hull — a bullet does 0.8 to the face of a slope. Against `astra`, the two lanes outside its row of slopes let bullets take the wheels off within ten seconds. So the car changed kind: three machine guns instead of six, behind slopes across its full width, and **two mortars**, whose bursts take no notice of slopes and armor. The controller lays each shell on the stud where its burst is worth most, led by the shell's flight time; it holds gun cars at about 9 m, stays outside the 10 m reach of laser cars, and runs from anything that has to touch it. The hover variant it took to Skybridge is gone.
+
+| Bot | Author (recorded model) | 1v1 | 2v2 | 3v3 |
+|---|---|---:|---:|---:|
+| quillback | Fable | 1 | 1 | 1 |
+| grindstone | Opus | 2 | 5 | 6 |
+| carbon | gemini-4-carbon-medium | 3 | 3 | 4 |
+| astra | gpt-6-astra | 4 | 2 | 2 |
+| sol | gpt-6-sol | 5 | 4 | 3 |
+| tailwind | Muse Spark | 6 | 6 | 5 |
+| hydrogen | gemini-4-hydrogen-medium | 7 | 9 | 15 |
+
+`quillback` wins 528 of its 532 1v1 matches, 159 of 168 in 2v2 and 197 of 228 in 3v3. Head to head against the six other entries as they now stand (all maps, seeds 1 and 2, both sides) it went from 193-143 to 335-1 in 1v1, from 196-140 to 334-2 in 2v2 and from 216-120 to 336-0 in 3v3; on a seed it was not tuned on, from 90-78 to 167-1. It was tuned against Astra and Sol as they were before their v2; against the v2 cars it loses one match of 336 across the three modes. All of these figures were measured outside the tuning run.
+
+**This table says less about the entries than it looks.** A margin like that is a field that has not answered yet, not a car that cannot be beaten:
+
+- None of the other six carries a long gun, and none of them gets out from under a shell. The rulebook gives the helper for that (`api.util.threat`), and the house bot `thumper`, which does dodge, was hit by 0 of 29 shells in one match.
+- On the weapon bench, a plain three-railgun car with the bench's plain controller beats the new `quillback` in 5 of 28 matches; give it two lines that drive out of a shell's circle and it wins 17 of 28. A four-cannon car goes from 0 to 10 of 28 the same way. Machine-gun and laser cars do not, with or without dodging: inside 13 m there is no answer to a car that will not let them close.
+- `quillback` was tuned last, against all the others as they stood. Astra and Sol's v2 revisions were made without a mortar car in the field, and the other four entries have not been touched on 0.6.0 at all, `grindstone` apart.
+
+So the fair reading is: on this engine, a mortar car that shoots well beats everything that was written before mortars were worth carrying. The next round of any other entry is likely to change that.

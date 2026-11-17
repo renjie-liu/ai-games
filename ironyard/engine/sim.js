@@ -45,7 +45,7 @@ const IDLE = Object.freeze({
 function newStats() {
   return {
     damageDealt: 0, damageTaken: 0, byType: { kinetic: 0, energy: 0, explosive: 0, melee: 0, ram: 0, fire: 0 },
-    kills: 0, partsLost: 0, partsDestroyed: 0, shots: 0, hits: 0, healing: 0, deflected: 0,
+    kills: 0, partsLost: 0, partsDestroyed: 0, shots: 0, hits: 0, healing: 0, deflected: 0, turnedAway: 0,
     itemsPicked: 0, itemsUsed: 0, distance: 0, rams: 0,
     timeStunned: 0, timeEnergyStarved: 0, timeFireOutOfArc: 0, timeOutsideZone: 0,
     timeOn: { mud: 0, ice: 0, lava: 0 }, timeStill: 0, timeNoEnemyVisible: 0,
@@ -225,14 +225,19 @@ export class World {
    */
   damage(v, p, amount, dtype, src, shotAng, cause, via) {
     if (!p.alive || !v.alive || !(amount > 0)) return 0;
-    const def = p.def;
+    const def = p.def, foe = src && src !== v && src.stats && src.team !== v.team;
     // a slope turns a shot that meets its face — except a rail slug, which is going too fast to be turned (def.noDeflect)
     if (def.deflect && shotAng !== undefined && (dtype === 'kinetic' || dtype === 'explosive') && !(via && via.def && via.def.noDeflect)
       && Math.cos(shotAng - (v.th + DIR_ANGLE[p.dir])) < -0.5) {
       v.stats.deflected += amount * (1 - def.deflect);
+      if (foe) src.stats.turnedAway += amount * (1 - def.deflect);
       amount *= def.deflect;
     }
-    if (def.armor && (dtype === 'kinetic' || dtype === 'explosive')) amount = Math.max(amount * 0.25, amount - def.armor);
+    if (def.armor && (dtype === 'kinetic' || dtype === 'explosive')) {
+      const through = Math.max(amount * 0.25, amount - def.armor);
+      if (foe) src.stats.turnedAway += amount - through;   // (book-keeping for the shooter's report: what its hits lost on the way in)
+      amount = through;
+    }
     const dealt = Math.min(p.hp, amount);
     p.hp -= amount;
     if (!p.decor) {
@@ -409,7 +414,8 @@ export class World {
         if (p.alive) this.warm(v, p, heat * f, src ? src.id : -1);
       }
     }
-    if (struck && opts.count && via.tw) via.tw.hits++;   // a mortar shell that hurt somebody was a hit
+    // a mortar shell that hurt somebody was a hit: for the gun that fired it and for the vehicle's own count
+    if (struck && opts.count) { if (via.tw) via.tw.hits++; if (src && src.stats) src.stats.hits++; }
   }
 
   /**
