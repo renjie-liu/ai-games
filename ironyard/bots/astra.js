@@ -1,121 +1,221 @@
-// Astra: sustained-fire assault car with a protected low cockpit.
-const meta = {name:'Astra — Starforge',author:'gpt-6-astra',model:'gpt-6-astra',revision:'v2', editor:'Codex', notes:'Compact-arena aft cockpit and pursuit-aware spacing; balanced touring chassis for larger maps, component targeting and team focus.'};
-function design(ctx,api){
- const p=[], put=(type,x,y,z,dir='N')=>p.push({type,x,y,z,dir});
- const light=ctx.budget<1100,heavy=ctx.budget>=1700;
- for(const x of [-3,3])for(const y of [-1,1])put('bigwheel',x,y,0);
- put('core',0,0,0);
- for(const x of [-1,0,1])put('reactor',x,-1,0);
- for(let x=-2;x<=2;x++)for(let y=-1;y<=2;y++){
-  if(y===-1||y<2)continue;
-  if(x===-2||x===1)put('plate2',x,y,0,'E');else if(x===0)put('plate',x,y,0);
- }
- put('plate4',-2,0,0);put('plate4',1,0,0);
- for(const x of [-3,-2,-1,1,2,3]){put('mg',x,1,1);put('slope',x,2,1);}
- put('armor',0,2,1);put('armor',0,1,0);put('armor',0,0,1);
- if(light){
-  // The light chassis preserves four-wheel mobility and a four-gun battery.
-  for(let i=p.length-1;i>=0;i--)if((p[i].type==='mg'&&Math.abs(p[i].x)===1)||(p[i].type==='slope'&&Math.abs(p[i].x)<=1)||(p[i].type==='reactor'&&p[i].x!==0)||p[i].type==='armor')p.splice(i,1);
- }
- if(heavy){
-  put('shieldgen',-1,0,1);put('repairer',1,0,1);put('reactor',0,1,1);
-  put('plate',0,-2,0);put('repairer',0,-2,1);
-  for(const x of [-2,2]){put('plate',x,-1,0);put('armor',x,0,1);}
-  put('reactor',0,-3,0);put('radar',0,-3,1);
- }
- // Compact arenas reward a tucked-back cockpit; keep the balanced touring chassis on large maps.
- if(!light&&!heavy&&Math.min(api.map.width,api.map.height)<=40){
-  for(const q of p){
-   if(q.type==='core')q.y=-1;
-   else if(q.type==='reactor'&&q.x===0)q.y=0;
-   else if(q.type==='armor'&&q.x===0&&q.y===0&&q.z===1)q.y=-1;
+// v3 was iterated through Ironyard MCP; model records original authorship, editor records this revision.
+const meta = {
+  name: 'Astra — Siege Battery', author: 'gpt-6-astra', model: 'gpt-6-astra', revision: 'v3', editor: 'Codex',
+  notes: 'Two cannons and two mortars on a compact chassis; aims splash at valuable components, shares focus and commits to clear escape lanes.',
+};
+
+// Compact, independent floor strips keep one lost support from dropping the whole battery.
+// The guns face astern; forward drive opens distance without waiting for the hull to turn.
+const STANDARD_PARTS = [
+  {type: "bigwheel",x: -3,y: -2,z: 0,dir: "S"},
+  {type: "bigwheel",x: -3,y: 0,z: 0,dir: "S"},
+  {type: "bigwheel",x: 3,y: -2,z: 0,dir: "S"},
+  {type: "bigwheel",x: 3,y: 0,z: 0,dir: "S"},
+  {type: "plate2",x: -2,y: -2,z: 0,dir: "E"},
+  {type: "plate2",x: 1,y: -2,z: 0,dir: "E"},
+  {type: "plate2",x: -2,y: -1,z: 0,dir: "E"},
+  {type: "plate2",x: 1,y: -1,z: 0,dir: "E"},
+  {type: "plate2",x: -2,y: 0,z: 0,dir: "E"},
+  {type: "plate2",x: 1,y: 0,z: 0,dir: "E"},
+  {type: "plate",x: 0,y: -2,z: 0,dir: "S"},
+  {type: "armor",x: 0,y: -1,z: 0,dir: "S"},
+  {type: "core",x: 0,y: 0,z: 0,dir: "S"},
+  {type: "reactor",x: -1,y: 1,z: 0,dir: "S"},
+  {type: "reactor",x: 1,y: 1,z: 0,dir: "S"},
+  {type: "mortar",x: -2,y: 0,z: 1,dir: "S"},
+  {type: "mortar",x: 1,y: 0,z: 1,dir: "S"},
+  {type: "cannon",x: -2,y: -2,z: 1,dir: "S"},
+  {type: "plate",x: -2,y: -3,z: 0},
+  {type: "slope",x: -2,y: -3,z: 1,dir: "S"},
+  {type: "cannon",x: 2,y: -2,z: 1,dir: "S"},
+  {type: "plate",x: 2,y: -3,z: 0},
+  {type: "slope",x: 2,y: -3,z: 1,dir: "S"},
+  {type: "slope",x: -1,y: -2,z: 1,dir: "S"},
+  {type: "slope",x: 1,y: -2,z: 1,dir: "S"},
+  {type: "gyro",x: 0,y: -2,z: 1},
+  {type: "armor",x: 0,y: 0,z: 1}
+];
+function design(ctx) {
+  let parts = STANDARD_PARTS.map(p => ({...p}));
+  if (ctx.budget < 1200) {
+    parts = parts.filter(p => p.type !== 'mortar' && p.type !== 'gyro' && !(p.type === 'reactor' && p.x === 1));
+  } else if (ctx.budget >= 1800) {
+    parts.push({type:'plate',x:0,y:1,z:0}, {type:'shieldgen',x:0,y:1,z:1},
+      {type:'repairer',x:0,y:-1,z:1}, {type:'reactor',x:0,y:2,z:0}, {type:'armor',x:0,y:2,z:1});
   }
- }
- return {name:'Astra Starforge',paint:{accent:'purple'},parts:p};
+  return {name:'Astra — Siege Battery', paint:{accent:'purple'}, parts};
 }
-let route,lock=-1,mark=-1,until=0,lastX=0,lastY=0,lastT=0,stuck=0;
-const MOV={wheel:1,bigwheel:1,track:1,hover:1,thruster:1};
-const WEAP={mg:1,cannon:1,laser:1,railgun:1,missile:1,mortar:1,saw:1,piston:1,flamer:1,harpoon:1};
-const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-function aimPart(s,e,api){
- const ps=e.parts.filter(p=>p.alive), core=ps.find(p=>p.type==='core');
- if(!core)return e;
- // Trace occupied stud columns to estimate the effective work to expose a component.
- const cells=[]; const fx=Math.cos(e.heading),fy=Math.sin(e.heading);
- for(const p of ps){const z=api.parts[p.type].size,w=(p.dir==='E'||p.dir==='W')?z[1]:z[0],h=(p.dir==='E'||p.dir==='W')?z[0]:z[1];
-  for(let a=0;a<w;a++)for(let b=0;b<h;b++){
-   const dx=(a-(w-1)/2)*.4,dy=(b-(h-1)/2)*.4;
-   cells.push({x:p.wx+fy*dx+fx*dy,y:p.wy-fx*dx+fy*dy,p});
+
+let route=null,escapePoint=null,escapeUntil=-1;
+let targetId = -1;
+let jamStart = 0, jamX = 0, jamY = 0, unstuckUntil = 0;
+const PI = Math.PI;
+function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
+function diff(a, b) { let d = (a - b + 3 * PI) % (2 * PI) - PI; return d; }
+function rangeOf(e) {
+  let gun = 0, close = 0, bomb = 0, mortar = 0;
+  for (const p of e.parts) {
+    if (!p.alive) continue;
+    if (p.type === 'mg' || p.type === 'laser' || p.type === 'cannon' || p.type === 'railgun' || p.type === 'missile') gun++;
+    if (p.type === 'saw' || p.type === 'piston' || p.type === 'spike' || p.type === 'plow' || p.type === 'flamer' || p.type === 'harpoon') close++;
+    if (p.type === 'keg') bomb++;
+    if (p.type === 'mortar') mortar++;
   }
- }
- let best=core,bs=Infinity;
- for(const q of ps){
-  if(q.type!=='core'&&!WEAP[q.type]&&!MOV[q.type]&&q.type!=='reactor'&&q.type!=='shieldgen')continue;
-  const dx=q.wx-s.x,dy=q.wy-s.y,L=Math.hypot(dx,dy),ux=dx/L,uy=dy/L;
-  const hits=new Map();
-  for(const c of cells){const ax=c.x-s.x,ay=c.y-s.y,t=ax*ux+ay*uy,d=Math.abs(ax*uy-ay*ux);if(t>0&&t<L+.22&&d<.235)hits.set(c.p.i,c.p);}
-  let cost=0;
-  for(const p of hits.values()){
-   const def=api.parts[p.type];let mul=1;
-   if(p.type==='slope'){
-    const da={N:0,S:Math.PI,E:-Math.PI/2,W:Math.PI/2}[p.dir];
-    if(Math.cos(Math.atan2(dy,dx)-e.heading-da)<-.5)mul=.45;
-   }
-   cost+=(p.hp??(p.hpFrac??1)*def.hp)/Math.max(.25,mul-(def.armor||0)/4);
-  }
-  let value=q.type==='core'?2.0:q.type==='reactor'?1.4:q.type==='shieldgen'?1.1:WEAP[q.type]?1.4:MOV[q.type]?0.65:1;
-  if(e.hovering&&q.type==='hover')value=4;
-  if(WEAP[q.type]&&['saw','piston','flamer','keg'].includes(q.type))value=2.5;
-  const sc=cost/value+(q.i===mark&&e.id===lock?-30:0);
-  if(sc<bs){bs=sc;best=q;}
- }
- mark=best.i;lock=e.id;return {x:best.wx,y:best.wy};
+  return { gun, close, bomb, mortar };
 }
-function tick(state,api){
- const s=state.self,U=api.util,N=api.nav;route??=N.follower({lavaCost:200,mudCost:1.4,iceCost:1.5});
- let e=null,bs=Infinity;
- for(const q of state.enemies){let z=U.dist(s,q)+q.coreFrac*4+(N.los(s.x,s.y,q.x,q.y)?0:8);for(const m of state.messages)if(m.data&&m.data.focus===q.id)z-=4;if(z<bs){e=q;bs=z;}}
- let cmd={fire:false,aims:{},repair:s.energy>25,shield:true};
- let goal=e||state.lastSeen.filter(q=>q.alive).sort((a,b)=>U.dist(s,a)-U.dist(s,b))[0]||api.map.center;
- let d=e?U.dist(s,e):999, combat=false;
- if(e){
-  cmd.say={focus:e.id};cmd.target=e.id;
-  const tp=aimPart(s,e,api),lead=U.lead(s,{x:tp.x,y:tp.y,vx:e.vx,vy:e.vy},28);
-  cmd.aim=lead;
-  const los=N.los(s.x,s.y,e.x,e.y);
-  cmd.fire=los&&d<14;
-  const close=e.parts.some(p=>p.alive&&['saw','piston','flamer','spike','plow','keg'].includes(p.type));
-  const laser=e.parts.some(p=>p.alive&&p.type==='laser');
-  const compact=Math.min(api.map.width,api.map.height)<=40&&api.rules.budget>=1100&&api.rules.budget<1700;
-  const keep=compact?(close?11:laser?12:4.5):(close?10:4.5);
-  if(los&&d<15){
-   const a=U.angleTo(s,lead),err=U.angDiff(a,s.heading);
-   cmd.steer=clamp(err*2.0-s.angVel*.55,-1,1);
-   // Match an approaching threat's velocity as well as its distance.
-   const pursuit=(close||laser)?e.vx*Math.cos(s.heading)+e.vy*Math.sin(s.heading):0;
-   const desired=compact?clamp((d-keep)*1.5+pursuit,-8,6):clamp((d-keep)*1.5,-5,5);
-   const vf=s.vx*Math.cos(s.heading)+s.vy*Math.sin(s.heading);
-   cmd.throttle=Math.abs(err)<1.1?clamp((desired-vf)*.35,-1,1):0;
-   cmd.brake=Math.abs(d-keep)<1?0.6:0;
-   combat=true;
+function safe(state, api, cmd) {
+  const s = state.self, nav = api.nav;
+  const blast = api.util.threat(state);
+  if (blast && blast.in < 1.5) Object.assign(cmd, api.util.driveTo(s, blast.away, { reverse: true }));
+  if (s.hovering) return cmd;
+  const f = Math.cos(s.heading), g = Math.sin(s.heading);
+  const harmful = (x, y) => { const t = nav.tileAt(x, y); return t === 'pit' || t === 'lava'; };
+  if (!harmful(s.x, s.y)) {
+    for (const k of [0.25, 0.55, 0.85]) {
+      if (harmful(s.x + s.vx * k, s.y + s.vy * k)) {
+        cmd.throttle = s.vx * f + s.vy * g > 0 ? -1 : 1;
+        cmd.brake = 1;
+        return cmd;
+      }
+    }
+    const sign = Math.sign(cmd.throttle || 0);
+    if (sign) for (const d of [0.7, 1.4, 2.3]) for (const w of [-0.45, 0, 0.45]) {
+      if (harmful(s.x + sign * f * d - g * w, s.y + sign * g * d + f * w)) {
+        cmd.throttle = 0;
+        cmd.brake = 0.5;
+        return cmd;
+      }
+    }
   }
-  if(s.item)cmd.useItem=s.item.type==='emp'?d<7:s.item.type==='mine'&&d<7;
- }
- for(const i of state.items){const r=U.dist(s,i);if((i.type==='repair'&&s.hpFrac<.7&&r<13)||(!e&&r<8)){goal=i;combat=false;break;}}
- const zd=U.dist(s,state.zone);
- if(zd>state.zone.r-4){const k=Math.max(0,state.zone.r-7)/zd;goal={x:state.zone.x+(s.x-state.zone.x)*k,y:state.zone.y+(s.y-state.zone.y)*k};combat=false;}
- if(!combat){const wp=route.next(s,goal.x,goal.y,state.tick);Object.assign(cmd,U.driveTo(s,wp,{stopDist:.6}));}
- // Emergency braking considers both current drift and commanded acceleration.
- const hazard=(x,y)=>{const t=N.tileAt(x,y);return t==='pit'||t==='lava';};
- const hx=Math.cos(s.heading),hy=Math.sin(s.heading);
- if(!s.hovering&&!hazard(s.x,s.y)){
-  for(const t of [.2,.4,.65])if(hazard(s.x+s.vx*t,s.y+s.vy*t)){cmd.brake=1;cmd.throttle=s.vx*hx+s.vy*hy>0?-1:1;return cmd;}
-  const dir=Math.sign(cmd.throttle||0);
-  if(dir&&!N.clear(s.x,s.y,s.x+hx*dir*2,s.y+hy*dir*2,{margin:.6,avoid:['lava']})){
-   if(combat){cmd.throttle=0;cmd.brake=1;}
+  return cmd;
+}
+function tick(state, api) {
+  const s = state.self, U = api.util, nav = api.nav;
+  route ??= nav.follower({ mudCost: 1.5, iceCost: 1.8, lavaCost: 120 });
+  const cmd = { throttle: 0, steer: 0, brake: 0, fire: false, repair: s.energy > 45 };
+  let foe = null, score = Infinity;
+  for (const e of state.enemies) {
+    const d = U.dist(s, e);
+    const q = d + (e.id === targetId ? -3 : 0) + e.coreFrac * 3 + (nav.los(s.x, s.y, e.x, e.y) ? 0 : 6);
+    if (q < score) { score = q; foe = e; }
   }
+  targetId = foe ? foe.id : -1;
+  if (foe && state.allies.length) {
+    const leader = state.allies.every(a => !a.alive || a.slot > s.slot);
+    if (leader) cmd.say = { focus: foe.id };
+    else {
+      const m = state.messages.find(m => m.data && m.data.focus !== undefined);
+      const pick = m && state.enemies.find(e => e.id === m.data.focus);
+      if (pick && U.dist(s, pick) < 22) foe = pick;
+    }
+  }
+  let goal = foe;
+  if (!goal) {
+    let best = Infinity;
+    for (const l of state.lastSeen) if (l.alive && U.dist(s, l) < best) { best = U.dist(s, l); goal = l; }
+    goal ??= api.map.center;
+  }
+  const z = state.zone, zd = U.dist(s, z);
+  const out = zd > z.r - (z.shrinking ? 6 : 3.5);
+  if (out) {
+    const k = Math.max(0, z.r * 0.45) / (zd || 1);
+    goal = { x: z.x + (s.x - z.x) * k, y: z.y + (s.y - z.y) * k };
+  }
+  let d = Infinity, los = false;
+  if (foe) {
+    d = U.dist(s, foe);
+    los = nav.los(s.x, s.y, foe.x, foe.y);
+    const mark = foe.parts.find(p => p.type === "core" && p.alive) || foe;
+    const tx = mark.wx ?? mark.x, ty = mark.wy ?? mark.y;
+    const vx = foe.vx || 0, vy = foe.vy || 0;
+    let tt = Math.hypot(tx - s.x, ty - s.y) / 28;
+    const ox = tx - foe.x, oy = ty - foe.y, w = foe.angVel || 0;
+    let aim = { x: tx, y: ty };
+    for (let i = 0; i < 2; i++) {
+      const a = w * tt, c = Math.cos(a), n = Math.sin(a);
+      aim = { x: foe.x + vx * tt + ox * c - oy * n, y: foe.y + vy * tt + ox * n + oy * c };
+      tt = Math.hypot(aim.x - s.x, aim.y - s.y) / 28;
+    }
+    cmd.aim = aim;
+    cmd.fire=[];cmd.aims={};
+    const shell = shellAim(foe,api);
+    for(const w of s.weapons)if(w.alive){
+      if(w.type==='mortar'){
+        const target={x:shell.x,y:shell.y,vx:foe.vx,vy:foe.vy};
+        cmd.aims[w.i]=U.lead(s,target,15);
+        if(d>6&&d<24.5)cmd.fire.push(w.i);
+      }else {cmd.aims[w.i]=U.lead(s,{x:tx,y:ty,vx,vy},w.projSpeed||28);if(los&&d<w.range+foe.radius)cmd.fire.push(w.i);}
+    }
+    cmd.target = foe.id;
+    if (s.item && (s.item.type === 'emp' && d < 7 || s.item.type === 'mine' && d < 5)) cmd.useItem = true;
+    if (goal === foe && d < 26) {
+      const pr = rangeOf(foe);
+      let hold = foe.parts.some(p=>p.alive && p.type==='laser') ? 14 : 10;
+      if (pr.close) hold = 11;
+      if (pr.bomb) hold = 11.5;
+      if (pr.mortar && !pr.close) hold = 12;
+      // The light loadout has no mortar; stay inside the reach of its surviving guns.
+      const reach = Math.max(0, ...s.weapons.filter(w => w.alive).map(w => w.range));
+      if (reach) hold = Math.min(hold, reach - 1);
+      const bearing = U.angleTo(s, foe), away = bearing + PI;
+      const err = diff(away, s.heading);
+      cmd.steer = clamp(err * 2.5 - s.angVel * 0.35, -1, 1);
+      const ux = (foe.x - s.x) / (d || 1), uy = (foe.y - s.y) / (d || 1);
+      const closing = (foe.vx - s.vx) * -ux + (foe.vy - s.vy) * -uy;
+      cmd.throttle = clamp((hold + Math.max(0, closing) * 0.35 - d) * 0.5, -1, 1);
+      if (Math.abs(err) > 1.1) cmd.throttle = clamp(cmd.throttle, -0.25, 0.4);
+      if (Math.abs(cmd.throttle) < 0.12) cmd.brake = 0.7;
+      // If retreat is blocked, present the tail and hold position rather than rush a blade.
+      if (cmd.throttle > 0) {
+        const x = s.x + Math.cos(s.heading) * 3, y = s.y + Math.sin(s.heading) * 3;
+        if (!nav.isOpen(x, y) || nav.tileAt(x, y) === 'lava') { cmd.throttle = 0; cmd.brake = 0.8; }
+      }
+      const blocked=!nav.clear(s.x,s.y,s.x+Math.cos(s.heading)*4,s.y+Math.sin(s.heading)*4,{margin:.7,avoid:['lava']});
+      if(escapeUntil<state.t&&blocked&&d<hold+1){
+        const a=U.angleTo(foe,s);let score=-Infinity;escapePoint=null;
+        for(const offset of [0,.5,-.5,1,-1,1.5,-1.5,2,-2,2.6,-2.6]){
+          const x=s.x+Math.cos(a+offset)*5,y=s.y+Math.sin(a+offset)*5;
+          if(!nav.clear(s.x,s.y,x,y,{margin:.7,avoid:['lava']}))continue;
+          const q=Math.hypot(x-foe.x,y-foe.y)-Math.max(0,Math.hypot(x-z.x,y-z.y)-z.r+4)*4-.1*Math.abs(offset);
+          if(q>score){score=q;escapePoint={x,y};}
+        }
+        if(escapePoint)escapeUntil=state.t+1.3;
+      }
+      if(state.t<escapeUntil&&escapePoint)Object.assign(cmd,U.driveTo(s,escapePoint,{stopDist:.5}));
+      return safe(state, api, cmd);
+    }
+  }
+  // Collect useful supplies on the route, especially repairs when wounded.
+  let ib = Infinity, item = null;
+  for (const i of state.items) {
+    const q = U.dist(s, i);
+    const cap = i.type === 'repair' && s.hpFrac < 0.65 ? 22 : 6;
+    if (q < cap && q < ib) { ib = q; item = i; }
+  }
+  if (item && !out && (!foe || d > 13 || item.type === 'repair')) goal = item;
+  const wp = route.next(s, goal.x, goal.y, state.tick);
+  Object.assign(cmd, U.driveTo(s, wp));
+  if (state.t - jamStart > 1.2) {
+    if (Math.hypot(s.x - jamX, s.y - jamY) < 0.5 && Math.abs(cmd.throttle) > 0.5) unstuckUntil = state.t + 0.8;
+    jamStart = state.t; jamX = s.x; jamY = s.y;
+  }
+  if (state.t < unstuckUntil) { cmd.throttle = -1; cmd.steer = 1; }
+  return safe(state, api, cmd);
+}
+
+
+function shellAim(e,api){
+ const cells=new Map(),all=e.parts.filter(p=>p.alive);
+ for(const p of all){const def=api.parts[p.type];if(def.decor)continue;const a=def.size;const[w,h]=(p.dir==='E'||p.dir==='W')?[a[1],a[0]]:a;
+ for(let i=0;i<w;i++)for(let j=0;j<h;j++){const k=(p.x+i)+','+(p.y+j),dx=(i-(w-1)/2)*.4,dy=(j-(h-1)/2)*.4;const prev=cells.get(k);if(!prev||p.z>prev.p.z)cells.set(k,{p,x:p.wx+Math.sin(e.heading)*dx+Math.cos(e.heading)*dy,y:p.wy-Math.cos(e.heading)*dx+Math.sin(e.heading)*dy});}}
+ let best={x:e.x,y:e.y},bs=-1;
+ const values={core:6,mortar:2,laser:2,cannon:2,mg:1.3,railgun:2,reactor:1.6,shieldgen:1.5,repairer:1.4,hover:1.5,bigwheel:1,wheel:1,track:1,keg:2};
+ const points=[...cells.values()];
+ for(const q of points){let score=0;const hit=new Set();
+ for(const c of points.map(c=>({c,d:Math.hypot(c.x-q.x,c.y-q.y)})).filter(x=>x.d<2).sort((a,b)=>a.d-b.d)){
+ if(hit.has(c.c.p.i))continue;hit.add(c.c.p.i);if(hit.size>7)break;
+ const p=c.c.p;score+=(values[p.type]||.12)*Math.min(1,46*(1-.65*c.d/2)/Math.max(1,p.hpFrac*api.parts[p.type].hp));
  }
- const threat=U.threat(state,.8);
- if(threat&&threat.in<1.1&&N.clear(s.x,s.y,threat.away.x,threat.away.y,{margin:.8,avoid:['lava']}))Object.assign(cmd,U.driveTo(s,threat.away,{reverse:true}));
- return cmd;
+ if(score>bs){bs=score;best=q;}}
+ return best;
 }

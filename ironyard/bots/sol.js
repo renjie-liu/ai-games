@@ -1,55 +1,51 @@
+// v3 was iterated through Ironyard MCP; model records original authorship, editor records this revision.
 const meta = {
-  name: 'Afterburner',
-  author: 'gpt-6-sol',
-  model: 'gpt-6-sol',
-  revision: 'v2',
-  editor: 'Codex',
-  notes: 'Rear-facing battery with an armored chassis firing lane, smaller independent floor supports and longer spacing against lasers.',
+  name: 'Sol — Sunshield', author: 'gpt-6-sol', model: 'gpt-6-sol', revision: 'v3', editor: 'Codex',
+  notes: 'Two mortars and two rear guns behind a shield; sustained fire, component-aware shell placement, blast evasion and persistent escape routes.',
 };
 
-const design = (ctx, api) => {
-  const budget = ctx.budget;
-  const p = [];
-  const add = (type, x, y, z, dir) => p.push({ type, x, y, z, ...(dir ? { dir } : {}) });
-  // The back of the vehicle is the gun side. Deck wedges take the first hits.
-  for (const y of [-3, -1]) for (const x of [-3, -1, 1]) {
-    if (x === -1 && (y === -1||y === -3)) continue;
-    add('plate4', x, y, 0);
+// Compact, independent floor strips keep one lost support from dropping the whole battery.
+// The guns face astern; forward drive opens distance without waiting for the hull to turn.
+const STANDARD_PARTS = [
+  {type: "bigwheel",x: -3,y: -2,z: 0,dir: "S"},
+  {type: "bigwheel",x: -3,y: 0,z: 0,dir: "S"},
+  {type: "bigwheel",x: 3,y: -2,z: 0,dir: "S"},
+  {type: "bigwheel",x: 3,y: 0,z: 0,dir: "S"},
+  {type: "plate2",x: -2,y: -2,z: 0,dir: "E"},
+  {type: "plate2",x: 1,y: -2,z: 0,dir: "E"},
+  {type: "plate2",x: -2,y: -1,z: 0,dir: "E"},
+  {type: "plate2",x: 1,y: -1,z: 0,dir: "E"},
+  {type: "plate2",x: -2,y: 0,z: 0,dir: "E"},
+  {type: "plate2",x: 1,y: 0,z: 0,dir: "E"},
+  {type: "plate",x: 0,y: -2,z: 0,dir: "S"},
+  {type: "armor",x: 0,y: -1,z: 0,dir: "S"},
+  {type: "core",x: 0,y: 0,z: 0,dir: "S"},
+  {type: "reactor",x: -1,y: 1,z: 0,dir: "S"},
+  {type: "reactor",x: 1,y: 1,z: 0,dir: "S"},
+  {type: "mortar",x: -2,y: 0,z: 1,dir: "S"},
+  {type: "mortar",x: 1,y: 0,z: 1,dir: "S"},
+  {type: "mg",x: -2,y: -1,z: 1,dir: "S"},
+  {type: "mg",x: 2,y: -1,z: 1,dir: "S"},
+  {type: "slope",x: -2,y: -2,z: 1,dir: "S"},
+  {type: "slope",x: -1,y: -2,z: 1,dir: "S"},
+  {type: "slope",x: 0,y: -2,z: 1,dir: "S"},
+  {type: "slope",x: 1,y: -2,z: 1,dir: "S"},
+  {type: "slope",x: 2,y: -2,z: 1,dir: "S"},
+  {type: "shieldgen",x: 0,y: 0,z: 1,dir: "S"}
+];
+function design(ctx) {
+  let parts = STANDARD_PARTS.map(p => ({...p}));
+  if (ctx.budget < 1200) {
+    parts = parts.filter(p => p.type !== 'mortar' && p.type !== 'shieldgen' && !(p.type === 'reactor' && p.x === 1));
+    parts.push({type:'mg',x:0,y:-1,z:1,dir:'S'}, {type:'armor',x:0,y:0,z:1});
+  } else if (ctx.budget >= 1800) {
+    parts.push({type:'mg',x:0,y:-1,z:1,dir:'S'}, {type:'plate',x:0,y:1,z:0},
+      {type:'repairer',x:0,y:1,z:1}, {type:'reactor',x:0,y:2,z:0}, {type:'armor',x:0,y:2,z:1});
   }
-  for (const [x, y] of [[-1,-3],[0,-3],[-1,-2],[-1, -1], [0, -1], [-1, 0]]) add('plate', x, y, 0);
-  add('core', 0, 0, 0);
-  // Light class retains a floor under the centre wedge; standard/heavy use armor here.
-  if (budget < 1200) add('plate', 0, -2, 0);
-  for (const x of [-4, 3]) for (const y of [-2, 0]) add('bigwheel', x, y, 0);
-  if (budget >= 1200) {
-    for (let x = -2; x <= 3; x++) add('slope', x, -2, 1, 'S');
-    for (let x = -2; x <= 3; x++) add('mg', x, -1, 1, 'S');
-    for (const x of [-2, -1, 1]) add('reactor', x, 0, 1);
-    // Protect the incoming fire lane on the chassis before a shot reaches the cockpit.
-    add('armor', 0, -2, 0);
-    add('plate', 0, 0, 1);
-  } else {
-    for (const x of [-2, 0, 2]) add('slope', x, -2, 1, 'S');
-    for (const x of [-2, -1, 0, 1]) add('mg', x, -1, 1, 'S');
-    add('reactor', -2, 0, 1);
-    add('plate', 0, 0, 1);
-  }
-  if (budget >= 1500) {
-    add('mg', -3, -1, 1, 'S');
-    add('slope', -3, -2, 1, 'S');
-    add('reactor', -3, 0, 1);
-    add('reactor', 3, 0, 1);
-    add('shieldgen', 2, 0, 1);
-    for (const x of [-1, 1]) add('plate4', x, 1, 0);
-    add('armor', 0, 1, 1);
-    add('armor', -1, 1, 1);
-    add('armor', 1, 1, 1);
-    add('repairer', 0, 2, 1);
-  }
-  return { name: 'Afterburner', paint: { accent: 'pink' }, parts: p };
-};
+  return {name:'Sol — Sunshield', paint:{accent:'pink'}, parts};
+}
 
-let route = null;
+let route=null,escapePoint=null,escapeUntil=-1;
 let targetId = -1;
 let jamStart = 0, jamX = 0, jamY = 0, unstuckUntil = 0;
 const PI = Math.PI;
@@ -95,7 +91,7 @@ function safe(state, api, cmd) {
 function tick(state, api) {
   const s = state.self, U = api.util, nav = api.nav;
   route ??= nav.follower({ mudCost: 1.5, iceCost: 1.8, lavaCost: 120 });
-  const cmd = { throttle: 0, steer: 0, brake: 0, fire: false };
+  const cmd = { throttle: 0, steer: 0, brake: 0, fire: false, repair: s.energy > 45 };
   let foe = null, score = Infinity;
   for (const e of state.enemies) {
     const d = U.dist(s, e);
@@ -140,15 +136,26 @@ function tick(state, api) {
       tt = Math.hypot(aim.x - s.x, aim.y - s.y) / 28;
     }
     cmd.aim = aim;
-    cmd.fire = los && d < 13.5 + foe.radius;
+    cmd.fire=[];cmd.aims={};
+    const shell = shellAim(foe,api);
+    for(const w of s.weapons)if(w.alive){
+      if(w.type==='mortar'){
+        const target={x:shell.x,y:shell.y,vx:foe.vx,vy:foe.vy};
+        cmd.aims[w.i]=U.lead(s,target,15);
+        if(d>6&&d<24.5)cmd.fire.push(w.i);
+      }else {cmd.aims[w.i]=aim;if(los&&d<w.range+foe.radius)cmd.fire.push(w.i);}
+    }
     cmd.target = foe.id;
     if (s.item && (s.item.type === 'emp' && d < 7 || s.item.type === 'mine' && d < 5)) cmd.useItem = true;
-    if (goal === foe && los && d < 17) {
+    if (goal === foe && d < 26) {
       const pr = rangeOf(foe);
-      let hold = foe.parts.some(p=>p.alive && p.type==='laser') ? 12 : 8;
+      let hold = foe.parts.some(p=>p.alive && p.type==='laser') ? 14 : 10;
       if (pr.close) hold = 11;
       if (pr.bomb) hold = 11.5;
-      if (pr.mortar && !pr.close) hold = 5.5;
+      if (pr.mortar && !pr.close) hold = 12;
+      // The light loadout has no mortar; stay inside the reach of its surviving guns.
+      const reach = Math.max(0, ...s.weapons.filter(w => w.alive).map(w => w.range));
+      if (reach) hold = Math.min(hold, reach - 1);
       const bearing = U.angleTo(s, foe), away = bearing + PI;
       const err = diff(away, s.heading);
       cmd.steer = clamp(err * 2.5 - s.angVel * 0.35, -1, 1);
@@ -162,6 +169,19 @@ function tick(state, api) {
         const x = s.x + Math.cos(s.heading) * 3, y = s.y + Math.sin(s.heading) * 3;
         if (!nav.isOpen(x, y) || nav.tileAt(x, y) === 'lava') { cmd.throttle = 0; cmd.brake = 0.8; }
       }
+
+      const blocked=!nav.clear(s.x,s.y,s.x+Math.cos(s.heading)*4,s.y+Math.sin(s.heading)*4,{margin:.7,avoid:['lava']});
+      if(escapeUntil<state.t&&blocked&&d<hold+1){
+        const a=U.angleTo(foe,s);let score=-Infinity;escapePoint=null;
+        for(const offset of [0,.5,-.5,1,-1,1.5,-1.5,2,-2,2.6,-2.6]){
+          const x=s.x+Math.cos(a+offset)*5,y=s.y+Math.sin(a+offset)*5;
+          if(!nav.clear(s.x,s.y,x,y,{margin:.7,avoid:['lava']}))continue;
+          const q=Math.hypot(x-foe.x,y-foe.y)-Math.max(0,Math.hypot(x-z.x,y-z.y)-z.r+4)*4-.1*Math.abs(offset);
+          if(q>score){score=q;escapePoint={x,y};}
+        }
+        if(escapePoint)escapeUntil=state.t+1.3;
+      }
+      if(state.t<escapeUntil&&escapePoint)Object.assign(cmd,U.driveTo(s,escapePoint,{stopDist:.5}));
       return safe(state, api, cmd);
     }
   }
@@ -181,4 +201,21 @@ function tick(state, api) {
   }
   if (state.t < unstuckUntil) { cmd.throttle = -1; cmd.steer = 1; }
   return safe(state, api, cmd);
+}
+
+
+function shellAim(e,api){
+ const cells=new Map(),all=e.parts.filter(p=>p.alive);
+ for(const p of all){const def=api.parts[p.type];if(def.decor)continue;const a=def.size;const[w,h]=(p.dir==='E'||p.dir==='W')?[a[1],a[0]]:a;
+ for(let i=0;i<w;i++)for(let j=0;j<h;j++){const k=(p.x+i)+','+(p.y+j),dx=(i-(w-1)/2)*.4,dy=(j-(h-1)/2)*.4;const prev=cells.get(k);if(!prev||p.z>prev.p.z)cells.set(k,{p,x:p.wx+Math.sin(e.heading)*dx+Math.cos(e.heading)*dy,y:p.wy-Math.cos(e.heading)*dx+Math.sin(e.heading)*dy});}}
+ let best={x:e.x,y:e.y},bs=-1;
+ const values={core:6,mortar:2,laser:2,cannon:2,mg:1.3,railgun:2,reactor:1.6,shieldgen:1.5,repairer:1.4,hover:1.5,bigwheel:1,wheel:1,track:1,keg:2};
+ const points=[...cells.values()];
+ for(const q of points){let score=0;const hit=new Set();
+ for(const c of points.map(c=>({c,d:Math.hypot(c.x-q.x,c.y-q.y)})).filter(x=>x.d<2).sort((a,b)=>a.d-b.d)){
+ if(hit.has(c.c.p.i))continue;hit.add(c.c.p.i);if(hit.size>7)break;
+ const p=c.c.p;score+=(values[p.type]||.12)*Math.min(1,46*(1-.65*c.d/2)/Math.max(1,p.hpFrac*api.parts[p.type].hp));
+ }
+ if(score>bs){bs=score;best=q;}}
+ return best;
 }
