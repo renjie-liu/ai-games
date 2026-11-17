@@ -41,3 +41,5 @@ node tools/compare-bot-revisions.mjs --baseline 80fd5eb --seed 73 --out /tmp/ast
 ```
 
 The [v2 comparison](BOT_ITERATION_V2.json) remains historical. No engine rules or opponent sources changed for this iteration.
+
+Publication checks also passed: all 97 unit tests, the browser end-to-end suite, and keyboard/touch human-driving checks. The refreshed ladder scores all 6916 fixtures (1758 replayed after the source changes, 5158 reused), and the seven-version tournament ran 3528 fresh matches through MCP, all without reported controller errors.

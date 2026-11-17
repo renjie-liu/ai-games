@@ -199,9 +199,9 @@ node tools/compare-bot-revisions.mjs --baseline 09f0b90 --seed 29 --out /tmp/bot
 
 Human driving uses the same engine in a separate browser worker and never contributes results to this AI ladder.
 
-## Current season: `quillback` reworked on 0.6.0
+## Season with `quillback` reworked on 0.6.0
 
-Verified again on **2026-11-17 (Asia/Shanghai)** at [`413aea5`](https://github.com/renjie-liu/ai-games/commit/413aea518c08696c44bf9a6a6590e0812633c608): all **6916 matches** were replayed from an empty cache, with **zero reported controller errors**. The complete saved snapshot — ranks, displayed ratings, win/draw/loss records and author tables — was reproduced exactly, and the bundled website contains that same snapshot. All 97 unit tests passed. The separate **3528-match seven-version tournament** was also rerun on all fourteen maps, seeds 1 and 2, from both sides, with no errors or unscored games. See [both ranking overviews and head-to-head tables](../TOURNAMENT.md), [raw tournament results and source hashes](tournaments/seven-models-2026-11-17.json), and [the combined CSV](tournaments/rankings-2026-11-17.csv).
+Verified again on **2026-11-17 (Asia/Shanghai)** at [`413aea5`](https://github.com/renjie-liu/ai-games/commit/413aea518c08696c44bf9a6a6590e0812633c608): all **6916 matches** were replayed from an empty cache, with **zero reported controller errors**. The complete saved snapshot — ranks, displayed ratings, win/draw/loss records and author tables — was reproduced exactly, and the website built for that revision contains the same snapshot. All 97 unit tests passed. The separate **3528-match seven-version tournament** was also rerun on all fourteen maps, seeds 1 and 2, from both sides, with no errors or unscored games. See [that run's ranking overviews and head-to-head tables](https://github.com/renjie-liu/ai-games/blob/80fd5eb03be3bc332207454b90bb9bd031c16e3a/ironyard/TOURNAMENT.md), [raw tournament results and source hashes](tournaments/seven-models-2026-11-17.json), and [the combined CSV](tournaments/rankings-2026-11-17.csv).
 
 `quillback`'s author reworked it through the MCP server alone, as `grindstone`'s had before it: scouting the entries that beat it, replaying its most one-sided losses, reading the telemetry. The ladder matches it plays in were played again on top of the season above; every other result is as there (the engine's results were checked to be identical match for match, before and after the match engine was restructured for human driving).
 
@@ -226,3 +226,25 @@ What the replays showed: against `grindstone` the car spent its time at 4 to 8 m
 - `quillback` was tuned last, against all the others as they stood. Astra and Sol's v2 revisions were made without a mortar car in the field, and the other four entries have not been touched on 0.6.0 at all, `grindstone` apart.
 
 So the fair reading is: on this engine, a mortar car that shoots well beats everything that was written before mortars were worth carrying. The next round of any other entry is likely to change that.
+
+## Current season: Astra and Sol v3 through MCP
+
+Engine rules and the other 18 sources are unchanged. Astra now carries two cannons and two mortars; Sol carries two mortars, two rear machine guns and a shield. Both use component-aware shell placement and commit to a clear escape route when their retreat is blocked. These are Codex edits to the existing submissions, with their original generation-model attribution retained. The [MCP iteration report](MCP_ITERATION_V3.md) describes the measured failures, builds and validation.
+
+The MCP `leaderboard` calls completed all **6916 fixtures**, with **zero reported controller errors**. Source hashes invalidated **1758** affected fixtures; the other **5158** results were reused from the fully replayed season above. The table shows actual ranks among all 20 bots.
+
+| Entry | 1v1 | 2v2 | 3v3 |
+|---|---:|---:|---:|
+| Fable | 1 | 2 | 1 |
+| Sol | 2 | 1 | 2 |
+| Astra | 3 | 3 | 3 |
+| Opus | 4 | 6 | 6 |
+| Carbon | 5 | 5 | 4 |
+| Hydrogen | 6 | 8 | 10 |
+| Muse | 7 | 4 | 5 |
+
+Sol moves from **5 / 4 / 3** to **2 / 1 / 2**. Astra moves from **4 / 2 / 2** to **3 / 3 / 3**: its team ranks fall one place because Sol passes it, although Astra's displayed team ratings rise from 1729 to 1781 and from 1754 to 1856. The solo gap between Fable (2055) and Sol (2051) is small.
+
+The independent seed-73 comparison held the six opposing sources at `80fd5eb`, rather than updating both cars at once. Over 504 fixtures per revision, Astra improved from **243 to 417 wins**, and Sol from **249 to 423**; every mode improved. All 2016 paired-validation matches completed without errors. See [the MCP responses and source hashes](BOT_ITERATION_V3.json).
+
+The separate same-version-team competition is in [TOURNAMENT.md](../TOURNAMENT.md), with the current sources installed together. Its points and opponents differ from this mixed-team ladder and from the fixed-field revision comparison.
