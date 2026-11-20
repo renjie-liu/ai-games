@@ -769,7 +769,7 @@ const EPISODES = [
           : ({ verify: { aside: '你要的鉴定，到了。' },
                wait: { aside: '你一直没接话，是在等这扇门被推开。' },
                son: { aside: '周子豪刚才的反应，不是没有原因。' } }[s.doc] || null) },
-      { clip: 'm_forge', flip: { t: 6.8, clock: ['鉴定完成', '签名是伪造的'] } },
+      { clip: 'm_forge', flip: { t: 12.2, clock: ['鉴定完成', '签名是伪造的'] } },
       { beat: () => ({ type: 'report', title: '笔迹鉴定意见书', rows: [['检材', '三亿元转让书（存档件）'], ['转出方签名', '非本人书写'], ['执笔人', '周子豪']], stamp: '鉴定专用' }) },
       { clip: 's5', clock: ['鉴定完成', '签名是伪造的'] },
       { clip: 'm_last', choice: 'c', late: true },
@@ -834,8 +834,9 @@ const EPISODES = [
       b_all:    { who: '女董事', text: '周董，您名下百分之六十七的股权，今天早上已经完成过户了。', t0: 0.4, t1: 5.2 },
       b_vote:   { who: '周振国', text: '连你……连你也举手？', t0: 4.8, t1: 7.8 },
       b_ask:    { who: '周子豪', text: '不是我！是爸让我签的！', t0: 2.8, t1: 5.2 },
-      m_forge:  [{ who: '林特助', text: '打扰各位。笔迹鉴定的结果，出来了。', t0: 5.4, t1: 8.6 },
-                 { who: '林特助', text: '执笔的人，是周子豪。', t0: 9.4, t1: 12.1 }],
+      // her second sentence (9.5-12.0 s) is left without a subtitle: loudness alone cannot tell which
+      // of the two scripted lines was spoken, and the report card after the clip states the finding
+      m_forge:  { who: '林特助', text: '打扰各位。笔迹鉴定的结果，出来了。', t0: 5.4, t1: 8.6 },
       s5:       { who: '周振国', text: '完了……周家，全完了。', t0: 1.4, t1: 5.5 },
       m_last:   [{ who: '周振国', text: '呵……你以为，是我要你父亲垮？', t0: 1.7, t1: 4.8 },
                  { who: '周振国', text: '那三个亿，我只过了一道手。', t0: 7.1, t1: 10.1 },
