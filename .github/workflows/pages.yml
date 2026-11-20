@@ -29,10 +29,13 @@ jobs:
 
       - name: Put the site together
         run: |
-          mkdir -p _site/ironyard
-          cp site/index.html site/ironyard.jpg _site/
+          mkdir -p _site/ironyard _site/tonight-i-pay
+          cp site/index.html site/ironyard.jpg site/tonight-i-pay.jpg _site/
           # the game is one self-contained file, already built and tested in the repository
           cp ironyard/dist/index.html _site/ironyard/index.html
+          # the drama is one page, its cover, and the clips it plays
+          cp tonight-i-pay/index.html tonight-i-pay/cover.jpg _site/tonight-i-pay/
+          cp -r tonight-i-pay/clips _site/tonight-i-pay/clips
           touch _site/.nojekyll
 
       - uses: actions/configure-pages@v6
