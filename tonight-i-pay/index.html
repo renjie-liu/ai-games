@@ -119,6 +119,19 @@ button, input { font: inherit; color: inherit; }
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
 }
 .topline strong { font-weight: 600; margin-right: 8px; }
+.tools { display: flex; align-items: center; }
+.speed {
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid rgba(247, 240, 230, 0.55);
+  border-radius: 14px;
+  background: rgba(22, 4, 8, 0.45);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.speed:focus-visible { outline: 2px solid var(--gold-hot); outline-offset: 2px; }
 .mute {
   width: 40px; height: 40px;
   display: grid; place-items: center;
@@ -515,6 +528,8 @@ button, input { font: inherit; color: inherit; }
   cursor: pointer;
 }
 .ghost:hover { border-color: var(--gold-hot); }
+.jump { display: flex; gap: 8px; }
+.jump .ghost { flex: 1; }
 .teaser { margin: 14px 0 0; font-size: 13px; color: rgba(247, 240, 230, 0.6); }
 .teaser:empty { display: none; }
 
@@ -543,6 +558,8 @@ button, input { font: inherit; color: inherit; }
     <div class="bars" id="bars" aria-hidden="true"></div>
     <div class="topline">
       <span><strong>今晚，我买单</strong><span id="ep-no">第 1 集</span></span>
+      <span class="tools">
+      <button class="speed" id="speed" type="button" aria-label="播放速度">1.2×</button>
       <button class="mute" id="mute" type="button" aria-label="静音" aria-pressed="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>
@@ -550,6 +567,7 @@ button, input { font: inherit; color: inherit; }
           <path class="off" d="M17 9l5 6M22 9l-5 6"/>
         </svg>
       </button>
+      </span>
     </div>
 
     <div class="clock" id="clock" hidden><b id="clock-time"></b><span id="clock-label"></span></div>
@@ -590,22 +608,25 @@ button, input { font: inherit; color: inherit; }
 
     <div class="cover" id="cover">
       <h2>今晚，<br>我买单</h2>
-      <p class="ep">第 1 集 订婚宴 · 约 4 分半</p>
+      <p class="ep">第 1 集 订婚宴 · 约 3 分半</p>
       <p class="logline">三年前，周家把你扫地出门。今晚他们还不知道，站在门口的人是谁。</p>
       <label class="name">他们该怎么称呼你？
         <input id="surname" type="text" maxlength="2" placeholder="陆" autocomplete="off" aria-label="你的姓">
         <b>董</b>
       </label>
       <button class="start" id="start" type="button" disabled>正在检查镜头</button>
-      <button class="ghost" id="skip" type="button">直接看第 2 集</button>
+      <div class="jump" id="jump">
+        <button class="ghost" type="button" data-ep="1">看第 2 集</button>
+        <button class="ghost" type="button" data-ep="2">看第 3 集</button>
+      </div>
       <p class="problem" id="problem" hidden></p>
     </div>
   </section>
 
   <aside class="notes">
-    <p>互动短剧试玩版，两集，每集四分钟左右。镜头就是你。</p>
-    <p>左上角是剧情里的进度：第 1 集是时间，八点整酒店交割；第 2 集是那份转让书的笔迹鉴定。结果出来之前，你只能先忍着。</p>
-    <p>每次选择限时几秒，不选就按第一个来。键盘按 1、2、3 也能选。</p>
+    <p>互动短剧试玩版，三集，每集三分半左右。镜头就是你。</p>
+    <p>左上角是剧情里的进度：第 1 集是时间，八点整酒店交割；第 2 集是转让书的笔迹鉴定；第 3 集是那份协议原件的下落。</p>
+    <p>每次选择限时几秒，不选就按第一个来。键盘按 1、2、3 也能选。右上角可以换播放速度。</p>
     <p class="fine">原创剧情，画面和声音由 Seedance 2.5 生成，字幕是后加的。</p>
   </aside>
 </main>
@@ -737,16 +758,16 @@ const EPISODES = [
     },
     notes: {
       n_lobby: [{ t0: 14.4, t1: 18.2, text: '交割文件到公证处了。八点之前，您在这栋楼里还只是客人。' }],
-      c1:      [{ t0: 0.3, t1: 2.7, text: '顺带一提：今晚这场宴席，周家挂的是周氏在云顶的账。' }],
-      n_toast: [{ t0: 0.4, t1: 4.0, text: '台上那位是白行长的女儿白薇。周氏现在全靠白行长的贷款续命。' },
+      c1:      [{ t0: 0.3, t1: 4.2, text: '顺带一提：今晚这场宴席，周家挂的是周氏在云顶的账。' }],
+      n_toast: [{ t0: 0.4, t1: 5.6, text: '台上那位是白行长的女儿白薇。周氏现在全靠白行长的贷款续命。' },
                 { t0: 19.3, t1: 20.4, text: '他刚才那几句话，我录下来了。' }],
       c2:      [{ t0: 5.0, t1: 7.4, text: '交割完成。云顶酒店，现在是您的了。' }],
-      c3:      [{ t0: 0.3, t1: 3.0, text: s => ({ sit: '门口那把椅子，我让人撤了。', stand: '您站了一刻钟。现在该他们站着了。', main: '主桌正中那把椅子，本来就是给您留的。' })[s.seat] }],
+      c3:      [{ t0: 0.3, t1: 3.8, text: s => ({ sit: '门口那把椅子，我让人撤了。', stand: '您站了一刻钟。现在该他们站着了。', main: '主桌正中那把椅子，本来就是给您留的。' })[s.seat] }],
     },
   },
   {
     n: 2, name: '周家的账本',
-    teaser: '第 3 集还没有做，试玩版到这里。',
+    teaser: '下一集：白家的茶。',
     flow: [
       { act: '清晨' },
       { card: ['昨晚，云顶酒店换了主人。', '今早九点，周氏董事会。'] },
@@ -850,8 +871,114 @@ const EPISODES = [
       cliff2:   { who: '黑衣女人', text: '三年不见，手段还是这么狠。当年赶你出门的，可不止周家。', t0: 1.0, t1: 6.0 },
     },
     notes: {
-      s2:     [{ t0: 0.2, t1: 2.6, text: '鉴定结果还没出来。三个亿的事，他不会认。' }],
+      s2:     [{ t0: 0.2, t1: 3.6, text: '鉴定结果还没出来。三个亿的事，他不会认。' }],
       m_deny: [{ t0: 15.9, t1: 18.4, text: '他手里那份和存档件是同一个签名。鉴定还要一会儿。' }],
+    },
+  },
+  {
+    n: 3, name: '白家的茶',
+    teaser: '第 4 集还没有做，试玩版到这里。',
+    flow: [
+      { act: '长廊' },
+      { card: ['周氏，一个上午就拿下了。', '可那三个亿，只在周家账上停了一天。', '而你的父亲，破产那年就病倒了，三年没开过口。'] },
+      { clip: 'k_meet', choice: 'face', late: true },
+      { card: ['你记得她。', '三年前，她常出入你父亲的书房。'] },
+      { clip: 'k_flash3', clock: ['三年前', '回忆'] },
+      // what you chose at the end of episode 2 decides how the invitation finds you
+      { beat: s => ({ type: 'msg', who: '白行长', text: '今晚七点，寒舍备了薄茶，小女薇薇也在。盼' + honorific() + '赏光。',
+          aside: { dig: '你让林特助去查那个户头。才查到一半，请柬先到了。', tea: '你说过要去喝这杯茶。请柬来得正好。', hold: '你没有动。他们果然自己找上门了。' }[s.prev.next] || '请柬来得比你预想的快。' }) },
+      { card: ['当晚，白家门外。'] },
+      { clip: 'k_brief', clock: ['协议原件', '下落不明'] },
+      { card: ['她叫白芷。', '白行长的长女，白薇的姐姐。'] },
+      { act: '茶局' },
+      { clip: 'k_gate', choice: 'sister', late: true },
+      { card: ['茶室里，只点了一盏灯。'] },
+      { clip: 'k_tea1', choice: 'cup', late: true },
+      { clip: 'k_offer', choice: 'deal', late: true },
+      { clip: 'k_turn', flip: { t: 16.0, clock: ['协议原件', '就在你手边'] }, choice: 'paper', late: true },
+      { beat: () => ({ type: 'report', title: '代管协议 · 原件', rows: [['约定', '三亿元由周氏代管，查清后全数归还'], ['附：批条', '划三亿至周氏，事成销户'], ['批条落款', '白行长亲笔']], stamp: '原件' }) },
+      { clip: 'k_fall', clock: ['协议原件', '到手'] },
+      { beat: () => ({ aside: '冻结周氏的账户，从来不是帮你。那是灭口。' }) },
+      { act: '尾声' },
+      { card: ['三年前她拟那份协议时，以为钱三个月就回来。', '后来她父亲的批条下来，说的是“处理一笔坏账”。'] },
+      { card: ['你走到院子里。姐妹俩跟了出来。'] },
+      { clip: 'k_why' },
+      { card: ['你带着原件，走出了白家。'] },
+      { clip: 'k_cliff3' },
+    ],
+    choices: {
+      face: { question: '她从你身边走了过去。', opts: [
+        { key: 'stop', label: '拦住她：把话说完', title: '当场拦人', scene: { say: '把话说完再走。', aside: '她没有停步：“今晚，你自己会听到。”' } },
+        { key: 'name', label: '问她：替谁做事？', title: '问她替谁做事', scene: { say: '你现在，替谁做事？', aside: '她头也没回：“今晚之前，替我父亲。”' } },
+        { key: 'let',  label: '让她走',           title: '放她走', scene: { type: 'dots', glyphs: ['…', '…', '…'], aside: '你没有回头。高跟鞋的声音越走越远。' } },
+      ]},
+      sister: { question: '她让你别提三年前。', opts: [
+        { key: 'ask',    label: '问她：你有个姐姐？', title: '问起姐姐', scene: { say: '你是不是有个姐姐？', aside: '她愣了一下：“你怎么知道？她三年没回过家了。”' } },
+        { key: 'ok',     label: '答应她',             title: '一口答应', scene: { say: '好，不提。', aside: '她松了口气，在前面带路。' } },
+        { key: 'silent', label: '不答话，往里走',     title: '不置可否', scene: { type: 'dots', glyphs: ['…', '…', '…'], aside: '你没有答应，也没有拒绝。' } },
+      ]},
+      cup: { question: '他把茶推到你面前。', headline: true, opts: [
+        { key: 'drink', label: '喝了',     clip: 'k_c_drink', title: '一饮而尽', scene: { say: '好茶。', aside: '你端起来，喝了。' } },
+        { key: 'leave', label: '不碰',     clip: 'k_c_leave', title: '滴茶不沾', scene: { type: 'dots', glyphs: ['…', '…', '…'], aside: '那杯茶，你没有碰。' } },
+        { key: 'pour',  label: '把茶倒了', clip: 'k_c_pour',  title: '当面泼茶', scene: { say: '这杯茶，我喝不起。', aside: '你把它倒进了茶盘。' } },
+      ]},
+      deal: { question: '五十亿，换你闭嘴。', opts: [
+        { key: 'agree', label: '先答应，稳住他',     title: '假意应承', scene: { say: '白行长的条件，我可以考虑。', aside: '他点了点头，像在看一个终于懂事的晚辈。' } },
+        { key: 'why',   label: '问：我父亲不懂什么', title: '追问父亲', scene: { say: '我父亲不懂的，是什么道理？', aside: '他笑了笑：“有些钱，不是他该问去向的。”' } },
+        { key: 'call',  label: '点破：户头是你批的', title: '当面点破', scene: { say: '那个被抹掉名字的户头，审批人是您。', aside: '他端茶的手，停了一下。' } },
+      ]},
+      paper: { question: '原件就在你手边。', headline: true, opts: [
+        { key: 'take',   label: '拿起来',       clip: 'k_p_take',   title: '原件入手', scene: { say: '这份东西，我带走了。' } },
+        { key: 'weiwei', label: '让白薇先看',   clip: 'k_p_weiwei', title: '交给白薇', scene: { say: '白薇，你自己看。' } },
+        { key: 'read',   label: '让白芷念出来', clip: 'k_p_read',   title: '当众宣读', scene: { say: '念。让他自己听听。' } },
+      ]},
+    },
+    lines: {
+      k_meet:    [{ who: '黑衣女人', text: '不认识我了？三年前，你父亲公司的账，是我做的。', t0: 0.5, t1: 5.7 },
+                  { who: '黑衣女人', text: '那三个亿，是我亲手划出去的。', t0: 7.2, t1: 9.8 },
+                  { who: '黑衣女人', text: '想知道是谁让我划的？今晚有人请你喝茶。', t0: 12.0, t1: 15.9 },
+                  { who: '黑衣女人', text: '去了，你就见到了。', t0: 16.6, t1: 18.4 }],
+      k_flash3:  [{ who: '三年前的她', text: '董事长，代管协议我拟好了。钱只是换个地方，放三个月。', t0: 0.5, t1: 5.3 },
+                  { who: '父亲', text: '这些年，账交给你，我放心。', t0: 6.5, t1: 8.4 },
+                  { who: '三年前的她', text: '……您在这里签字。', t0: 10.6, t1: 12.0 }],
+      k_brief:   [{ who: '林特助', text: '查到了。那个户头的经办人，是白行长的长女。', t0: 1.1, t1: 5.4 },
+                  { who: '林特助', text: '三年前，她是令尊公司的财务总监。', t0: 6.9, t1: 10.1 },
+                  { who: '林特助', text: '可经办记录定不了白行长。能定他的，只有当年那份代管协议的原件。', t0: 12.6, t1: 19.4 }],
+      k_gate:    [{ who: '白薇', text: '你来了。我爸在茶室等你。', t0: 1.4, t1: 3.9 },
+                  { who: '白薇', text: '那天晚上……谢谢你，让我看清了周子豪。', t0: 6.0, t1: 10.0 },
+                  { who: '白薇', text: '对了，在我爸面前，别提三年前。他不爱听。', t0: 12.3, t1: 16.1 }],
+      k_tea1:    [{ who: '白行长', text: '来，坐。尝尝，今年的头春茶。', t0: 0.9, t1: 5.0 },
+                  { who: '白行长', text: '周家的事，我替你收了个尾。年轻人做事，痛快。', t0: 6.9, t1: 12.1 },
+                  { who: '白行长', text: '只是有些旧账，翻得太深，对谁都不好。', t0: 14.9, t1: 19.4 }],
+      k_c_drink: { who: '白行长', text: '好。懂规矩的年轻人，不多了。', t0: 0.5, t1: 4.2 },
+      k_c_leave: { who: '白行长', text: '不合口味？无妨。茶凉了，可以再换。', t0: 4.4, t1: 8.8 },
+      k_c_pour:  [{ who: '白薇', text: '你……', t0: 0.9, t1: 1.9 }, { who: '白行长', text: '有脾气。像你父亲。', t0: 5.1, t1: 7.7 }],
+      k_offer:   [{ who: '白行长', text: '白氏银行给云顶授信五十亿。条件只有一个，三个亿的事，到周振国为止。', t0: 0.3, t1: 8.1 },
+                  { who: '白薇',   text: '爸，什么三个亿？', t0: 9.9, t1: 10.9 },
+                  { who: '白行长', text: '薇薇，添水。', t0: 11.4, t1: 13.0 },
+                  { who: '白行长', text: '你父亲当年，就是不懂这个道理。', t0: 15.7, t1: 19.5 }],
+      k_turn:    [{ who: '白行长', text: '东西带来了？', t0: 2.4, t1: 4.0 },
+                  { who: '白芷',   text: '带来了。代管协议的原件，还有您当年亲笔写的批条。', t0: 4.6, t1: 9.1 },
+                  { who: '白薇',   text: '姐？', t0: 9.9, t1: 10.6 },
+                  { who: '白芷',   text: '三年了，爸。我不想再替您保管了。', t0: 12.4, t1: 15.8 }],
+      k_p_take:  [{ who: '白行长', text: '拿了它，你今晚走不出这个院子。', t0: 0.4, t1: 3.9 },
+                  { who: '白芷',   text: '走得出。车是我叫的。', t0: 5.0, t1: 7.4 }],
+      k_p_weiwei: { who: '白薇', text: '爸……这上面，是你的签名。', t0: 5.6, t1: 7.8 },
+      k_p_read:  [{ who: '白芷', text: '划三亿至周氏，事成销户。', t0: 1.1, t1: 4.1 },
+                  { who: '白芷', text: '爸，这是您的亲笔。', t0: 5.9, t1: 7.0 }],
+      k_fall:    [{ who: '白行长', text: '不错。你父亲的公司，是我要的。周振国，不过是我手里的一把刀。', t0: 0.3, t1: 7.7 },
+                  { who: '白行长', text: '可一张纸，动不了白氏银行。', t0: 8.7, t1: 11.8 },
+                  { who: '白行长', text: '茶凉了，送客。', t0: 13.1, t1: 15.0 }],
+      k_why:     [{ who: '白薇', text: '姐，你早就知道？', t0: 0.4, t1: 2.4 },
+                  { who: '白芷', text: '批条是我亲手接的。那时候我以为，只是一笔坏账。', t0: 3.1, t1: 7.4 },
+                  { who: '白芷', text: '等我看懂，已经晚了。', t0: 7.9, t1: 9.7 },
+                  { who: '白芷', text: '原件我留了三年，就等一个敢来喝这杯茶的人。', t0: 12.1, t1: 16.0 }],
+      k_cliff3:  [{ who: '林特助', text: '董事长，白氏银行刚发了函，云顶的并购贷款，要提前收回。', t0: 1.4, t1: 6.1 },
+                  { who: '林特助', text: '还有，疗养院来电话了。令尊醒了。', t0: 7.5, t1: 10.7 },
+                  { who: '林特助', text: '他开口的第一句话是，别动白家。', t0: 13.2, t1: 17.0 }],
+    },
+    notes: {
+      k_tea1: [{ t0: 18.2, t1: 20.6, text: '我在门外。原件如果在这栋宅子里，今晚是唯一的机会。' }],
     },
   },
 ];
@@ -873,7 +1000,21 @@ EPISODES.forEach(ep => {
     ...ep.asked.flatMap(a => a.choice.opts.map(o => o.clip).filter(Boolean))])];
 });
 
-const CHOICE_MS = 6000;
+const CHOICE_MS = 5000;
+const SPEEDS = [1, 1.2, 1.5];
+let speed = 1.2;                       // clips, narration and beats all run at this pace
+try { const saved = +localStorage.getItem('shuang-speed'); if (SPEEDS.includes(saved)) speed = saved; } catch (e) { /* default pace */ }
+/* Where each clip is cut in and out, in its own seconds. Only dead air is cut: a lead-in before
+   the first line, or a tail after the last one. Clips not listed play whole. */
+const CUTS = {
+  c2: { in: 1.8 }, p_call: { in: 0.8 }, p_card: { in: 0.6 }, p_silent: { in: 1.0 }, d1: { in: 0.8 },
+  q_lawyer: { in: 1.0 }, n_ring: { in: 1.6 }, e_leave: { in: 0.6 }, cliff1: { in: 1.2 },
+  a2_sit: { in: 1.5, out: 9.2 }, a2_stand: { in: 1.2, out: 9.2 }, a2_main: { out: 9.0 },
+  s1: { in: 0.6 }, s3: { in: 0.8 }, a_stand: { in: 0.8 }, a_ledger: { in: 1.0 }, b_vote: { in: 0.8 }, b_ask: { in: 1.0 },
+  f_move: { in: 0.8 }, f_dish: { in: 1.2 }, m_son: { in: 1.0 }, m_forge: { in: 2.2, out: 15.0 }, m_trail: { in: 1.4 },
+  k_turn: { in: 1.0 }, k_c_drink: { out: 7.6 }, k_c_leave: { in: 1.5 }, k_c_pour: { out: 9.0 },
+  k_p_take: { out: 8.8 }, k_p_weiwei: { in: 1.5, out: 9.2 }, k_fall: { out: 16.6 },
+};
 const STORE_KEY = 'shuang-v3';
 const $ = id => document.getElementById(id);
 const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -886,8 +1027,8 @@ const honorific = () => ($('surname').value.trim() || '陆') + '董';
 function readStore() {
   try {
     const s = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
-    return { tried: s.tried || {}, last: s.last || {} };
-  } catch (e) { return { tried: {}, last: {} }; }
+    return { tried: s.tried || {}, last: s.last || {}, picks: s.picks || {} };
+  } catch (e) { return { tried: {}, last: {}, picks: {} }; }
 }
 function writeStore(s) {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch (e) { /* private window: the tally just resets */ }
@@ -979,9 +1120,15 @@ function playClip(id, o = {}) {
     current = (current + 1) % 2;
     const busy = on => { $('loading').hidden = !on; };
     const slow = setTimeout(() => busy(true), 450);   // only a slow connection ever shows this
-    if (o.tail) { await metadata(next); next.currentTime = Math.max(0, next.duration - o.tail); }
-    else if (next.currentTime) next.currentTime = 0;
+    const cut = CUTS[id] || {}, lines = LINES[id] || [], notes = NOTES[id] || [];
+    await metadata(next);
+    const end = Math.min(cut.out || Infinity, next.duration), from = cut.in || 0;
+    // a choice is asked as soon as the last line is over, not when the picture runs out
+    const askAt = lines.length ? Math.min(end, Math.max(...lines.map(l => l.t1)) + 0.3) : end - 1;
+    next.currentTime = o.tail ? Math.max(from, askAt - o.tail) : from;
+    next.playbackRate = speed;
     try { await next.play(); } catch (e) { /* a blocked play() still shows the first frame */ }
+    next.playbackRate = speed;
     clearTimeout(slow);
     busy(false);
     next.classList.add('on');
@@ -989,7 +1136,6 @@ function playClip(id, o = {}) {
     if (o.upNext) prime(o.upNext);
     if (o.clock) setClock(o.clock, o.deal);
 
-    const lines = LINES[id] || [], notes = NOTES[id] || [];
     let asked = false, finished = false, flipped = false;
     const finish = value => {
       if (finished) return;
@@ -1005,17 +1151,18 @@ function playClip(id, o = {}) {
     };
     const tick = () => {
       if (finished) return;      // finish() can run inside this very callback; never schedule another frame after it
-      const t = next.currentTime, d = next.duration || 1;
-      if (o.bar) o.bar(t / d);
+      const t = next.currentTime;
+      if (o.bar) o.bar((t - from) / (end - from));
       showSub(lines.find(l => t >= l.t0 && t <= l.t1));
       const note = notes.find(n => t >= n.t0 && t <= n.t1);
       showNote(note ? (typeof note.text === 'function' ? note.text(o.state || {}) : note.text) : null);
       if (o.flip && !flipped && t >= o.flip.t) { flipped = true; setClock(o.flip.clock, o.deal, true); }
-      if (o.choice && !asked && (next.ended || (!o.late && d - t <= 1))) {
+      if (o.choice && !asked && (next.ended || t >= askAt)) {
         asked = true;
         if (o.preset) { finish(o.preset); return; }
         ask(o.choice).then(finish);
       }
+      if (!o.choice && t >= end) { finish(); return; }   // cut out before a silent tail
       raf = requestAnimationFrame(tick);
     };
     next.onended = () => { if (!o.choice) finish(); };
@@ -1116,14 +1263,14 @@ async function scene(spec) {
     for (let i = 0; i < 17; i++) wave.append(el('i'));
     tape.append(wave, el('p', 'label', spec.label), el('p', 'quote', spec.quote));
     box.append(tape);
-    hold = 3000;
+    hold = 2800;
   } else if (spec.type === 'report') {
     const doc = el('div', 'report');
     doc.append(el('h3', '', spec.title));
     spec.rows.forEach(([k, v]) => { const row = el('p'); row.append(el('small', '', k), v); doc.append(row); });
     doc.append(el('span', 'stamp', spec.stamp));
     box.append(doc);
-    hold = 3400;
+    hold = 3200;
   } else if (spec.type === 'msg') {
     const msg = el('div', 'msg');
     msg.append(el('p', 'who', spec.who), el('p', 'text', spec.text));
@@ -1134,7 +1281,7 @@ async function scene(spec) {
   if (spec.big) box.append(el('p', 'big', spec.big));
   if (spec.aside) box.append(asideLine(spec.aside));
   const words = (spec.say || '') + (spec.big || '') + (spec.aside || '');
-  hold = Math.max(hold, 900 + 70 * words.length);   // longer lines get longer to be read
+  hold = Math.max(hold, 800 + 60 * words.length) / speed;   // longer lines get longer to be read
   box.classList.add('on');
   await wait(hold);
   box.classList.remove('on');
@@ -1147,9 +1294,9 @@ async function card(lines) {
   box.classList.add('on');
   for (const text of lines) {
     words.append(el('p', '', text));
-    await wait(1000 + 75 * text.length);
+    await wait((850 + 60 * text.length) / speed);
   }
-  await wait(300);
+  await wait(250);
   box.classList.remove('on');
 }
 // Opens a later episode: its name, and what you did in the one before.
@@ -1159,7 +1306,7 @@ async function titleCard(ep) {
   box.append(youSay(ep.name, '第 ' + ep.n + ' 集'));
   if (last) box.append(asideLine('上一集：' + last.join('，') + '。'));
   box.classList.add('on');
-  await wait(last ? 2600 : 1800);
+  await wait((last ? 2400 : 1600) / speed);
   box.classList.remove('on');
 }
 async function reportMissing(ep, missing) {
@@ -1174,13 +1321,17 @@ async function reportMissing(ep, missing) {
 /* ----- an episode. `o.from` starts at that step of the spine; `o.preset` answers that step's
    choice without asking (used to try another option straight from the ending); `o.state` and
    `o.picks` carry what was chosen before that step. ----- */
+let running = false;   // one episode at a time: a second click on a start button is ignored
 async function run(index, o = {}) {
+  if (running) return;
+  running = true;
   const ep = EPISODES[index], from = o.from || 0;
   const state = Object.assign({}, o.state), picks = Object.assign({}, o.picks);
+  state.prev = readStore().picks[ep.n - 1] || {};   // the previous episode's picks; empty when it was skipped
   $('finale').hidden = true;
   $('cover').hidden = true;
   const missing = await findMissing(ep);
-  if (missing.length) { await reportMissing(ep, missing); $('cover').hidden = false; return; }
+  if (missing.length) { await reportMissing(ep, missing); $('cover').hidden = false; running = false; return; }
   $('ep-no').textContent = '第 ' + ep.n + ' 集';
   buildBars(ep.acts.length);
   setClock(null);
@@ -1206,7 +1357,7 @@ async function run(index, o = {}) {
     const preset = i === from ? o.preset : null;
     const pick = await playClip(step.clip, {
       bar, state, choice, preset, clock: step.clock, flip: step.flip, late: step.late, deal: ep.deal,
-      tail: preset ? 4 : 0, upNext: step.branch ? null : upNext,
+      tail: preset ? 3.5 : 0, upNext: step.branch ? null : upNext,
     });
     unit++;
     if (!choice) continue;
@@ -1217,6 +1368,7 @@ async function run(index, o = {}) {
     if (pick.clip) { await playClip(pick.clip, { bar, state, upNext }); unit++; }
   }
   setBar(act, 1);
+  running = false;
   ending(index, picks);
 }
 
@@ -1227,6 +1379,7 @@ function ending(index, picks) {
   const headline = ep.asked.filter(a => a.choice.headline && picks[a.id]).map(a => picks[a.id].title);
   store.tried[ep.n] = [...tried];
   store.last[ep.n] = headline;
+  store.picks[ep.n] = Object.fromEntries(ep.asked.filter(a => picks[a.id]).map(a => [a.id, picks[a.id].key]));
   writeStore(store);
 
   $('fin-to').textContent = honorific() + '，第 ' + ep.n + ' 集你的打法：';
@@ -1272,11 +1425,19 @@ function ending(index, picks) {
 }
 
 $('start').addEventListener('click', () => run(0));
-$('skip').addEventListener('click', () => run(1));
+$('jump').addEventListener('click', e => { const b = e.target.closest('button'); if (b) run(+b.dataset.ep); });
 const resume = () => { const v = videos[current]; if (v && v.paused && !v.ended) v.play().catch(() => {}); };
 $('resume').addEventListener('click', resume);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') resume(); });
 $('surname').addEventListener('keydown', e => { if (e.key === 'Enter' && !$('start').disabled) $('start').click(); });
+const showSpeed = () => { $('speed').textContent = speed + '×'; };
+showSpeed();
+$('speed').addEventListener('click', () => {
+  speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
+  showSpeed();
+  videos.forEach(v => { v.playbackRate = speed; });
+  try { localStorage.setItem('shuang-speed', String(speed)); } catch (e) { /* not remembered in a private window */ }
+});
 $('mute').addEventListener('click', () => {
   const muted = $('mute').getAttribute('aria-pressed') !== 'true';
   $('mute').setAttribute('aria-pressed', String(muted));
