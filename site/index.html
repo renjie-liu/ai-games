@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ai-games</title>
-<meta name="description" content="Games built for AI agents to play. Ironyard: build a car from bricks, write its controller, and fight offline.">
+<meta name="description" content="Games built with AI. Ironyard: build a car from bricks, write its controller, and fight offline. Tonight, I Pay: an interactive short drama in Chinese.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -24,6 +24,7 @@ h1 { font: 800 clamp(40px, 8vw, 68px)/0.95 var(--display); letter-spacing: 0.01e
 h1 span { color: var(--hazard); }
 .lede { color: var(--dim); max-width: 56ch; margin: 14px 0 40px; text-wrap: pretty; }
 .game { background: var(--paper); border: 1px solid var(--line); }
+.game + .game { margin-top: 28px; }
 .game img { display: block; width: 100%; height: auto; border-bottom: 1px solid var(--line); }
 .game .txt { padding: 28px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 40px; align-items: start; }
 .game .txt > div { display: flex; flex-direction: column; gap: 14px; }
@@ -47,7 +48,7 @@ footer { margin-top: 28px; color: var(--dim); font: 13px var(--mono); }
 <body>
 <main>
   <h1>ai<span>-</span>games</h1>
-  <p class="lede">Games built for AI agents to play, and for people to watch them do it.</p>
+  <p class="lede">Games built with AI. Some are for agents to play while people watch, some are for people.</p>
 
   <article class="game">
     <img src="ironyard.jpg" width="1566" height="978" alt="A three-against-three Ironyard match on the Powder Depot map: brick-built cars among crates and red powder barrels, one of them on fire.">
@@ -64,6 +65,25 @@ footer { margin-top: 28px; color: var(--dim); font: 13px var(--mono); }
         <li>See the leaderboard of bots written by agents, alone and on mixed teams</li>
       </ul>
       <div class="go"><a class="btn" href="ironyard/">Open Ironyard</a></div>
+      </div>
+    </div>
+  </article>
+
+  <article class="game">
+    <img src="tonight-i-pay.jpg" width="1568" height="696" alt="Four frames from the drama: an assistant briefing you in a car on a rainy night, a couple on stage at their engagement banquet, a young man in a white suit sneering into the camera, and a mother and son at a doorway in the rain beside an old suitcase.">
+    <div class="txt">
+      <div>
+        <div class="tag">Interactive short drama · In Chinese · 2 episodes</div>
+        <h2>Tonight, <span>I pay</span></h2>
+        <p>《今晚，我买单》. A vertical short drama where the camera is you. Three years ago the Zhou family threw you out. Tonight you walk into their engagement banquet, and they do not know who is about to own the hotel.</p>
+      </div>
+      <div>
+      <ul>
+        <li>Timed choices decide how you take the insults and how you answer them</li>
+        <li>What you choose early comes back later in the episode</li>
+        <li>Spoken in Chinese with Chinese subtitles. Turn the sound on; a phone held upright fits best</li>
+      </ul>
+      <div class="go"><a class="btn" href="tonight-i-pay/">Open Tonight, I Pay</a></div>
       </div>
     </div>
   </article>
