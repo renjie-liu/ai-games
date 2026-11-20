@@ -203,6 +203,20 @@ button, input { font: inherit; color: inherit; }
 .note .who { margin: 0 0 1px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: rgba(26, 5, 8, 0.62); }
 .note .text { margin: 0; font-size: 14.5px; line-height: 1.5; font-weight: 600; }
 
+.loading {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 6;
+  margin: 0;
+  padding: 9px 18px;
+  border-radius: 20px;
+  background: rgba(22, 4, 8, 0.78);
+  border: 1px solid rgba(230, 194, 122, 0.4);
+  font-size: 14px;
+  color: var(--pearl);
+}
+
 /* shown only when something outside the page paused the clip (a call, a hidden tab) */
 .resume {
   position: absolute;
@@ -394,6 +408,12 @@ button, input { font: inherit; color: inherit; }
 .tape .label { margin: 0; font-size: 13px; letter-spacing: 0.2em; color: var(--gold); }
 .tape .quote { margin: 0; max-width: 15em; text-align: center; font-size: 19px; line-height: 1.6; font-weight: 600; }
 
+.report { position: relative; width: min(290px, 76vw); padding: 20px 20px 26px; border-radius: 4px; background: var(--pearl); color: var(--ink); box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6); animation: slam 0.42s cubic-bezier(0.2, 1.4, 0.3, 1) both; }
+.report h3 { margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid rgba(26, 5, 8, 0.25); text-align: center; font-family: var(--display); font-weight: 400; font-size: 24px; letter-spacing: 0.12em; }
+.report p { margin: 10px 0 0; font-size: 17px; font-weight: 700; line-height: 1.4; }
+.report small { display: block; font-size: 12px; font-weight: 600; letter-spacing: 0.1em; color: rgba(26, 5, 8, 0.6); }
+.report .stamp { position: absolute; right: 14px; bottom: 12px; padding: 6px 8px; border: 2px solid #b3261e; border-radius: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.2em; color: #b3261e; transform: rotate(-12deg); opacity: 0.85; }
+
 .msg { width: min(280px, 74vw); padding: 12px 14px 13px; border-radius: 18px; background: rgba(247, 240, 230, 0.96); color: var(--ink); animation: rise 0.35s ease both; }
 .msg .who { margin: 0 0 3px; font-size: 12px; font-weight: 700; color: rgba(26, 5, 8, 0.6); }
 .msg .text { margin: 0; font-size: 16px; line-height: 1.55; font-weight: 600; }
@@ -505,7 +525,7 @@ button, input { font: inherit; color: inherit; }
 }
 @media (prefers-reduced-motion: reduce) {
   .choice, .scene, .opt, .sub, .note, .clock { transition: none; }
-  .ring::before, .ring::after, .card, .dots i, .words p, .big, .msg, .tape .wave i { animation: none; opacity: 1; }
+  .ring::before, .ring::after, .card, .dots i, .words p, .big, .msg, .report, .tape .wave i { animation: none; opacity: 1; }
 }
 </style>
 </head>
@@ -546,6 +566,8 @@ button, input { font: inherit; color: inherit; }
       <p class="hint">不动手的话，时间一到就按第一个来。</p>
     </form>
 
+    <p class="loading" id="loading" role="status" hidden>加载中…</p>
+
     <button class="resume" id="resume" type="button" hidden>
       <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
       点一下继续
@@ -575,15 +597,15 @@ button, input { font: inherit; color: inherit; }
         <b>董</b>
       </label>
       <button class="start" id="start" type="button" disabled>正在检查镜头</button>
-      <button class="ghost" id="skip" type="button">直接看第 2 集（上一版短剪辑）</button>
+      <button class="ghost" id="skip" type="button">直接看第 2 集</button>
       <p class="problem" id="problem" hidden></p>
     </div>
   </section>
 
   <aside class="notes">
-    <p>互动短剧试玩版。镜头就是你。第 1 集是加长版，约 4 分半：先交代你是谁、为什么来，再进订婚宴。</p>
-    <p>左上角是剧情里的时间。八点整酒店交割，在那之前你只是客人。</p>
-    <p>每次选择限时几秒，不选就按第一个来。键盘按 1、2、3 也能选。第 2 集暂时还是上一版的短剪辑。</p>
+    <p>互动短剧试玩版，两集，每集四分钟左右。镜头就是你。</p>
+    <p>左上角是剧情里的进度：第 1 集是时间，八点整酒店交割；第 2 集是那份转让书的笔迹鉴定。结果出来之前，你只能先忍着。</p>
+    <p>每次选择限时几秒，不选就按第一个来。键盘按 1、2、3 也能选。</p>
     <p class="fine">原创剧情，画面和声音由 Seedance 2.5 生成，字幕是后加的。</p>
   </aside>
 </main>
@@ -600,7 +622,7 @@ button, input { font: inherit; color: inherit; }
 const EPISODES = [
   {
     n: 1, name: '订婚宴', deal: '20:00',
-    teaser: '第 2 集暂时还是上一版的 1 分钟短剪辑。',
+    teaser: '下一集：周氏董事会。',
     flow: [
       { act: '归来' },
       { card: ['三年前，周家当众退婚，把你赶出了门。', '今晚，是周子豪的订婚宴。', '也是你回来的日子。'] },
@@ -725,42 +747,112 @@ const EPISODES = [
   {
     n: 2, name: '周家的账本',
     teaser: '第 3 集还没有做，试玩版到这里。',
-    flow: [{ act: '董事会' }, { clip: 's1' }, { clip: 's2', choice: 'a' }, { clip: 's3' }, { clip: 's4', choice: 'b' }, { clip: 's5', choice: 'c' }, { clip: 'cliff2' }],
+    flow: [
+      { act: '清晨' },
+      { card: ['昨晚，云顶酒店换了主人。', '今早九点，周氏董事会。'] },
+      { clip: 'm_brief', clock: ['鉴定中', '转让书上的签名'] },
+      { beat: () => ({ type: 'msg', who: '白行长', text: honorific() + '，昨晚的事薇薇都告诉我了。周氏的账户，我今天上午就冻结。算白家的一点心意。', aside: '你没有回。' }) },
+      { card: ['三年前的一个晚上，', '你在书房门外，听到过一段话。'] },
+      { clip: 'm_flash2', clock: ['三年前', '回忆'] },
+      { card: ['那时候你没听懂。', '说好的“代管”，后来在纸上成了“转让”。'] },
+      { clip: 'm_son', clock: ['鉴定中', '转让书上的签名'], choice: 'son', late: true },
+      { act: '董事会' },
+      { card: ['二十八层，董事会。'] },
+      { clip: 's1' },
+      { clip: 's2', choice: 'a' },
+      { clip: 's3' },
+      { beat: () => ({ say: '三年前那三个亿。说好的，是代管。' }) },
+      { clip: 'm_deny', choice: 'doc', late: true },
+      { clip: 's4', choice: 'b' },
+      { beat: s => s.b === 'ask'
+          ? { aside: '他自己说出来了。现在，只差白纸黑字。' }
+          : ({ verify: { aside: '你要的鉴定，到了。' },
+               wait: { aside: '你一直没接话，是在等这扇门被推开。' },
+               son: { aside: '周子豪刚才的反应，不是没有原因。' } }[s.doc] || null) },
+      { clip: 'm_forge', flip: { t: 12.2, clock: ['鉴定完成', '签名是伪造的'] } },
+      { beat: () => ({ type: 'report', title: '笔迹鉴定意见书', rows: [['检材', '三亿元转让书（存档件）'], ['转出方签名', '非本人书写'], ['执笔人', '周子豪']], stamp: '鉴定专用' }) },
+      { clip: 's5', clock: ['鉴定完成', '签名是伪造的'] },
+      { clip: 'm_last', choice: 'c', late: true },
+      { act: '尾声' },
+      { card: ['散会了。', '你走出会议室，在玻璃长廊里站了一会儿。'] },
+      { clip: 'm_trail', choice: 'next', late: true },
+      { card: ['林特助回了会议室。', '你转过身。长廊尽头，站着一个人。'] },
+      { clip: 'cliff2' },
+    ],
     choices: {
+      son: { question: '他把电梯让了出来。', opts: [
+        { key: 'walk',  label: '走进电梯，不回头', title: '头也不回', scene: { aside: '你从他身边走过去，按下了二十八层。' } },
+        { key: 'ask',   label: '问他：你怕什么？', title: '问他怕什么', scene: { say: '你到底在怕什么？', aside: '他没有回答。' } },
+        { key: 'bring', label: '让他一起上去',     title: '带他上楼', scene: { say: '一起上去。有些话，你也该听听。' } },
+      ]},
       a: { question: '他数三声，你呢？', headline: true, opts: [
         { key: 'stand',  label: '让董事们起立', clip: 'a_stand',  title: '全员起立', scene: { say: '各位，该给谁让座，心里有数吧。' } },
         { key: 'ledger', label: '把账本拍桌上', clip: 'a_ledger', title: '账本上桌', scene: { say: '周家三年的账，都在这里。' } },
         { key: 'count',  label: '让他数完',     clip: 'a_count',  title: '任他数完', scene: { type: 'dots', glyphs: ['一', '二', '…'], aside: '你没动，让他数。' } },
       ]},
+      doc: { question: '他说，是你父亲亲笔签的。', opts: [
+        { key: 'verify', label: '要求验笔迹',         title: '当场验笔迹', scene: { say: '签名是真是假，验一验就知道。', aside: '周振国握着手杖的手，紧了一下。' } },
+        { key: 'wait',   label: '不说话，看他演',     title: '静观其变', scene: { type: 'dots', glyphs: ['…', '…', '…'], aside: '你没有接话。会议室安静得能听见手杖点地的声音。' } },
+        { key: 'son',    label: '问周子豪见没见过',   title: '转问周子豪', scene: s => ({ say: '周子豪，这份文件，你见过吗？', aside: s.son === 'ask' ? '他又没有回答。和在楼下时一样。' : '他的手抖了一下。' }) },
+      ]},
       b: { question: '他开价三成，怎么回？', headline: true, opts: [
         { key: 'all',  label: '我要全部',   clip: 'b_all',  title: '全盘接手', scene: { say: '三成？我要的是全部。' } },
         { key: 'vote', label: '让董事表决', clip: 'b_vote', title: '当场表决', scene: { say: '那就表决吧。' } },
-        { key: 'ask',  label: '问他一句话', clip: 'b_ask',  title: '一问诛心', scene: { say: '三年前那份合同，是谁签的字？' } },
+        { key: 'ask',  label: '问他一句话', clip: 'b_ask',  title: '一问诛心', scene: { say: '转让书上我父亲的名字，到底是谁签的？' } },
       ]},
       c: { question: '怎么发落？', headline: true, opts: [
         { key: 'move',  label: '三天内搬走',   clip: 'f_move',  title: '限期搬离', scene: { say: '三天之内，搬出这栋楼。' } },
         { key: 'dish',  label: '让他去洗盘子', clip: 'f_dish',  title: '发配后厨', scene: { say: '周子豪，明天起去酒店后厨洗盘子。' } },
         { key: 'audit', label: '账本交审计',   clip: 'f_audit', title: '移交审计', scene: { say: '账本交给审计组，一笔一笔查。' } },
       ]},
+      next: { question: '白氏银行那个户头？', opts: [
+        { key: 'dig',  label: '现在就查',         title: '顺藤摸瓜', scene: { say: '查。查到是谁为止。' } },
+        { key: 'tea',  label: '去喝白行长那杯茶', title: '登门喝茶', scene: { say: '替我回白行长：那杯茶，我去喝。' } },
+        { key: 'hold', label: '先不动，等他们来', title: '按兵不动', scene: { say: '不急。该来的，自己会来。' } },
+      ]},
     },
     lines: {
+      m_brief:  [{ who: '林特助', text: '董事长，账本和流水都齐了。周氏，您今天就能拿下。', t0: 0.5, t1: 5.6 },
+                 { who: '林特助', text: '可那三个亿的转让书上，有两个签名。收款的是周振国，转出的，是令尊。', t0: 6.6, t1: 13.6 },
+                 { who: '林特助', text: '令尊那个签名，我送去验笔迹了。结果出来之前，他不会认。', t0: 14.6, t1: 20.1 }],
+      m_flash2: [{ who: '周振国', text: '亲家，这阵子风头紧。那笔钱，先放我这儿。', t0: 0.4, t1: 5.6 },
+                 { who: '周振国', text: '等查完了，一分不少，还你。', t0: 6.7, t1: 9.2 },
+                 { who: '父亲',   text: '……老周，我信你。', t0: 12.0, t1: 14.4 }],
+      m_son:    [{ who: '周子豪', text: '你……你还真敢来。', t0: 2.4, t1: 3.5 },
+                 { who: '周子豪', text: '昨晚算我瞎了眼。你要多少，开个价，我给。', t0: 5.0, t1: 8.6 },
+                 { who: '周子豪', text: '别上去。我爸他……什么都做得出来。', t0: 11.0, t1: 15.5 }],
       s1:       { who: '周振国', text: '年轻人，买下一家酒店，就敢来我周氏的董事会撒野？', t0: 1.8, t1: 7.1 },
       s2:       { who: '周振国', text: '这张桌子，三年前没你的位置，今天也没有。我数三声，自己出去。', t0: 2.8, t1: 7.8 },
       a_ledger: { who: '周子豪', text: '爸，这……这本账怎么会在这里！', t0: 4.6, t1: 6.2 },
       a_stand:  { who: '全体董事', text: '董事长早！', t0: 2.6, t1: 4.6 },
       a_count:  [{ who: '周振国', text: '一。二。', t0: 0.6, t1: 3.0 }, { who: '周子豪', text: '爸，银行把我们的账户全冻结了。', t0: 4.4, t1: 6.6 }],
       s3:       { who: '周振国', text: '你……你到底想怎么样？', t0: 2.0, t1: 4.9 },
+      m_deny:   [{ who: '周振国', text: '三个亿？那是你父亲亲笔签了字，转给周氏的。', t0: 1.1, t1: 6.4 },
+                 { who: '周振国', text: '白纸黑字，是他求着我收下的。', t0: 7.3, t1: 10.7 },
+                 { who: '周振国', text: '年轻人，你父亲没告诉你的事，还多着呢。', t0: 12.3, t1: 17.6 }],
       s4:       { who: '周振国', text: '都是老相识，何必闹成这样。周氏分你三成，账本的事到此为止，如何？', t0: 1.2, t1: 8.0 },
       b_all:    { who: '女董事', text: '周董，您名下百分之六十七的股权，今天早上已经完成过户了。', t0: 0.4, t1: 5.2 },
       b_vote:   { who: '周振国', text: '连你……连你也举手？', t0: 4.8, t1: 7.8 },
       b_ask:    { who: '周子豪', text: '不是我！是爸让我签的！', t0: 2.8, t1: 5.2 },
+      // her second sentence (9.5-12.0 s) is left without a subtitle: loudness alone cannot tell which
+      // of the two scripted lines was spoken, and the report card after the clip states the finding
+      m_forge:  { who: '林特助', text: '打扰各位。笔迹鉴定的结果，出来了。', t0: 5.4, t1: 8.6 },
       s5:       { who: '周振国', text: '完了……周家，全完了。', t0: 1.4, t1: 5.5 },
+      m_last:   [{ who: '周振国', text: '呵……你以为，是我要你父亲垮？', t0: 1.7, t1: 4.8 },
+                 { who: '周振国', text: '那三个亿，我只过了一道手。', t0: 7.1, t1: 10.1 },
+                 { who: '周振国', text: '真正动手的人，你惹不起。', t0: 12.0, t1: 15.6 }],
       f_move:   { who: '周振国', text: '……我们搬。三天之内，一定搬。', t0: 2.4, t1: 6.4 },
       f_dish:   { who: '周子豪', text: '我洗！我洗！明天一早就去！', t0: 3.0, t1: 6.0 },
       f_audit:  { who: '审计人员', text: '周振国先生，请配合我们走一趟。', t0: 0.4, t1: 2.8 },
+      m_trail:  [{ who: '林特助', text: '董事长，还有一处对不上。那三个亿，在周氏账上只停了一天。', t0: 2.8, t1: 6.9 },
+                 { who: '林特助', text: '第二天就转走了。收款的户头，开在白氏银行。', t0: 7.5, t1: 11.4 },
+                 { who: '林特助', text: '开户人的名字，被人抹掉了。', t0: 12.1, t1: 14.0 }],
       cliff2:   { who: '黑衣女人', text: '三年不见，手段还是这么狠。当年赶你出门的，可不止周家。', t0: 1.0, t1: 6.0 },
     },
-    notes: {},
+    notes: {
+      s2:     [{ t0: 0.2, t1: 2.6, text: '鉴定结果还没出来。三个亿的事，他不会认。' }],
+      m_deny: [{ t0: 15.9, t1: 18.4, text: '他手里那份和存档件是同一个签名。鉴定还要一会儿。' }],
+    },
   },
 ];
 const LINES = {}, NOTES = {};
@@ -857,19 +949,21 @@ function showNote(text) {
   if ($('note-text').textContent !== text) $('note-text').textContent = text;
   el.classList.add('show');
 }
-// `value` is a time inside the story ("19:43") or a label ("三年前"); `deal` is when the hotel changes hands.
+// `value` is a time inside the story ("19:43", counted down to `deal`), a label ("三年前"),
+// or a [value, label] pair for a tracker that is not a time (episode 2's handwriting report).
 function setClock(value, deal, struck) {
   const el = $('clock');
   if (!value) { el.hidden = true; return; }
-  const now = /^(\d\d):(\d\d)$/.exec(value), due = /^(\d\d):(\d\d)$/.exec(deal || '');
-  let label = '回忆';
-  if (now && due) {
+  const [text, fixed] = Array.isArray(value) ? value : [value];
+  const now = /^(\d\d):(\d\d)$/.exec(text), due = /^(\d\d):(\d\d)$/.exec(deal || '');
+  let label = fixed || '回忆';
+  if (!fixed && now && due) {
     const left = (due[1] * 60 + +due[2]) - (now[1] * 60 + +now[2]);
     label = left > 0 ? '距交割 ' + left + ' 分钟' : struck ? '交割完成' : '已交割';
   }
-  $('clock-time').textContent = value;
+  $('clock-time').textContent = text;
   $('clock-label').textContent = label;
-  el.classList.toggle('memo', !now);
+  el.classList.toggle('memo', label === '回忆');
   el.classList.toggle('struck', !!struck);
   el.hidden = false;
 }
@@ -883,9 +977,13 @@ function playClip(id, o = {}) {
     prime(id);
     const next = videos[(current + 1) % 2], prev = videos[current];
     current = (current + 1) % 2;
+    const busy = on => { $('loading').hidden = !on; };
+    const slow = setTimeout(() => busy(true), 450);   // only a slow connection ever shows this
     if (o.tail) { await metadata(next); next.currentTime = Math.max(0, next.duration - o.tail); }
     else if (next.currentTime) next.currentTime = 0;
     try { await next.play(); } catch (e) { /* a blocked play() still shows the first frame */ }
+    clearTimeout(slow);
+    busy(false);
     next.classList.add('on');
     if (prev) { prev.classList.remove('on'); prev.pause(); }
     if (o.upNext) prime(o.upNext);
@@ -897,8 +995,9 @@ function playClip(id, o = {}) {
       if (finished) return;
       finished = true;
       cancelAnimationFrame(raf);
-      next.onended = next.onpause = next.onplaying = null;
+      next.onended = next.onpause = next.onplaying = next.onwaiting = null;
       $('resume').hidden = true;
+      busy(false);
       showSub(null);
       showNote(null);
       if (o.bar) o.bar(1);
@@ -922,7 +1021,8 @@ function playClip(id, o = {}) {
     next.onended = () => { if (!o.choice) finish(); };
     // A pause we didn't ask for (a phone call, a hidden tab) must not strand the episode.
     next.onpause = () => { if (!finished && !next.ended) $('resume').hidden = false; };
-    next.onplaying = () => { $('resume').hidden = true; };
+    next.onplaying = () => { $('resume').hidden = true; busy(false); };
+    next.onwaiting = () => { if (!finished && !next.ended) busy(true); };
     if (next.paused) $('resume').hidden = false;
     raf = requestAnimationFrame(tick);
   });
@@ -1017,6 +1117,13 @@ async function scene(spec) {
     tape.append(wave, el('p', 'label', spec.label), el('p', 'quote', spec.quote));
     box.append(tape);
     hold = 3000;
+  } else if (spec.type === 'report') {
+    const doc = el('div', 'report');
+    doc.append(el('h3', '', spec.title));
+    spec.rows.forEach(([k, v]) => { const row = el('p'); row.append(el('small', '', k), v); doc.append(row); });
+    doc.append(el('span', 'stamp', spec.stamp));
+    box.append(doc);
+    hold = 3400;
   } else if (spec.type === 'msg') {
     const msg = el('div', 'msg');
     msg.append(el('p', 'who', spec.who), el('p', 'text', spec.text));
@@ -1081,6 +1188,9 @@ async function run(index, o = {}) {
 
   let act = -1, unit = 0;
   const bar = ratio => setBar(act, (unit + ratio) / ep.acts[act].units);
+  // starting mid-episode, the story clock shows what the skipped steps had left it at
+  const before = ep.flow.slice(0, from).filter(st => st.clock).pop();
+  if (before) setClock(before.flip ? before.flip.clock : before.clock, ep.deal);
   for (let i = 0; i < ep.flow.length; i++) {
     const step = ep.flow[i];
     if (step.act) { setBar(act, 1); act++; unit = 0; continue; }
@@ -1103,7 +1213,7 @@ async function run(index, o = {}) {
     state[step.choice] = pick.key;
     picks[step.choice] = pick;
     prime(pick.clip || upNext);        // the beat below gives it time to get ready
-    await scene(pick.scene);
+    await scene(typeof pick.scene === 'function' ? pick.scene(state) : pick.scene);
     if (pick.clip) { await playClip(pick.clip, { bar, state, upNext }); unit++; }
   }
   setBar(act, 1);
