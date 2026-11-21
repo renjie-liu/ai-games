@@ -321,6 +321,11 @@ button, input { font: inherit; color: inherit; }
 .opt.picked .fill { display: none; }
 .opt.picked kbd { border-color: rgba(26, 5, 8, 0.4); color: var(--ink); }
 .choice.done .opt:not(.picked) { opacity: 0.22; }
+/* an option an earlier choice did not earn: shown, with the reason, but closed */
+.opt.shut { border-style: dashed; border-color: rgba(230, 194, 122, 0.3); background: rgba(58, 11, 21, 0.5); color: rgba(247, 240, 230, 0.42); cursor: not-allowed; }
+.opt.shut:hover { border-color: rgba(230, 194, 122, 0.3); }
+.opt em { position: relative; flex: none; margin-left: 10px; font-family: var(--text); font-style: normal; font-size: 12.5px; letter-spacing: 0; color: rgba(247, 240, 230, 0.6); }
+.opt.shut kbd { display: none; }
 .hint { margin: 12px 2px 0; font-size: 12.5px; color: rgba(247, 240, 230, 0.62); }
 
 /* ---------- the beat between your choice and its payoff ---------- */
@@ -522,6 +527,7 @@ button, input { font: inherit; color: inherit; }
 .pill:focus-visible { outline: 2px solid var(--gold-hot); outline-offset: 2px; }
 .pill.tried { background: rgba(230, 194, 122, 0.32); border-color: transparent; color: var(--pearl); }
 .pill.now { background: var(--gold-hot); border-color: transparent; color: var(--ink); font-weight: 600; }
+.pill.shut, .pill.shut:hover { border-style: dashed; border-color: rgba(230, 194, 122, 0.22); color: rgba(247, 240, 230, 0.32); cursor: not-allowed; }
 .ghost {
   width: 100%; height: 46px;
   margin-top: 10px;
@@ -586,7 +592,7 @@ button, input { font: inherit; color: inherit; }
     <form class="choice" id="choice" aria-live="assertive" onsubmit="return false">
       <h2 id="question"></h2>
       <div id="opts"></div>
-      <p class="hint">不动手的话，时间一到就按第一个来。</p>
+      <p class="hint" id="hint">不动手的话，时间一到就按第一个来。</p>
     </form>
 
     <p class="loading" id="loading" role="status" hidden>加载中…</p>
@@ -624,14 +630,15 @@ button, input { font: inherit; color: inherit; }
       <div class="jump" id="jump">
         <button class="ghost" type="button" data-ep="1">看第 2 集</button>
         <button class="ghost" type="button" data-ep="2">看第 3 集</button>
+        <button class="ghost" type="button" data-ep="3">看第 4 集</button>
       </div>
       <p class="problem" id="problem" hidden></p>
     </div>
   </section>
 
   <aside class="notes">
-    <p>互动短剧试玩版，三集，每集三分半左右。镜头就是你。</p>
-    <p>左上角是剧情里的进度：第 1 集是时间，八点整酒店交割；第 2 集是转让书的笔迹鉴定；第 3 集是那份协议原件的下落。</p>
+    <p>互动短剧试玩版，四集，每集三分半左右。镜头就是你。</p>
+    <p>左上角是剧情里的进度：第 1 集是时间，八点整酒店交割；第 2 集是转让书的笔迹鉴定；第 3 集是那份协议原件的下落；第 4 集是贷款到期的倒计时。</p>
     <p>每次选择限时几秒，不选就按第一个来。键盘按 1、2、3 也能选。右上角可以换播放速度。</p>
     <p class="fine">原创剧情，画面和声音由 Seedance 2.5 生成，字幕是后加的。</p>
   </aside>
@@ -645,9 +652,13 @@ button, input { font: inherit; color: inherit; }
      { clip, clock, flip, choice }  a clip; with `choice` it holds on its last frame and asks
                                     (over its last second, or with `late` only once it has ended)
    An option with a `clip` plays it before rejoining the spine. An option without one costs no
-   footage: it only leaves a mark in `state`, which later notes and beats read. */
+   footage: it only leaves a mark in `state`, which later notes and beats read.
+   A step with `when` is skipped unless the state earns it; an option with `need` is shown closed,
+   with `lack` as the reason, unless the state (or `state.prev`, the last episode's picks) earns it. */
 // Episode 2: is the forged signature exposed at the table? Only if it was put on the record or the son was made to talk.
 const proven = s => s.doc === 'verify' || s.b === 'ask';
+// Episode 4: does 白行长 leave the hall with the regulators? Only if his own recording is played, or your father came to speak.
+const fallen = s => s.weapon === 'tape' || s.dad === 'ask';
 const EPISODES = [
   {
     n: 1, name: '订婚宴', deal: '20:00',
@@ -892,7 +903,7 @@ const EPISODES = [
   },
   {
     n: 3, name: '白家的茶',
-    teaser: '第 4 集还没有做，试玩版到这里。',
+    teaser: '下一集：父亲的账。',
     flow: [
       { act: '长廊' },
       { card: ['周氏，一个上午就拿下了。', '可那三个亿，只在周家账上停了一天。'] },
@@ -994,6 +1005,131 @@ const EPISODES = [
       k_tea1: [{ t0: 18.2, t1: 20.6, text: '我在门外。您的手机通着，这边一直在录。' }],
     },
   },
+  {
+    /* What each route leaves true; every clip after the branch (pay4, dadend, hook4) holds on all of them.
+         father asked to come + 请父亲进来 or 批条   he speaks in the hall, 白行长 leaves with the regulators,
+                                                   the recall is withdrawn at 11:40, the workers are paid today
+         录音 (needs episode 3's recording)         the same ending; the father stays outside or at the sanatorium
+         father kept out of it + 批条               白行长 walks out, you repay the loan at 11:50 and keep the hotel,
+                                                   the workers wait three days, he is taken away that afternoon */
+    n: 4, name: '父亲的账', deal: '12:00', dealWord: '贷款到期',
+    teaser: '第 5 集还没有做，试玩版到这里。',
+    flow: [
+      { act: '疗养院' },
+      { card: ['三年前，你身无分文。', '一笔没有署名的汇款，让你盘下了第一家小旅馆。'] },
+      { card: ['当晚，城郊疗养院。', '三年里，他没有认出过任何人。'] },
+      { clip: 'dad1', clock: ['当晚', '城郊疗养院'], choice: 'first' },
+      { clip: 'dad2', choice: 'dad' },
+      { act: '上午' },
+      { card: ['那三个亿，是两千名工人的安置金。', '这张纸见了光，白行长会倒。你父亲，也要坐牢。'] },
+      { card: ['第二天上午，云顶酒店。'] },
+      { clip: 'brief4', clock: '09:40' },
+      { beat: s => ({ say: '让他开。在我的楼里，话筒归我管。', aside: s.dad === 'ask' ? '时间和地点，你让人带去了疗养院。那边，还没有回话。' : '疗养院那边，你什么都没有说。' }) },
+      { clip: 'worker', clock: '09:50', choice: 'worker' },
+      { clip: 'sisters', clock: '09:56' },
+      { act: '发布会' },
+      { card: ['十点整。宴会厅的门，开着。'] },
+      { clip: 'press1', clock: '10:00', choice: 'weapon' },
+      // asked to come, he comes in even when you opened with the slip
+      { when: s => s.weapon === 'slip' && s.dad === 'ask', beat: () => ({ aside: '话音没落，宴会厅的门开了。' }) },
+      { when: s => s.weapon === 'slip' && s.dad === 'ask', clip: 'w_dad' },
+      { when: s => s.weapon === 'tape' && s.dad === 'ask', beat: () => ({ aside: '门外，父亲听完了整段录音。他没有进来。' }) },
+      { when: fallen, beat: () => ({ aside: '最后一排，站起来两个人。' }) },
+      { when: fallen, clip: 'fall4' },
+      { when: s => !fallen(s), beat: () => ({ aside: '他合上文件夹，从你身边走了出去。没有人拦他。' }) },
+      { beat: s => ({ say: fallen(s) ? '各位师傅。三个亿的安置金，今天到账。' : '各位师傅。三个亿的安置金，我来出。给我三天。', big: '这一单，我买。' }) },
+      { clip: 'pay4' },
+      { when: fallen, clock: ['11:40', '收贷函已撤回'], struck: true, beat: () => ({ aside: '十一点四十，白氏银行撤回了收贷函。云顶，还是你的。' }) },
+      { when: s => !fallen(s), clock: ['11:50', '贷款已还清'], struck: true, beat: () => ({ aside: '十一点五十，你把账上能动的钱，全部还给了白氏银行。云顶保住了。安置金，要等三天。' }) },
+      { act: '尾声' },
+      { when: s => !fallen(s), card: ['当天下午，笔迹鉴定出来了：批条，是白行长亲笔。', '他是在自己的办公室里，被带走的。'] },
+      { card: s => s.first === 'dad' ? ['当晚，疗养院。', '“爸。”', '这一次，他应了。'] : ['当晚，疗养院。'] },
+      { clip: 'dadend', clock: ['当晚', '城郊疗养院'] },
+      { card: ['那笔没有署名的汇款，你查了三年。', '深夜，云顶顶层。'] },
+      { clip: 'hook4', clock: ['深夜', '云顶顶层'] },
+    ],
+    outcome: s => Object.assign(
+      { got: fallen(s) ? '云顶，和白行长被当场带走的那一刻' : '云顶',
+        ally: s.weapon === 'tape' ? (s.dad === 'ask' ? '父亲到了门外，没有进来。那段录音，替他说了话。' : '父亲没有露面。那段录音，替他说了话。')
+          : s.dad === 'ask' ? '那一页，父亲自己认了。' : '父亲没有露面。',
+        word: { truth: fallen(s) ? '你答应赵师傅的实话，他们听到了。' : '你答应赵师傅的实话，今天只说出了一半。',
+                money: fallen(s) ? '你答应赵师傅的钱，今天到账。' : '你答应赵师傅的钱，要再等三天。',
+                seat: '第一排的位置，赵师傅他们坐到了散场。' }[s.worker] },
+      fallen(s) ? {} : { miss: '白行长当场认栽的那一刻，和今天就到账的安置金。让父亲自己来说，或者在第 3 集先稳住白行长、录下他认账的话，结果会不一样。' }),
+    choices: {
+      first: { question: '三年了，他认出你，说的是这个。', opts: [
+        { key: 'why',   label: '问他：为什么',     title: '问个明白', scene: { say: '为什么？', aside: '他闭了闭眼睛。' } },
+        { key: 'paper', label: '把原件放到他手边', title: '原件上桌', scene: { say: '原件在这儿。刚拿到的。', aside: '他看着那几页纸，手抖了一下。' } },
+        { key: 'dad',   label: '先叫一声：爸',     title: '叫一声爸', scene: { say: '爸。', aside: '他没有应。喉结动了一下。' } },
+      ]},
+      dad: { question: '原件，烧不烧？', headline: true, opts: [
+        { key: 'ask',  label: '不烧，让他自己说', title: '让他自己说', scene: { say: '不烧。那一页是您签的。该不该说，您自己定。', aside: '他看了你很久，没有回答。' } },
+        { key: 'keep', label: '不烧，我替他打',   title: '替父出战',   scene: { say: '不烧。您歇着。这一仗，我替您打。', aside: '他闭上眼睛，摇了摇头。' } },
+        { key: 'burn', label: '听他的，烧了',     title: '付之一炬',   scene: { type: 'dots', glyphs: ['…', '…', '…'], aside: '你拿起了桌上的打火机。' },
+          // with the original gone nothing ties the money to 白行长, recording or not
+          dead: { title: '烧掉的那一页', lines: s => [
+            '你当着他的面，把原件烧了。',
+            '第二天十点，白行长拿着一份复印件开了发布会：三个亿，是你父亲亲手转走的。',
+            (s.prev || {}).deal === 'agree' ? '批条成了灰。你手里那段录音，对不上任何一张纸。' : '批条成了灰。没有人能证明，钱最后进了谁的口袋。',
+            '云顶保住了。可两千个工人，只记住了你父亲的名字。'] } },
+      ]},
+      worker: { question: '他们等了三年。', opts: [
+        { key: 'truth', label: '今天，给你们实话', title: '许一句实话', scene: { say: '今天，各位会听到实话。' } },
+        { key: 'money', label: '今天，把钱给你们', title: '许一笔钱',   scene: { say: '安置金，今天给各位一个交代。' } },
+        { key: 'seat',  label: '请他们坐第一排',   title: '请上第一排', scene: { say: '第一排，留给各位师傅。', aside: '赵师傅愣了一下，攥紧了手里的工帽。' } },
+      ]},
+      weapon: { question: '拿什么回他？', headline: true, opts: [
+        { key: 'dad',  label: '请父亲进来',     clip: 'w_dad',  title: '开门请父', need: s => s.dad === 'ask', lack: '他没有来',
+          scene: { say: '该鞠躬的人，不是我。开门。' } },
+        { key: 'tape', label: '放他自己的录音', clip: 'w_tape', title: '录音为证', need: s => (s.prev || {}).deal === 'agree', lack: '第 3 集没录到',
+          scene: { type: 'tape', label: '录音 · 昨晚 · 白家茶室', quote: '音控室按下了播放键。', say: '白行长，先听一段您自己的话。' } },
+        { key: 'slip', label: '把批条投上大屏', clip: 'w_slip', title: '批条上屏',
+          scene: { type: 'report', title: '批条', rows: [['内容', '划三亿至周氏，事成销户'], ['落款', '白行长亲笔']], stamp: '原件', hold: 2200, say: '那一页的后面，还有一页。' } },
+      ]},
+    },
+    lines: {
+      dad1:    [{ who: '父亲', text: '……是你。瘦了。', t0: 0.0, t1: 2.3 },
+                { who: '父亲', text: '听我说。不管你查到什么，别动白家。', t0: 4.9, t1: 9.5 },
+                { who: '父亲', text: '那份代管协议要是到了你手上，烧了它。', t0: 11.8, t1: 16.2 }],
+      dad2:    [{ who: '父亲', text: '那三个亿，是两千个工人的安置金。我想替他们藏三个月。', t0: 0.7, t1: 7.3 },
+                { who: '父亲', text: '字是我签的。纸一见光，先坐牢的是我。', t0: 9.3, t1: 14.1 },
+                { who: '父亲', text: '你刚站起来，不能有个坐牢的爹。', t0: 16.0, t1: 20.0 }],
+      brief4:  [{ who: '林特助', text: '董事长，白行长十点开发布会，就在楼上宴会厅。厅是白氏银行半年前订的。', t0: 0.8, t1: 6.8 },
+                { who: '林特助', text: '他要公开代管协议。只公开令尊签字的那一页。', t0: 9.0, t1: 12.6 },
+                { who: '林特助', text: '还有，并购贷款中午十二点到期。还不上，云顶就归白氏银行。', t0: 14.9, t1: 20.0 }],
+      worker:  [{ who: '赵师傅', text: '你是老董事长的孩子吧？小时候，你常来车间。', t0: 0.6, t1: 5.7 },
+                { who: '赵师傅', text: '白行长说，今天告诉我们，安置金是谁拿走的。', t0: 7.5, t1: 12.3 },
+                { who: '赵师傅', text: '三年了。我们就想听一句实话。', t0: 14.0, t1: 18.0 }],
+      sisters: [{ who: '白薇', text: '我爸的讲稿，我看过了。他会说，白氏银行也是受害者。', t0: 0.6, t1: 5.6 },
+                { who: '白芷', text: '他只敢放一页。批条那一页，只有你手里有。', t0: 7.2, t1: 11.5 },
+                { who: '白芷', text: '十二点之前，这个厅还是你的。', t0: 13.2, t1: 16.0 }],
+      press1:  [{ who: '白行长', text: '三年前，两千名工人的安置金，是谁转走的？', t0: 1.4, t1: 6.1 },
+                { who: '白行长', text: '转出人的亲笔签名，就在这一页。', t0: 8.5, t1: 11.9 },
+                { who: '白行长', text: '他的孩子也到了。年轻人，替你父亲，鞠个躬吧。', t0: 13.7, t1: 20.0 }],
+      w_dad:   [{ who: '父亲', text: '那一页，是我签的。安置金，是我亲手转出去的。', t0: 0.9, t1: 7.2 },
+                { who: '父亲', text: '可是白行长，封我账的是你，让老周来找我的，也是你。', t0: 9.2, t1: 14.6 },
+                { who: '父亲', text: '我今天来，是来自首的。你呢？', t0: 16.0, t1: 20.0 }],
+      w_tape:  [{ who: '录音 · 白行长', text: '不错。你父亲的公司，是我要的。周振国，不过是我手里的一把刀。', t0: 0.4, t1: 7.9 },
+                { who: '记者', text: '白行长，这是您的声音吗？', t0: 8.4, t1: 10.4 }],
+      w_slip:  [{ who: '白行长', text: '伪造的。交出这张纸的，是我大女儿。那三个亿，是她亲手划走的。', t0: 1.4, t1: 9.1 },
+                { who: '白行长', text: '她的话，各位也信？要验，随便验。', t0: 10.3, t1: 14.7 },
+                { who: '白行长', text: '结果出来之前，十二点就到了。', t0: 16.1, t1: 19.6 }],
+      fall4:   [{ who: '监管人员', text: '白先生，请跟我们走一趟。', t0: 0.4, t1: 2.6 },
+                { who: '白行长', text: '……年轻人。这杯茶，到底还是凉了。', t0: 5.9, t1: 10.5 }],
+      pay4:    [{ who: '赵师傅', text: '……三个亿？孩子，这钱不该你出。', t0: 0.0, t1: 4.1 },
+                { who: '赵师傅', text: '三年了，头一回有人站出来，说这笔账他认。', t0: 6.3, t1: 11.6 }],
+      dadend:  [{ who: '父亲', text: '那两千个人的钱，本不该你背。', t0: 1.0, t1: 4.1 },
+                { who: '父亲', text: '字是我签的。该说清楚的地方，我自己去。', t0: 5.9, t1: 10.6 },
+                { who: '父亲', text: '你往前走。别学我，信错了人。', t0: 11.9, t1: 16.0 }],
+      hook4:   [{ who: '白芷', text: '三年前，你那家小旅馆的第一笔钱，是我汇的。', t0: 0.7, t1: 5.1 },
+                { who: '白芷', text: '先别谢。我爸的保险柜里，还有一份名单。', t0: 6.6, t1: 11.1 },
+                { who: '白芷', text: '分你父亲公司的，不止他一个。第一个名字，你认识。', t0: 12.0, t1: 17.5 }],
+    },
+    notes: {
+      press1: [{ t0: 5.2, t1: 12.3, text: '音控室是我们的人。监管局的人，我请到了最后一排。' },
+               { t0: 12.6, t1: 16.4, text: s => (s.dad === 'ask' ? '令尊到了。在门外。' : '') }],
+    },
+  },
 ];
 const LINES = {}, NOTES = {};
 EPISODES.forEach(ep => {
@@ -1018,7 +1154,8 @@ const SPEEDS = [1, 1.2, 1.5];
 let speed = 1.2;                       // clips, narration and beats all run at this pace
 try { const saved = +localStorage.getItem('shuang-speed'); if (SPEEDS.includes(saved)) speed = saved; } catch (e) { /* default pace */ }
 /* Where each clip is cut in and out, in its own seconds. Only dead air is cut: a lead-in before
-   the first line, or a tail after the last one. Clips not listed play whole. */
+   the first line, or a tail after the last one. Clips not listed play whole. `hold` is the frame a
+   choice waits on when the clip's own last frame is no picture to choose over (a camera flash). */
 const CUTS = {
   c2: { in: 1.8 }, p_call: { in: 0.8 }, p_card: { in: 0.6 }, p_silent: { in: 1.0 }, d1: { in: 0.8 },
   q_lawyer: { in: 1.0 }, n_ring: { in: 1.6 }, e_leave: { in: 0.6 }, cliff1: { in: 1.2 },
@@ -1027,6 +1164,7 @@ const CUTS = {
   f_move: { in: 0.8 }, f_dish: { in: 1.2 }, m_son: { in: 1.0 }, m_forge: { out: 14.8 }, m_trail: { in: 1.4 },
   k_turn: { in: 1.0 }, k_c_drink: { out: 7.6 }, k_c_leave: { in: 1.5 }, k_c_pour: { out: 9.0 },
   k_p_take: { out: 8.8 }, k_p_weiwei: { in: 1.5, out: 9.2 }, k_fall: { out: 16.6 },
+  press1: { in: 0.9, hold: 19.6 }, w_slip: { in: 0.9 }, w_dad: { in: 0.5 }, w_tape: { out: 11.6 }, fall4: { out: 13.4 }, dadend: { in: 0.5 }, hook4: { in: 0.3 },
 };
 const STORE_KEY = 'shuang-v3';
 const $ = id => document.getElementById(id);
@@ -1107,6 +1245,7 @@ function showNote(text) {
 }
 // `value` is a time inside the story ("19:43", counted down to `deal`), a label ("三年前"),
 // or a [value, label] pair for a tracker that is not a time (episode 2's handwriting report).
+let dealWord = '交割';   // what the episode's clock counts down to
 function setClock(value, deal, struck) {
   const el = $('clock');
   if (!value) { el.hidden = true; return; }
@@ -1115,7 +1254,7 @@ function setClock(value, deal, struck) {
   let label = fixed || '回忆';
   if (!fixed && now && due) {
     const left = (due[1] * 60 + +due[2]) - (now[1] * 60 + +now[2]);
-    label = left > 0 ? '距交割 ' + left + ' 分钟' : struck ? '交割完成' : '已交割';
+    label = left > 0 ? '距' + dealWord + ' ' + left + ' 分钟' : struck ? dealWord + '完成' : '已' + dealWord;
   }
   $('clock-time').textContent = text;
   $('clock-label').textContent = label;
@@ -1151,13 +1290,14 @@ function playClip(id, o = {}) {
     if (o.upNext) prime(o.upNext);
     if (o.clock) setClock(o.clock, o.deal);
 
-    let asked = false, finished = false, flipped = false;
+    let asked = false, finished = false, flipped = false, held = false;
     const finish = value => {
       if (finished) return;
       finished = true;
       cancelAnimationFrame(raf);
       next.onended = next.onpause = next.onplaying = next.onwaiting = null;
       $('resume').hidden = true;
+      delete next.dataset.held;
       busy(false);
       showSub(null);
       showNote(null);
@@ -1166,7 +1306,7 @@ function playClip(id, o = {}) {
     };
     const tick = () => {
       if (finished) return;      // finish() can run inside this very callback; never schedule another frame after it
-      const t = next.currentTime;
+      const t = held ? end : next.currentTime;   // waiting on a held frame, the clip itself is over
       if (o.bar) o.bar((t - from) / (end - from));
       showSub(lines.find(l => t >= l.t0 && t <= l.t1));
       const note = notes.find(n => t >= n.t0 && t <= n.t1);
@@ -1175,14 +1315,20 @@ function playClip(id, o = {}) {
       if (o.choice && !asked && (next.ended || t >= askAt)) {
         asked = true;
         if (o.preset) { finish(o.preset); return; }
-        ask(o.choice).then(finish);
+        ask(o.choice, o.state).then(finish);
+      }
+      if (o.choice && cut.hold != null && !held && (next.ended || t >= end - 0.05)) {
+        held = true;                       // the sound has run out; wait on a frame worth looking at
+        next.dataset.held = '1';
+        next.pause();
+        next.currentTime = cut.hold;
       }
       if (!o.choice && t >= end) { finish(); return; }   // cut out before a silent tail
       raf = requestAnimationFrame(tick);
     };
     next.onended = () => { if (!o.choice) finish(); };
     // A pause we didn't ask for (a phone call, a hidden tab) must not strand the episode.
-    next.onpause = () => { if (!finished && !next.ended) $('resume').hidden = false; };
+    next.onpause = () => { if (!finished && !next.ended && !held) $('resume').hidden = false; };
     next.onplaying = () => { $('resume').hidden = true; busy(false); };
     next.onwaiting = () => { if (!finished && !next.ended) busy(true); };
     if (next.paused) $('resume').hidden = false;
@@ -1190,9 +1336,14 @@ function playClip(id, o = {}) {
   });
 }
 
-/* ----- the choice: three options, a few seconds to pick ----- */
-function ask(choice) {
+/* ----- the choice: three options, a few seconds to pick -----
+   An option with `need` is closed unless the state earns it. One rule decides it everywhere:
+   the buttons, the number keys, where the countdown lands, and the pills under the ending. */
+const open = (opt, state) => !opt.need || !!opt.need(state || {});
+function ask(choice, state) {
   return new Promise(resolve => {
+    const first = Math.max(0, choice.opts.findIndex(opt => open(opt, state)));
+    $('hint').textContent = first ? '不动手的话，时间一到就按第一个能选的来。' : '不动手的话，时间一到就按第一个来。';
     const sheet = $('choice'), box = $('opts');
     $('question').textContent = choice.question;
     box.innerHTML = '';
@@ -1217,20 +1368,21 @@ function ask(choice) {
       btn.innerHTML = '<i class="fill"></i><span></span><kbd></kbd>';
       btn.querySelector('span').textContent = opt.label;
       btn.querySelector('kbd').textContent = i + 1;
-      btn.addEventListener('click', () => pick(opt, btn));
+      if (open(opt, state)) btn.addEventListener('click', () => pick(opt, btn));
+      else { btn.classList.add('shut'); btn.disabled = true; btn.append(el('em', '', opt.lack || '选不了')); }
       box.append(btn);
       return btn;
     });
     const onKey = e => {
       const i = ['1', '2', '3'].indexOf(e.key);
-      if (i >= 0) pick(choice.opts[i], buttons[i]);
+      if (i >= 0 && open(choice.opts[i], state)) pick(choice.opts[i], buttons[i]);
     };
     document.addEventListener('keydown', onKey);
-    // The first option's own background is the countdown: when it fills, it fires.
-    timer = buttons[0].querySelector('.fill').animate(
+    // The first open option's own background is the countdown: when it fills, it fires.
+    timer = buttons[first].querySelector('.fill').animate(
       [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }],
       { duration: CHOICE_MS, easing: 'linear', fill: 'forwards' });
-    timer.onfinish = () => pick(choice.opts[0], buttons[0]);
+    timer.onfinish = () => pick(choice.opts[first], buttons[first]);
     stage.classList.add('choosing');
     sheet.classList.add('open');
   });
@@ -1343,6 +1495,7 @@ async function run(index, o = {}) {
   const ep = EPISODES[index], from = o.from || 0;
   const state = Object.assign({}, o.state), picks = Object.assign({}, o.picks);
   state.prev = readStore().picks[ep.n - 1] || {};   // the previous episode's picks; empty when it was skipped
+  dealWord = ep.dealWord || '交割';
   $('finale').hidden = true;
   $('cover').hidden = true;
   const missing = await findMissing(ep);
@@ -1355,14 +1508,15 @@ async function run(index, o = {}) {
   let act = -1, unit = 0;
   const bar = ratio => setBar(act, (unit + ratio) / ep.acts[act].units);
   // starting mid-episode, the story clock shows what the skipped steps had left it at
-  const before = ep.flow.slice(0, from).filter(st => st.clock).pop();
-  if (before) setClock(before.flip ? before.flip.clock : before.clock, ep.deal);
+  const shown = ep.flow.slice(0, from).filter(st => st.clock && (!st.when || st.when(state))).pop();
+  if (shown) setClock(shown.flip ? shown.flip.clock : given(shown.clock, state), ep.deal, !!shown.flip || shown.struck);
   for (let i = 0; i < ep.flow.length; i++) {
     const step = ep.flow[i];
     if (step.act) { setBar(act, 1); act++; unit = 0; continue; }
     if (i < from) { if (step.clip) unit += step.branch ? 2 : 1; continue; }
     if (step.when && !step.when(state)) continue;        // a step an earlier choice did not earn
     const upNext = clipAfter(ep, i, state);
+    if (step.clock && !step.clip) setClock(given(step.clock, state), ep.deal, step.struck);   // a beat or card can move the clock too
     if (step.card) { prime(upNext); await card(given(step.card, state)); continue; }
     if (step.cold) { await playClip(step.cold, { state, plain: true, cut: step.cut, upNext }); continue; }
     if (step.beat) {
@@ -1371,7 +1525,7 @@ async function run(index, o = {}) {
       continue;
     }
     const choice = step.choice && ep.choices[step.choice];
-    const preset = i === from ? o.preset : null;
+    const preset = i === from && o.preset && open(o.preset, state) ? o.preset : null;
     const pick = await playClip(step.clip, {
       bar, state, choice, preset, clock: given(step.clock, state), flip: step.flip, deal: ep.deal,
       cut: given(step.cut, state), tail: preset || (o.retry && i === from) ? 3.5 : 0, upNext: step.branch ? null : upNext,
@@ -1386,7 +1540,7 @@ async function run(index, o = {}) {
     if (pick.dead) {
       if (pick.dead.clip) await playClip(pick.dead.clip, { bar, state });
       running = false;
-      deadEnd(index, i, pick, picks);
+      deadEnd(index, i, pick, picks, state);
       return;
     }
   }
@@ -1411,7 +1565,7 @@ function before(ep, at, picks) {
 }
 
 // A choice that loses the evening. Nothing from it is carried into the next episode.
-function deadEnd(index, at, pick, picks) {
+function deadEnd(index, at, pick, picks, state) {
   const ep = EPISODES[index], store = readStore();
   store.tried[ep.n] = [...new Set([...(store.tried[ep.n] || []), ep.flow[at].choice + ':' + pick.key])];
   writeStore(store);
@@ -1421,7 +1575,7 @@ function deadEnd(index, at, pick, picks) {
   $('fin-out').innerHTML = '';
   $('fin-count').textContent = '';
   $('fin-rows').innerHTML = '';
-  pick.dead.lines.forEach(text => $('fin-rows').append(el('p', 'fate', text)));
+  given(pick.dead.lines, state || {}).forEach(text => $('fin-rows').append(el('p', 'fate', text)));
   $('fin-actions').innerHTML = '';
   const retry = action('回到那一刻，重新选', 'again', () => run(index, Object.assign({ from: at, retry: true }, before(ep, at, picks))));
   action('从头再看一遍', 'ghost', () => run(index));
@@ -1450,6 +1604,7 @@ function ending(index, picks, state) {
   box.innerHTML = '';
   if (out.got) box.append(el('span', '', '你带走了：' + out.got + '。'));
   if (out.ally) box.append(el('span', '', out.ally));
+  if (out.word) box.append(el('span', '', out.word));
   if (out.miss) box.append(el('span', 'miss', '没拿到：' + out.miss));
   const total = ep.asked.reduce((n, a) => n + a.choice.opts.length, 0);
   $('fin-count').textContent = '这一集有 ' + total + ' 个选项，你试过 ' + tried.size + ' 个。点任意一个，从那一刻重来。';
@@ -1457,9 +1612,12 @@ function ending(index, picks, state) {
   rows.innerHTML = '';
   ep.asked.forEach(a => {
     const row = el('div', 'row', a.choice.question), pills = el('div', 'pills');
+    // what was true when this choice came up decides which of its options were open
+    const then = Object.assign({ prev: store.picks[ep.n - 1] || {} }, before(ep, a.at, picks).state);
     a.choice.opts.forEach(opt => {
       const pill = el('button', 'pill' + (picks[a.id] === opt ? ' now' : tried.has(a.id + ':' + opt.key) ? ' tried' : ''), opt.label);
       pill.type = 'button';
+      if (!open(opt, then)) { pill.classList.add('shut'); pill.disabled = true; pill.title = opt.lack || ''; pills.append(pill); return; }
       // keep what was chosen before this moment; everything after it is asked again
       pill.addEventListener('click', () => run(index, Object.assign({ from: a.at, preset: opt }, before(ep, a.at, picks))));
       pills.append(pill);
@@ -1479,7 +1637,7 @@ function ending(index, picks, state) {
 
 $('start').addEventListener('click', () => run(0));
 $('jump').addEventListener('click', e => { const b = e.target.closest('button'); if (b) run(+b.dataset.ep); });
-const resume = () => { const v = videos[current]; if (v && v.paused && !v.ended) v.play().catch(() => {}); };
+const resume = () => { const v = videos[current]; if (v && v.paused && !v.ended && !v.dataset.held) v.play().catch(() => {}); };
 $('resume').addEventListener('click', resume);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') resume(); });
 $('surname').addEventListener('keydown', e => { if (e.key === 'Enter' && !$('start').disabled) $('start').click(); });
