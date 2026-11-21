@@ -497,6 +497,11 @@ button, input { font: inherit; color: inherit; }
 }
 .finale h2 span { display: inline-block; white-space: nowrap; }
 .finale .path { margin: 14px 0 0; font-size: 15px; color: rgba(247, 240, 230, 0.86); }
+.outcome { margin: 12px 0 0; font-size: 14.5px; line-height: 1.7; color: rgba(247, 240, 230, 0.92); }
+.outcome:empty { display: none; }
+.outcome span { display: block; }
+.outcome .miss { color: rgba(247, 240, 230, 0.62); }
+.fate { margin: 10px 0 0; font-size: 16px; line-height: 1.75; color: rgba(247, 240, 230, 0.92); }
 .seen { margin: 18px 0 0; }
 .seen > p { margin: 0 0 2px; font-size: 14px; color: rgba(247, 240, 230, 0.75); }
 .row { margin-top: 8px; font-size: 12.5px; color: rgba(247, 240, 230, 0.6); }
@@ -597,6 +602,7 @@ button, input { font: inherit; color: inherit; }
       <div class="fin-in">
         <p class="to" id="fin-to"></p>
         <h2 id="fin-title"></h2>
+        <p class="outcome" id="fin-out"></p>
         <div class="seen">
           <p id="fin-count"></p>
           <div id="fin-rows"></div>
@@ -640,24 +646,27 @@ button, input { font: inherit; color: inherit; }
                                     (over its last second, or with `late` only once it has ended)
    An option with a `clip` plays it before rejoining the spine. An option without one costs no
    footage: it only leaves a mark in `state`, which later notes and beats read. */
+// Episode 2: is the forged signature exposed at the table? Only if it was put on the record or the son was made to talk.
+const proven = s => s.doc === 'verify' || s.b === 'ask';
 const EPISODES = [
   {
     n: 1, name: '订婚宴', deal: '20:00',
     teaser: '下一集：周氏董事会。',
     flow: [
+      // the worst moment first, then how it came to this
+      { cold: 'c2', cut: { in: 1.8, out: 7.0 } },
+      { card: ['四十分钟前。'] },
       { act: '归来' },
-      { card: ['三年前，周家当众退婚，把你赶出了门。', '今晚，是周子豪的订婚宴。', '也是你回来的日子。'] },
       { clip: 'n_car', clock: '19:20', choice: 'why', late: true },
-      { card: ['三年前，也是这样一个雨夜。'] },
+      { card: ['三年前。父亲的公司破产，他一病不起。'] },
       { clip: 'n_flash', clock: '三年前' },
-      { card: ['十八分钟后，云顶酒店。', '八点交割之前，你在这里只是客人。'] },
+      { card: ['三年里，你把一家小旅馆做成了酒店集团。', '今晚，回到这里。'] },
       { clip: 'n_lobby', clock: '19:38' },
       { act: '订婚宴' },
       { clip: 'c1', clock: '19:43' },
       { clip: 'n_seat', clock: '19:45', choice: 'seat', late: true },
-      { card: ['宴会厅的灯，暗了下来。'] },
       { clip: 'n_toast', clock: '19:52', choice: 'tape', late: true },
-      { card: ['敬完酒，周子豪端着杯子，径直朝你走来。'] },
+      { card: ['他端着杯子，朝你走来。'] },
       { act: '八点整' },
       { clip: 'c2', clock: '19:59', flip: { t: 5.0, clock: '20:00' }, choice: 'a' },
       { clip: 'c3', clock: '20:01' },
@@ -676,6 +685,7 @@ const EPISODES = [
       { clip: 'cliff1', clock: '20:15' },
       { clip: 'n_cliffb', clock: '20:16' },
     ],
+    outcome: () => ({ got: '云顶酒店，和周氏的全部债权' }),
     choices: {
       why: { question: '为什么非去不可？', opts: [
         { key: 'debt',  label: '去讨一笔旧账',   title: '讨债', scene: { say: '三年的账，今晚该算了。' } },
@@ -685,7 +695,9 @@ const EPISODES = [
       seat: { question: '门口那把椅子？', opts: [
         { key: 'sit',   label: '坐下',         clip: 'a2_sit',   title: '门口落座', scene: { say: '行。那我就坐这儿。' } },
         { key: 'stand', label: '站着不动',     clip: 'a2_stand', title: '站着不动', scene: { type: 'dots', glyphs: ['…', '…', '…'], aside: '你没坐，也没走。' } },
-        { key: 'main',  label: '走向主桌空位', clip: 'a2_main',  title: '直奔主桌', scene: { say: '主桌那个空位，我看挺合适。' } },
+        { key: 'main',  label: '走向主桌空位', clip: 'a2_main',  title: '直奔主桌', scene: { say: '主桌那个空位，我看挺合适。' },
+          // before eight you are only a guest: this one loses the evening
+          dead: { title: '迟到的胜利', clip: 'a2_out', lines: ['八点之前，你在这栋楼里只是客人。', '八点整，交割完成。可那两扇门，没有再为你打开。'] } },
       ]},
       tape: { question: '这段录音？', opts: [
         { key: 'keep', label: '留着，待会儿放给他听', title: '留作证据', scene: { say: '留着。一会儿，放给他自己听。' } },
@@ -726,6 +738,8 @@ const EPISODES = [
       a2_sit:   { who: '周太太',   text: '瞧见没有？三年了，还是这么听话。', t0: 4.7, t1: 8.0 },
       a2_stand: { who: '周子豪',   text: '站着？行啊。那就站到散席，别挡着上菜的路。', t0: 3.2, t1: 7.9 },
       a2_main:  { who: '周太太',   text: '站住！那是新老板的位置，你也配坐？', t0: 4.9, t1: 7.5 },
+      a2_out:   [{ who: '周子豪', text: '保安，把人请出去。新老板八点到，别让闲人碍眼。', t0: 0.4, t1: 4.6 },
+                 { who: '保安',   text: '这位客人，请吧。', t0: 5.1, t1: 6.0 }],
       n_toast:  [{ who: '周子豪', text: '感谢各位，来见证我和薇薇订婚。', t0: 4.1, t1: 6.6 },
                  { who: '周子豪', text: '顺便宣布一件事。云顶的新老板，是我的朋友。', t0: 7.5, t1: 11.2 },
                  { who: '周子豪', text: '往后十年，这里的生意，周氏独家。', t0: 11.8, t1: 15.0 },
@@ -762,7 +776,7 @@ const EPISODES = [
       n_toast: [{ t0: 0.4, t1: 5.6, text: '台上那位是白行长的女儿白薇。周氏现在全靠白行长的贷款续命。' },
                 { t0: 19.3, t1: 20.4, text: '他刚才那几句话，我录下来了。' }],
       c2:      [{ t0: 5.0, t1: 7.4, text: '交割完成。云顶酒店，现在是您的了。' }],
-      c3:      [{ t0: 0.3, t1: 3.8, text: s => ({ sit: '门口那把椅子，我让人撤了。', stand: '您站了一刻钟。现在该他们站着了。', main: '主桌正中那把椅子，本来就是给您留的。' })[s.seat] }],
+      c3:      [{ t0: 0.3, t1: 3.8, text: s => ({ sit: '门口那把椅子，我让人撤了。主桌正中那把，本来就是给您留的。', stand: '您站了一刻钟。现在该他们站着了。' })[s.seat] }],
     },
   },
   {
@@ -771,12 +785,12 @@ const EPISODES = [
     flow: [
       { act: '清晨' },
       { card: ['昨晚，云顶酒店换了主人。', '今早九点，周氏董事会。'] },
-      { clip: 'm_brief', clock: ['鉴定中', '转让书上的签名'] },
+      { clip: 'm_brief', clock: ['转让书', '签名真假待验'] },
       { beat: () => ({ type: 'msg', who: '白行长', text: honorific() + '，昨晚的事薇薇都告诉我了。周氏的账户，我今天上午就冻结。算白家的一点心意。', aside: '你没有回。' }) },
       { card: ['三年前的一个晚上，', '你在书房门外，听到过一段话。'] },
       { clip: 'm_flash2', clock: ['三年前', '回忆'] },
       { card: ['那时候你没听懂。', '说好的“代管”，后来在纸上成了“转让”。'] },
-      { clip: 'm_son', clock: ['鉴定中', '转让书上的签名'], choice: 'son', late: true },
+      { clip: 'm_son', clock: ['转让书', '签名真假待验'], choice: 'son', late: true },
       { act: '董事会' },
       { card: ['二十八层，董事会。'] },
       { clip: 's1' },
@@ -785,21 +799,22 @@ const EPISODES = [
       { beat: () => ({ say: '三年前那三个亿。说好的，是代管。' }) },
       { clip: 'm_deny', choice: 'doc', late: true },
       { clip: 's4', choice: 'b' },
-      { beat: s => s.b === 'ask'
-          ? { aside: '他自己说出来了。现在，只差白纸黑字。' }
-          : ({ verify: { aside: '你要的鉴定，到了。' },
-               wait: { aside: '你一直没接话，是在等这扇门被推开。' },
-               son: { aside: '周子豪刚才的反应，不是没有原因。' } }[s.doc] || null) },
-      { clip: 'm_forge', flip: { t: 12.2, clock: ['鉴定完成', '签名是伪造的'] } },
-      { beat: () => ({ type: 'report', title: '笔迹鉴定意见书', rows: [['检材', '三亿元转让书（存档件）'], ['转出方签名', '非本人书写'], ['执笔人', '周子豪']], stamp: '鉴定专用' }) },
-      { clip: 's5', clock: ['鉴定完成', '签名是伪造的'] },
+      // the forged signature is exposed at the table only if you put it on the record or made the son talk
+      { when: proven, beat: s => s.b === 'ask' ? { aside: '他自己说出来了。会议室的门被推开，白纸黑字也到了。' } : { aside: '会议室的门被推开。你要的鉴定，到了。' } },
+      { when: proven, clip: 'm_forge', flip: { t: 11.2, clock: ['转让书', '签名是伪造的'] } },
+      { when: proven, beat: () => ({ type: 'report', title: '笔迹鉴定意见书', rows: [['转出方签名', '非本人书写'], ['执笔人', '周子豪']], stamp: '鉴定专用', hold: 2200 }) },
+      { when: s => !proven(s), beat: () => ({ aside: '没有人再提那份转让书。周振国丢了公司，却保住了那句“是你父亲亲笔签的”。' }) },
+      { clip: 's5', clock: s => ['转让书', proven(s) ? '签名是伪造的' : '签名真假待验'] },
       { clip: 'm_last', choice: 'c', late: true },
       { act: '尾声' },
-      { card: ['散会了。', '你走出会议室，在玻璃长廊里站了一会儿。'] },
+      { card: s => proven(s) ? ['散会了。', '你走出会议室，在玻璃长廊里站了一会儿。'] : ['散会了。鉴定结果晚了十分钟才到：签名是伪造的。', '可周振国已经不在桌前了。'] },
       { clip: 'm_trail', choice: 'next', late: true },
       { card: ['林特助回了会议室。', '你转过身。长廊尽头，站着一个人。'] },
       { clip: 'cliff2' },
     ],
+    outcome: s => proven(s)
+      ? { got: '周氏，和当场揭穿的伪造签名' }
+      : { got: '周氏', miss: '那份转让书的真假，没能当着周振国的面揭穿。当场要求验笔迹，或者逼周子豪开口，结果会不一样。' },
     choices: {
       son: { question: '他把电梯让了出来。', opts: [
         { key: 'walk',  label: '走进电梯，不回头', title: '头也不回', scene: { aside: '你从他身边走过去，按下了二十八层。' } },
@@ -812,7 +827,7 @@ const EPISODES = [
         { key: 'count',  label: '让他数完',     clip: 'a_count',  title: '任他数完', scene: { type: 'dots', glyphs: ['一', '二', '…'], aside: '你没动，让他数。' } },
       ]},
       doc: { question: '他说，是你父亲亲笔签的。', opts: [
-        { key: 'verify', label: '要求验笔迹',         title: '当场验笔迹', scene: { say: '签名是真是假，验一验就知道。', aside: '周振国握着手杖的手，紧了一下。' } },
+        { key: 'verify', label: '要求验笔迹，记入纪要', title: '当场验笔迹', scene: { say: '签名是真是假，验一验就知道。请记入会议纪要。', aside: '结果出来之前，这个会，谁也散不了。' } },
         { key: 'wait',   label: '不说话，看他演',     title: '静观其变', scene: { type: 'dots', glyphs: ['…', '…', '…'], aside: '你没有接话。会议室安静得能听见手杖点地的声音。' } },
         { key: 'son',    label: '问周子豪见没见过',   title: '转问周子豪', scene: s => ({ say: '周子豪，这份文件，你见过吗？', aside: s.son === 'ask' ? '他又没有回答。和在楼下时一样。' : '他的手抖了一下。' }) },
       ]},
@@ -855,9 +870,9 @@ const EPISODES = [
       b_all:    { who: '女董事', text: '周董，您名下百分之六十七的股权，今天早上已经完成过户了。', t0: 0.4, t1: 5.2 },
       b_vote:   { who: '周振国', text: '连你……连你也举手？', t0: 4.8, t1: 7.8 },
       b_ask:    { who: '周子豪', text: '不是我！是爸让我签的！', t0: 2.8, t1: 5.2 },
-      // her second sentence (9.5-12.0 s) is left without a subtitle: loudness alone cannot tell which
-      // of the two scripted lines was spoken, and the report card after the clip states the finding
-      m_forge:  { who: '林特助', text: '打扰各位。笔迹鉴定的结果，出来了。', t0: 5.4, t1: 8.6 },
+      m_forge:  [{ who: '林特助', text: '打扰各位。笔迹鉴定的结果出来了。', t0: 0.7, t1: 3.4 },
+                 { who: '林特助', text: '转让书上的签名，不是本人写的。', t0: 5.0, t1: 7.4 },
+                 { who: '林特助', text: '执笔的人，是周子豪。', t0: 8.9, t1: 11.1 }],
       s5:       { who: '周振国', text: '完了……周家，全完了。', t0: 1.4, t1: 5.5 },
       m_last:   [{ who: '周振国', text: '呵……你以为，是我要你父亲垮？', t0: 1.7, t1: 4.8 },
                  { who: '周振国', text: '那三个亿，我只过了一道手。', t0: 7.1, t1: 10.1 },
@@ -880,7 +895,7 @@ const EPISODES = [
     teaser: '第 4 集还没有做，试玩版到这里。',
     flow: [
       { act: '长廊' },
-      { card: ['周氏，一个上午就拿下了。', '可那三个亿，只在周家账上停了一天。', '而你的父亲，破产那年就病倒了，三年没开过口。'] },
+      { card: ['周氏，一个上午就拿下了。', '可那三个亿，只在周家账上停了一天。'] },
       { clip: 'k_meet', choice: 'face', late: true },
       { card: ['你记得她。', '三年前，她常出入你父亲的书房。'] },
       { clip: 'k_flash3', clock: ['三年前', '回忆'] },
@@ -888,34 +903,32 @@ const EPISODES = [
       { beat: s => ({ type: 'msg', who: '白行长', text: '今晚七点，寒舍备了薄茶，小女薇薇也在。盼' + honorific() + '赏光。',
           aside: { dig: '你让林特助去查那个户头。才查到一半，请柬先到了。', tea: '你说过要去喝这杯茶。请柬来得正好。', hold: '你没有动。他们果然自己找上门了。' }[s.prev.next] || '请柬来得比你预想的快。' }) },
       { card: ['当晚，白家门外。'] },
-      { clip: 'k_brief', clock: ['协议原件', '下落不明'] },
+      { clip: 'k_brief', clock: ['代管协议', '原件下落不明'] },
       { card: ['她叫白芷。', '白行长的长女，白薇的姐姐。'] },
       { act: '茶局' },
-      { clip: 'k_gate', choice: 'sister', late: true },
-      { card: ['茶室里，只点了一盏灯。'] },
+      { clip: 'k_gate' },
       { clip: 'k_tea1', choice: 'cup', late: true },
       { clip: 'k_offer', choice: 'deal', late: true },
-      { clip: 'k_turn', flip: { t: 16.0, clock: ['协议原件', '就在你手边'] }, choice: 'paper', late: true },
-      { beat: () => ({ type: 'report', title: '代管协议 · 原件', rows: [['约定', '三亿元由周氏代管，查清后全数归还'], ['附：批条', '划三亿至周氏，事成销户'], ['批条落款', '白行长亲笔']], stamp: '原件' }) },
-      { clip: 'k_fall', clock: ['协议原件', '到手'] },
-      { beat: () => ({ aside: '冻结周氏的账户，从来不是帮你。那是灭口。' }) },
+      { clip: 'k_turn', flip: { t: 16.0, clock: ['代管协议', '原件就在你手边'] }, choice: 'paper', late: true },
+      { beat: () => ({ type: 'report', title: '代管协议 · 原件', rows: [['约定', '三亿元交周氏代管，三个月后归还'], ['所附批条', '划三亿至周氏，事成销户'], ['批条落款', '白行长亲笔']], stamp: '原件' }) },
+      // he only says it out loud to someone he thinks he has bought
+      { clip: 'k_fall', clock: ['代管协议', '原件到手'], cut: s => (s.deal === 'agree' ? null : { in: 8.5 }) },
+      { beat: s => ({ aside: s.deal === 'agree' ? '冻结周氏，从来不是帮你，是灭口。他亲口说的那句“一把刀”，林特助录下来了。' : '冻结周氏，从来不是帮你，是灭口。可他一个字都没认。' }) },
       { act: '尾声' },
-      { card: ['三年前她拟那份协议时，以为钱三个月就回来。', '后来她父亲的批条下来，说的是“处理一笔坏账”。'] },
       { card: ['你走到院子里。姐妹俩跟了出来。'] },
       { clip: 'k_why' },
       { card: ['你带着原件，走出了白家。'] },
       { clip: 'k_cliff3' },
     ],
+    outcome: s => Object.assign(
+      { got: '代管协议的原件' + (s.deal === 'agree' ? '，和白行长亲口承认的录音' : ''),
+        ally: s.paper === 'weiwei' ? '白薇亲眼看到了父亲的签名。' : '白芷站到了你这边。' },
+      s.deal === 'agree' ? {} : { miss: '白行长一个字都没认，你手里只有一张纸。先稳住他，他才会开口。' }),
     choices: {
       face: { question: '她从你身边走了过去。', opts: [
         { key: 'stop', label: '拦住她：把话说完', title: '当场拦人', scene: { say: '把话说完再走。', aside: '她没有停步：“今晚，你自己会听到。”' } },
         { key: 'name', label: '问她：替谁做事？', title: '问她替谁做事', scene: { say: '你现在，替谁做事？', aside: '她头也没回：“今晚之前，替我父亲。”' } },
         { key: 'let',  label: '让她走',           title: '放她走', scene: { type: 'dots', glyphs: ['…', '…', '…'], aside: '你没有回头。高跟鞋的声音越走越远。' } },
-      ]},
-      sister: { question: '她让你别提三年前。', opts: [
-        { key: 'ask',    label: '问她：你有个姐姐？', title: '问起姐姐', scene: { say: '你是不是有个姐姐？', aside: '她愣了一下：“你怎么知道？她三年没回过家了。”' } },
-        { key: 'ok',     label: '答应她',             title: '一口答应', scene: { say: '好，不提。', aside: '她松了口气，在前面带路。' } },
-        { key: 'silent', label: '不答话，往里走',     title: '不置可否', scene: { type: 'dots', glyphs: ['…', '…', '…'], aside: '你没有答应，也没有拒绝。' } },
       ]},
       cup: { question: '他把茶推到你面前。', headline: true, opts: [
         { key: 'drink', label: '喝了',     clip: 'k_c_drink', title: '一饮而尽', scene: { say: '好茶。', aside: '你端起来，喝了。' } },
@@ -923,9 +936,9 @@ const EPISODES = [
         { key: 'pour',  label: '把茶倒了', clip: 'k_c_pour',  title: '当面泼茶', scene: { say: '这杯茶，我喝不起。', aside: '你把它倒进了茶盘。' } },
       ]},
       deal: { question: '五十亿，换你闭嘴。', opts: [
-        { key: 'agree', label: '先答应，稳住他',     title: '假意应承', scene: { say: '白行长的条件，我可以考虑。', aside: '他点了点头，像在看一个终于懂事的晚辈。' } },
-        { key: 'why',   label: '问：我父亲不懂什么', title: '追问父亲', scene: { say: '我父亲不懂的，是什么道理？', aside: '他笑了笑：“有些钱，不是他该问去向的。”' } },
-        { key: 'call',  label: '点破：户头是你批的', title: '当面点破', scene: { say: '那个被抹掉名字的户头，审批人是您。', aside: '他端茶的手，停了一下。' } },
+        { key: 'agree', label: '先答应，稳住他',     title: '假意应承', scene: { say: '白行长的条件，我可以考虑。', aside: '他点了点头，像在看一个终于懂事的晚辈。话，也多了起来。' } },
+        { key: 'why',   label: '问：我父亲不懂什么', title: '追问父亲', scene: { say: '我父亲不懂的，是什么道理？', aside: '他笑了笑：“有些钱，不是他该问去向的。”说完，便不肯多讲。' } },
+        { key: 'call',  label: '点破：户头是你批的', title: '当面点破', scene: { say: '那个被抹掉名字的户头，审批人是您。', aside: '他端茶的手，停了一下。从这一刻起，他每个字都很小心。' } },
       ]},
       paper: { question: '原件就在你手边。', headline: true, opts: [
         { key: 'take',   label: '拿起来',       clip: 'k_p_take',   title: '原件入手', scene: { say: '这份东西，我带走了。' } },
@@ -978,7 +991,7 @@ const EPISODES = [
                   { who: '林特助', text: '他开口的第一句话是，别动白家。', t0: 13.2, t1: 17.0 }],
     },
     notes: {
-      k_tea1: [{ t0: 18.2, t1: 20.6, text: '我在门外。原件如果在这栋宅子里，今晚是唯一的机会。' }],
+      k_tea1: [{ t0: 18.2, t1: 20.6, text: '我在门外。您的手机通着，这边一直在录。' }],
     },
   },
 ];
@@ -996,8 +1009,8 @@ EPISODES.forEach(ep => {
     step.branch = !!choice && choice.opts.some(o => o.clip);
     ep.acts[ep.acts.length - 1].units += step.branch ? 2 : 1;
   });
-  ep.clipIds = [...new Set([...ep.flow.filter(s => s.clip).map(s => s.clip),
-    ...ep.asked.flatMap(a => a.choice.opts.map(o => o.clip).filter(Boolean))])];
+  ep.clipIds = [...new Set([...ep.flow.filter(s => s.clip || s.cold).map(s => s.clip || s.cold),
+    ...ep.asked.flatMap(a => a.choice.opts.flatMap(o => [o.clip, o.dead && o.dead.clip]).filter(Boolean))])];
 });
 
 const CHOICE_MS = 5000;
@@ -1011,7 +1024,7 @@ const CUTS = {
   q_lawyer: { in: 1.0 }, n_ring: { in: 1.6 }, e_leave: { in: 0.6 }, cliff1: { in: 1.2 },
   a2_sit: { in: 1.5, out: 9.2 }, a2_stand: { in: 1.2, out: 9.2 }, a2_main: { out: 9.0 },
   s1: { in: 0.6 }, s3: { in: 0.8 }, a_stand: { in: 0.8 }, a_ledger: { in: 1.0 }, b_vote: { in: 0.8 }, b_ask: { in: 1.0 },
-  f_move: { in: 0.8 }, f_dish: { in: 1.2 }, m_son: { in: 1.0 }, m_forge: { in: 2.2, out: 15.0 }, m_trail: { in: 1.4 },
+  f_move: { in: 0.8 }, f_dish: { in: 1.2 }, m_son: { in: 1.0 }, m_forge: { out: 14.8 }, m_trail: { in: 1.4 },
   k_turn: { in: 1.0 }, k_c_drink: { out: 7.6 }, k_c_leave: { in: 1.5 }, k_c_pour: { out: 9.0 },
   k_p_take: { out: 8.8 }, k_p_weiwei: { in: 1.5, out: 9.2 }, k_fall: { out: 16.6 },
 };
@@ -1055,11 +1068,13 @@ function prime(id) {
 const metadata = v => new Promise(r => {
   if (v.readyState >= 1) r(); else v.addEventListener('loadedmetadata', r, { once: true });
 });
-// The next clip on the spine after step `i`, looking past cards and beats.
-function clipAfter(ep, i) {
-  const step = ep.flow.slice(i + 1).find(s => s.clip);
-  return step && step.clip;
+// The next clip on the spine after step `i`, looking past cards, beats and steps not earned.
+function clipAfter(ep, i, state) {
+  const step = ep.flow.slice(i + 1).find(s => (s.clip || s.cold) && (!s.when || !state || s.when(state)));
+  return step && (step.clip || step.cold);
 }
+// A step's card, clock or cut may depend on what has been chosen so far.
+const given = (v, state) => (typeof v === 'function' ? v(state) : v);
 
 /* ----- what sits on top of the picture ----- */
 function buildBars(count) {
@@ -1120,7 +1135,7 @@ function playClip(id, o = {}) {
     current = (current + 1) % 2;
     const busy = on => { $('loading').hidden = !on; };
     const slow = setTimeout(() => busy(true), 450);   // only a slow connection ever shows this
-    const cut = CUTS[id] || {}, lines = LINES[id] || [], notes = NOTES[id] || [];
+    const cut = Object.assign({}, CUTS[id], o.cut), lines = LINES[id] || [], notes = o.plain ? [] : NOTES[id] || [];
     await metadata(next);
     const end = Math.min(cut.out || Infinity, next.duration), from = cut.in || 0;
     // a choice is asked as soon as the last line is over, not when the picture runs out
@@ -1270,7 +1285,7 @@ async function scene(spec) {
     spec.rows.forEach(([k, v]) => { const row = el('p'); row.append(el('small', '', k), v); doc.append(row); });
     doc.append(el('span', 'stamp', spec.stamp));
     box.append(doc);
-    hold = 3200;
+    hold = spec.hold || 3200;
   } else if (spec.type === 'msg') {
     const msg = el('div', 'msg');
     msg.append(el('p', 'who', spec.who), el('p', 'text', spec.text));
@@ -1346,8 +1361,10 @@ async function run(index, o = {}) {
     const step = ep.flow[i];
     if (step.act) { setBar(act, 1); act++; unit = 0; continue; }
     if (i < from) { if (step.clip) unit += step.branch ? 2 : 1; continue; }
-    const upNext = clipAfter(ep, i);
-    if (step.card) { prime(upNext); await card(step.card); continue; }
+    if (step.when && !step.when(state)) continue;        // a step an earlier choice did not earn
+    const upNext = clipAfter(ep, i, state);
+    if (step.card) { prime(upNext); await card(given(step.card, state)); continue; }
+    if (step.cold) { await playClip(step.cold, { state, plain: true, cut: step.cut, upNext }); continue; }
     if (step.beat) {
       const spec = step.beat(state);
       if (spec) { prime(upNext); await scene(spec); }
@@ -1356,8 +1373,8 @@ async function run(index, o = {}) {
     const choice = step.choice && ep.choices[step.choice];
     const preset = i === from ? o.preset : null;
     const pick = await playClip(step.clip, {
-      bar, state, choice, preset, clock: step.clock, flip: step.flip, late: step.late, deal: ep.deal,
-      tail: preset ? 3.5 : 0, upNext: step.branch ? null : upNext,
+      bar, state, choice, preset, clock: given(step.clock, state), flip: step.flip, deal: ep.deal,
+      cut: given(step.cut, state), tail: preset || (o.retry && i === from) ? 3.5 : 0, upNext: step.branch ? null : upNext,
     });
     unit++;
     if (!choice) continue;
@@ -1365,14 +1382,56 @@ async function run(index, o = {}) {
     picks[step.choice] = pick;
     prime(pick.clip || upNext);        // the beat below gives it time to get ready
     await scene(typeof pick.scene === 'function' ? pick.scene(state) : pick.scene);
-    if (pick.clip) { await playClip(pick.clip, { bar, state, upNext }); unit++; }
+    if (pick.clip) { await playClip(pick.clip, { bar, state, upNext: pick.dead ? null : upNext }); unit++; }
+    if (pick.dead) {
+      if (pick.dead.clip) await playClip(pick.dead.clip, { bar, state });
+      running = false;
+      deadEnd(index, i, pick, picks);
+      return;
+    }
   }
   setBar(act, 1);
   running = false;
-  ending(index, picks);
+  ending(index, picks, state);
 }
 
-function ending(index, picks) {
+// Buttons under an ending.
+function action(label, cls, go) {
+  const b = el('button', cls, label);
+  b.type = 'button';
+  b.addEventListener('click', go);
+  $('fin-actions').append(b);
+  return b;
+}
+// What was chosen before step `at`, to start again from there.
+function before(ep, at, picks) {
+  const kept = {}, state = {};
+  ep.asked.filter(b => b.at < at && picks[b.id]).forEach(b => { kept[b.id] = picks[b.id]; state[b.id] = picks[b.id].key; });
+  return { picks: kept, state };
+}
+
+// A choice that loses the evening. Nothing from it is carried into the next episode.
+function deadEnd(index, at, pick, picks) {
+  const ep = EPISODES[index], store = readStore();
+  store.tried[ep.n] = [...new Set([...(store.tried[ep.n] || []), ep.flow[at].choice + ':' + pick.key])];
+  writeStore(store);
+  $('fin-to').textContent = '第 ' + ep.n + ' 集 · 另一种结局';
+  $('fin-title').innerHTML = '';
+  $('fin-title').append(el('span', '', pick.dead.title));
+  $('fin-out').innerHTML = '';
+  $('fin-count').textContent = '';
+  $('fin-rows').innerHTML = '';
+  pick.dead.lines.forEach(text => $('fin-rows').append(el('p', 'fate', text)));
+  $('fin-actions').innerHTML = '';
+  const retry = action('回到那一刻，重新选', 'again', () => run(index, Object.assign({ from: at, retry: true }, before(ep, at, picks))));
+  action('从头再看一遍', 'ghost', () => run(index));
+  $('fin-teaser').textContent = '';
+  $('finale').scrollTop = 0;
+  $('finale').hidden = false;
+  retry.focus();
+}
+
+function ending(index, picks, state) {
   const ep = EPISODES[index], next = EPISODES[index + 1], store = readStore();
   const tried = new Set(store.tried[ep.n] || []);
   ep.asked.forEach(a => { if (picks[a.id]) tried.add(a.id + ':' + picks[a.id].key); });
@@ -1386,6 +1445,12 @@ function ending(index, picks) {
   // parts that never break inside themselves, so a narrow screen wraps between them
   $('fin-title').innerHTML = '';
   headline.forEach((title, i) => $('fin-title').append(el('span', '', title + (i < headline.length - 1 ? '，' : ''))));
+  // what this route actually won, and what a different choice would have added
+  const out = ep.outcome ? ep.outcome(state || {}) : {}, box = $('fin-out');
+  box.innerHTML = '';
+  if (out.got) box.append(el('span', '', '你带走了：' + out.got + '。'));
+  if (out.ally) box.append(el('span', '', out.ally));
+  if (out.miss) box.append(el('span', 'miss', '没拿到：' + out.miss));
   const total = ep.asked.reduce((n, a) => n + a.choice.opts.length, 0);
   $('fin-count').textContent = '这一集有 ' + total + ' 个选项，你试过 ' + tried.size + ' 个。点任意一个，从那一刻重来。';
   const rows = $('fin-rows');
@@ -1395,29 +1460,17 @@ function ending(index, picks) {
     a.choice.opts.forEach(opt => {
       const pill = el('button', 'pill' + (picks[a.id] === opt ? ' now' : tried.has(a.id + ':' + opt.key) ? ' tried' : ''), opt.label);
       pill.type = 'button';
-      pill.addEventListener('click', () => {
-        // keep what was chosen before this moment; everything after it is asked again
-        const before = {}, state = {};
-        ep.asked.filter(b => b.at < a.at && picks[b.id]).forEach(b => { before[b.id] = picks[b.id]; state[b.id] = picks[b.id].key; });
-        run(index, { from: a.at, preset: opt, picks: before, state });
-      });
+      // keep what was chosen before this moment; everything after it is asked again
+      pill.addEventListener('click', () => run(index, Object.assign({ from: a.at, preset: opt }, before(ep, a.at, picks))));
       pills.append(pill);
     });
     row.append(pills);
     rows.append(row);
   });
 
-  const actions = $('fin-actions');
-  actions.innerHTML = '';
-  const add = (label, cls, go) => {
-    const b = el('button', cls, label);
-    b.type = 'button';
-    b.addEventListener('click', go);
-    actions.append(b);
-    return b;
-  };
-  const first = next ? add('看第 ' + next.n + ' 集', 'again', () => run(index + 1)) : add('从头再看一遍', 'again', () => run(index));
-  if (next) add('从头再看一遍', 'ghost', () => run(index)); else add('回到第 1 集', 'ghost', () => run(0));
+  $('fin-actions').innerHTML = '';
+  const first = next ? action('看第 ' + next.n + ' 集', 'again', () => run(index + 1)) : action('从头再看一遍', 'again', () => run(index));
+  if (next) action('从头再看一遍', 'ghost', () => run(index)); else action('回到第 1 集', 'ghost', () => run(0));
   $('fin-teaser').textContent = ep.teaser || '';
   $('finale').scrollTop = 0;
   $('finale').hidden = false;
