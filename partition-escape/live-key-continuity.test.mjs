@@ -1,0 +1,32 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {Room} from './world.mjs';
+import {LiveHub} from './live.mjs';
+
+test('a pending key handoff survives voice loss and a manual new session', () => {
+  const room = new Room({west:'human', east:'live'});
+  const live = new LiveHub('.', 'http://127.0.0.1', false);
+  const proposal = room.command('east', {type:'action', id:'send-key'});
+  assert.equal(proposal.receipt.outcome, 'proposed');
+  const pending = room.pending.id;
+  const originalScope = live.get(room).scope;
+  assert.throws(() => live.renew(room));
+  live.stop(room, 'browser_disconnected');
+  assert.equal(room.view('west').local.keyHere, false);
+  assert.equal(room.command('west', {type:'action', id:'unlock'}).ok, false);
+  assert.equal(live.renew(room), 1);
+  assert.notEqual(live.get(room).scope, originalScope);
+  assert.equal(live.get(room).started, false);
+  assert.equal(room.view('west').pending.id, pending);
+  const accepted = room.command('west', {type:'accept', id:pending});
+  assert.equal(accepted.receipt.outcome, 'applied');
+  assert.equal(room.view('west').local.keyHere, true);
+  live.stop(room, 'browser_disconnected');
+  const unlocked = room.command('west', {type:'action', id:'unlock'});
+  assert.equal(unlocked.receipt.outcome, 'applied');
+  assert.equal(room.view('west').local.unlocked, true);
+  assert.equal(room.view('west').local.doorOpen, false);
+  assert.equal(live.renew(room), 2);
+  assert.equal(room.view('west').local.unlocked, true);
+  assert.equal(room.command('west', {type:'action', id:'unlock'}).ok, false);
+});

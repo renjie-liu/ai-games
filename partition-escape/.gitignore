@@ -1,0 +1,11 @@
+.runs/
+.voice/
+.live/
+__pycache__/
+
+.model/
+model_request_ledger.json
+.env
+.env.*
+.venv/
+node_modules/
