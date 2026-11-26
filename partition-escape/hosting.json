@@ -1,0 +1,10 @@
+{
+  "public_origin": null,
+  "bind": "127.0.0.1",
+  "invites_file": null,
+  "rooms": {
+    "most": 20,
+    "idle_minutes": 0,
+    "per_invite_per_hour": 12
+  }
+}

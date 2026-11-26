@@ -7,6 +7,9 @@ window.addEventListener('hashchange',()=>location.reload());
 const $=s=>document.querySelector(s), app=$('#app');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const params=new URLSearchParams(location.hash.slice(1)), room=params.get('room'), key=params.get('key');
+// On a hosted server the link carries an invitation's code after the #, where no server sees it;
+// the page hands it over in a header when it asks what it may do and when it makes a room.
+const invitation=params.get('invite'), inviteHeader=invitation?{'X-Partition-Invite':invitation}:{};
 const seatName={west:'西席',east:'东席',watch:'观众'}, kindName={human:'真人',script:'脚本 stub',model:'真实模型',live:'Gemini Live', 'offline-fixture':'离线 fixture · 非模型'};
 let reading=false,voice=null,lastSpoken=0,ttsClient=null,liveClient=null;
 let view,scene,selected=null,tab='objects',detailMessage='',previousRender='',overlayClosed=false,commandTail=Promise.resolve();
@@ -87,7 +90,7 @@ function command(c){
   commandTail=commandTail.then(perform,perform);return commandTail;
 }
 async function createRoom(controllers){
-  const response=await fetch('/api/rooms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({controllers})});
+  const response=await fetch('/api/rooms',{method:'POST',headers:{'Content-Type':'application/json',...inviteHeader},body:JSON.stringify({controllers})});
   const result=await response.json();
   if(!response.ok)throw Error(result.error||'创建房间失败');
   return result;
@@ -95,18 +98,26 @@ async function createRoom(controllers){
 function lobby(){
   app.innerHTML=`<header class="topbar">${brand}<span class="badge">LOCAL PROTOTYPE / 01</span></header><main class="lobby"><div class="lobby-grid"><section><div class="eyebrow">一堵墙 · 两个房间 · 同一个出口</div><h1>你看不到的，<br><em>另一侧看得见。</em></h1><p class="intro">先别急着开你的门。查看自己的机关，把发现告诉墙后的人，一起找到离开的办法。</p><div class="setup"><div class="eyebrow">选择这次合作</div><div class="seats"><label class="seat-choice"><span>01 / 西席 · 动力与出口</span><select id="west" disabled></select></label><label class="seat-choice"><span>02 / 东席 · 检修与闸门</span><select id="east" disabled></select></label></div><button class="primary" id="create" disabled>创建这次合作 ↗</button><p class="scope">正在读取本机可用席位…</p><div id="invite" aria-live="polite"></div></div></section><div class="preview" id="preview"><div class="preview-label"><span>WEST / 暖光</span><span>两侧线索各自私有</span><span>EAST / 冷光</span></div></div></div><div class="feature-row"><span>◈ 固定规则，真实机关</span><span>↔ 交换发现，商量行动</span><span>↶ 错了可以调整，没有突然失败</span></div></main>`;
   async function loadSeats(){
-    const response=await fetch('/api/capabilities');
+    const response=await fetch('/api/capabilities',{headers:inviteHeader});
     if(!response.ok)throw Error('capabilities unavailable');
     const c=await response.json();
+    // A hosted server lets in whoever holds an invitation. Without a good one the page says so and offers nothing.
+    if(c.hosted&&!c.invite?.valid){
+      $('.scope').textContent=invitation?'这条邀请链接无效，或者已经被收回。请向邀请你的人要一条新的。':'这个入口需要邀请链接。请向邀请你的人要一条完整的链接。';
+      return;
+    }
     const west=$('#west'),east=$('#east');
     west.add(new Option('真人','human'));
     if(c.liveOnly){
       if(!c.live?.enabled)throw Error('Live unavailable');
       east.add(new Option('Gemini Live · 语音搭档','live'));
-      let status='进入西席后，由你点击开始语音。麦克风音频和游戏上下文会发送给 Google。';
-      if(c.live.remaining===0)status='本入口没有可用连接次数。';
+      // What is left to this visitor: the invitation's own count on a hosted server, never more than the server's.
+      const left=c.hosted?Math.min(c.live.remaining,c.invite.remaining):c.live.remaining;
+      let status=c.hosted?'进入西席后，由你点击开始语音。你的语音和游戏上下文会经由本服务发送给 Google。本服务不保存录音，也不保存你说了什么；你打字发给搭档的话和房间里的操作会留在服务端的运行记录里。':
+        '进入西席后，由你点击开始语音。麦克风音频和游戏上下文会发送给 Google。';
+      if(left===0)status=c.hosted?'这条邀请的语音次数已经用完，或者这个服务的总次数已经用完。':'本入口没有可用连接次数。';
       else if(c.live.projectVerified===false)status='项目费用和真人音频隐私设置待核实，当前不能开麦。';
-      $('.scope').textContent=`剩余${c.live.remaining}次本机连接。 ${status}`;
+      $('.scope').textContent=c.hosted?`受邀：${c.invite.name}。还可以开始 ${left} 次语音。仅限年满 18 岁的玩家。${status}`:`剩余${c.live.remaining}次本机连接。 ${status}`;
     }else{
       west.add(new Option('脚本 stub · harness','script'));
       east.add(new Option('脚本 stub · harness','script'));

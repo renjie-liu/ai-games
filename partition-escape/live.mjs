@@ -60,9 +60,20 @@ export class LiveHub {
   status(){
     if(this.enabled&&Date.now()-this.quotaAt>=this.server.quota_refresh_ms)this.refreshQuota();
     const s=this.session;
+    // What anyone may be told. Who was invited and how much each has used stays here (usedBy).
+    const {invites,...quota}=this.enabled?this.quota:NO_QUOTA;
     return {enabled:this.enabled,runtimeReady:this.runtime.ready,runtimeCode:this.runtime.code,fixture:process.env.PARTITION_LIVE_FIXTURE==='1',model:'gemini-3.8-live',
-      seconds:s.seconds,inputSeconds:s.input_seconds,outputSeconds:s.output_seconds,usageStopUsd:s.usage_stop_usd,creditsVerified:false,
-      ...(this.enabled?this.quota:NO_QUOTA)};
+      seconds:s.seconds,inputSeconds:s.input_seconds,outputSeconds:s.output_seconds,usageStopUsd:s.usage_stop_usd,creditsVerified:false,...quota};
+  }
+  // How many connections the invitation of this name has started, as last read from the ledger.
+  usedBy(name){return this.quota.invites[name]??0;}
+  running(room){const j=this.jobs.get(room.id);return !!j&&j.started&&!j.ended;}
+  // The room is being let go: its session, if one somehow still runs, is ended, and nothing of the
+  // room is kept or left ticking.
+  forget(room){
+    const j=this.jobs.get(room.id);if(!j)return;
+    this.stop(room,'room_expired');j.updates.clear('room_expired');clearInterval(j.timer);clearTimeout(j.deadline);j.stream?.end();
+    this.jobs.delete(room.id);
   }
   get(room){
     if(!this.jobs.has(room.id))this.jobs.set(room.id,{generation:0,scope:id(),epoch:0,tickets:new Map(),started:false,ended:false,speaking:false,stream:null,worker:null,lastSeen:Date.now(),events:[]});
@@ -106,7 +117,7 @@ export class LiveHub {
       if(quota.remaining===0)throw Error('live_authorization_exhausted');
       if(!quota.projectVerified)throw Error('live_project_unverified');
       // A first look only: the worker counts again, on the ledger itself, when it takes the connection.
-      if(room.invite&&(quota.invites[room.invite.name]??0)>=room.invite.connections)throw Error('live_invite_exhausted');
+      if(room.invite&&this.usedBy(room.invite.name)>=room.invite.connections)throw Error('live_invite_exhausted');
     }
     if([...this.jobs.values()].filter(x=>x.started&&!x.ended).length>=this.server.concurrent_sessions)throw Error('live_sessions_full');
     const seat=['west','east'].find(s=>room.controllers[s]==='live');if(!seat)throw Error('Not a Live room');

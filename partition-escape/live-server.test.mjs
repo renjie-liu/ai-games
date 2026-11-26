@@ -82,7 +82,9 @@ test('asking for the status never waits for the count: it is read in the backgro
   // Once the answer is older than the limits allow it is asked for again; the caller still gets the kept one.
   now+=700;
   assert.equal(hub.status().remaining,5);await tick();
-  assert.equal(asked.length,2);assert.deepEqual([hub.status().remaining,hub.status().invites],[4,{朋友:1}]);
+  assert.equal(asked.length,2);assert.deepEqual([hub.status().remaining,hub.usedBy('朋友'),hub.usedBy('同事')],[4,1,0]);
+  // The status is for anyone who asks: it does not say who was invited.
+  assert.equal('invites' in hub.status(),false);assert.equal(JSON.stringify(hub.status()).includes('朋友'),false);
   // Many callers at once make one question.
   now+=5000;for(let i=0;i<50;i++)hub.status();await tick();assert.equal(asked.length,3);
 });
