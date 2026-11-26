@@ -43,6 +43,7 @@ class ScriptedLive:
         self.out = asyncio.Queue()
         self.tool_responses = asyncio.Queue()
         self.sent = []          # every text the worker put on the wire, in order
+        self.responses = []     # every tool response the worker sent back, in order
         self.audio_in = 0       # bytes of player audio received
         self.calls = 0
         self.turns_done = 0
@@ -63,6 +64,7 @@ class ScriptedLive:
 
     async def send_tool_response(self, function_responses):
         for response in function_responses:
+            self.responses.append(response.response)
             await self.tool_responses.put(response.response)
 
     async def receive(self):

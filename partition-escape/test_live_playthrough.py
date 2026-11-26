@@ -13,6 +13,7 @@ import asyncio
 import base64
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -31,7 +32,12 @@ PLAYER_SECONDS = 5
 PARTNER_SECONDS = 4
 
 
-class WholeGameInOneSession(unittest.IsolatedAsyncioTestCase):
+class LiveRoom(unittest.IsolatedAsyncioTestCase):
+    """The production worker against the real room and hub, with a scripted provider. No tests of its own."""
+    # The rule set of the room (room-rules.json) and the seed of its puzzle; None is the room without one.
+    RULES = None
+    SEED = None
+
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -72,7 +78,8 @@ class WholeGameInOneSession(unittest.IsolatedAsyncioTestCase):
     def room_env(self):
         override = Path(self.temp.name) / 'limits.json'
         override.write_text(json.dumps(self.FAST))
-        return {**os.environ, 'PARTITION_LIVE_LIMITS': str(override)}
+        rules = {'PARTITION_FIXTURE_RULES': self.RULES, 'PARTITION_FIXTURE_SEED': str(self.SEED)} if self.RULES else {}
+        return {**os.environ, 'PARTITION_LIVE_LIMITS': str(override), **rules}
 
     def limit_patches(self):
         import live_budget
@@ -190,7 +197,8 @@ class WholeGameInOneSession(unittest.IsolatedAsyncioTestCase):
         with urllib.request.urlopen(request, timeout=10) as response:
             return json.load(response)
 
-    # --- the game --------------------------------------------------------------
+
+class WholeGameInOneSession(LiveRoom):
     async def test_the_partner_can_get_ready_under_a_waiting_proposal(self):
         # The order a person plays in (real game of 2026-11-26): west proposes cutting the power as
         # soon as the gate is up, and only then does the partner hold the gate and confirm.
@@ -248,6 +256,102 @@ class WholeGameInOneSession(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(self.run_task, 10)
         self.assertEqual(self.closed(), 'user_stop')
         print(f'\nwhole game with {tool_calls} tool calls, share of each session cap used:', {k: round(v, 3) for k, v in used.items()}, file=sys.stderr)
+
+
+class WholeGameWithAChoiceOfSupports(LiveRoom):
+    """The rule set with a battery and a choice of supports, through the same worker and hub.
+
+    The scripted partner and the test's player each use only what their own room shows, as the
+    two seats have to: the partner reads the supports, the slot and the tag off its own view, the
+    player the table and the gate's weight off the west view. Neither is told the answer."""
+    RULES = 'standard'
+    # In this room the two supports east would offer first are the weak ones.
+    SEED = 20261129
+    use_handed_tickets = True
+
+    def east_knows(self):
+        """What the partner can say about the supports, from the view the worker handed it."""
+        view = self.handed()['view']
+        notes = ' '.join(self.told_notes())
+        tag = re.search(r'一块(.+?)色检修牌', notes).group(1)
+        low, high = map(int, re.search(r'只放得进 (\d+) 到 (\d+) 厘米', notes).groups())
+        lengths = {mark: int(cm) for mark, cm in re.findall(r'刻着(.+?)的长 (\d+) 厘米', notes)}
+        offered = {re.fullmatch(r'装上刻着(.+)的支撑', a['label']).group(1): a['id']
+                   for thing in view['scene'] for a in thing['actions'] if a['id'].startswith('brace-')}
+        return tag, [mark for mark, cm in lengths.items() if low <= cm <= high], offered
+
+    def west_decides(self, view, tag, mark):
+        """The player's sum: is the support with this mark strong enough, in the column of that tag?"""
+        notes = {n['object']: n for n in view['notes']}
+        weight = int(re.search(r'自重 (\d+) 公斤', notes['plaque']['text']).group(1))
+        table = notes['chart']['table']
+        column = table['columns'].index(tag + '牌')
+        return next(row for row in table['rows'] if row[0] == mark)[column] >= weight
+
+    def told_notes(self):
+        """Every note the worker has put in front of the partner so far, read off the wire as a
+        model would: with the opening look, with each turn, and in each tool result. A note is
+        sent once in a session, so what the partner knows is all of them together."""
+        views = []
+        for text in self.live.sent:
+            try:
+                data = json.loads(text)
+            except ValueError:
+                continue
+            if isinstance(data, dict):
+                views += [data[key].get('view') for key in ('initial_observation', 'observation') if key in data]
+        views += [r.get('view') for r in self.live.responses if isinstance(r, dict)]
+        return [note['text'] for view in views if view for note in view.get('notes', [])]
+
+    async def test_a_wrong_offer_is_declined_and_the_right_support_wins_three_stars(self):
+        for thing in ('plaque', 'power', 'chart'):
+            await self.west({'type': 'inspect', 'id': thing})
+        await self.speak(('action', 'send-key'))
+        view = (await self.west({'type': 'inspect', 'id': 'hatch'}))['view']
+        self.assertEqual(view['local']['charge'], 2)
+        await self.west_button({'type': 'accept', 'id': view['pending']['id']})
+        await self.west_button({'type': 'action', 'id': 'unlock'})
+        await self.west_button({'type': 'action', 'id': 'power-on'})
+        await self.speak(('action', 'hold-brake'))
+        await self.west_button({'type': 'action', 'id': 'power-off'})
+        await self.type('我提了断电，你确认一下。', ('accept', None))
+        # The partner now sees the supports. It offers each one that fits; the player decides each
+        # against the table, declining what is too weak.
+        await self.speak()
+        tag, fitting, offered = self.east_knows()
+        self.assertEqual(len(fitting), 3, 'three supports fit the slot')
+        self.assertEqual(len(offered), 4, 'the one that does not fit can still be asked for')
+        declined = accepted = 0
+        for mark in fitting:
+            await self.speak(('action', offered[mark]))
+            view = (await self.west({'type': 'inspect', 'id': 'chart'}))['view']
+            self.assertEqual(view['pending']['label'], f'装上刻着{mark}的支撑')
+            if self.west_decides(view, tag, mark):
+                await self.west_button({'type': 'accept', 'id': view['pending']['id']})
+                accepted += 1
+                break
+            await self.west_button({'type': 'decline', 'id': view['pending']['id']})
+            declined += 1
+        self.assertEqual((declined, accepted), (2, 1))
+        await self.speak(('action', 'release-brake'))
+        public = (await asyncio.to_thread(self.get, self.tokens['watch']))['public']
+        self.assertTrue(public['gateOpen'], 'the support the table picked has to hold')
+        await self.west_button({'type': 'action', 'id': 'open-door'})
+        await self.speak(('accept', None), ('action', 'leave'))
+
+        final = (await self.west({'type': 'inspect', 'id': 'door'}))['view']
+        self.assertTrue(final['complete'])
+        self.assertEqual(final['rating'], {'stars': 3, 'powerOns': 1, 'packs': 0})
+        self.assertIsNone(self.closed(), 'the session must still be open when the game is won')
+        row = self.session.ledger.row
+        used = {k: row[k] / row['limits'][k] for k in ('input_seconds', 'output_seconds', 'turns', 'tools', 'text_bytes')}
+        used['usage_stop_usd'] = row['estimated_usd'] / row['limits']['usage_stop_usd']
+        self.assertLess(max(used.values()), .5, used)
+        await asyncio.to_thread(self.post, '/live-input', self.tokens['west'], {'type': 'stop'})
+        await asyncio.wait_for(self.run_task, 10)
+        print(f'\nwhole game with a choice of supports: {declined} declined, {row["tools"]} tool calls, '
+              f'{len(self.seen("turn_complete"))} turns, share of each session cap used:',
+              {k: round(v, 3) for k, v in used.items()}, file=sys.stderr)
 
 
 if __name__ == '__main__':
