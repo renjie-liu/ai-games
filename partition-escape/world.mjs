@@ -42,6 +42,15 @@ export class Room {
     this.event('system','ready','两侧已接通。先查看自己房间里的物件，再把发现告诉另一侧。','rules');
   }
   role(token){return Object.keys(this.tokens).find(s=>this.tokens[s]===token);}
+  // What a seat learns by simply looking around its own room: the current fact of each of its own
+  // objects goes into its notes. No event and no revision, because nothing in the world changed.
+  // For the voice partner, which cannot spend a turn on every object before it can be of any help.
+  look(role){
+    for(const p of props[role]||[]){
+      const f=fact(role,p.id,this.state);
+      if(f&&!this.notes[role].some(n=>n.id===f.id))this.notes[role].push(f);
+    }
+  }
   event(seat,type,text,source=this.controllers[seat]||'rules',details={}) {
     if(source==='live'&&this.liveFixture)source='offline-fixture';
     this.rev++; this.events.push({id:this.rev,at:new Date().toISOString(),seat,type,text,source,...details});

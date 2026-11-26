@@ -149,6 +149,9 @@ export class LiveHub {
   observe(room,role,scope){
     const j=this.get(room);if(role!==j.seat||j.ended||j.speaking||scope!==j.scope)return {ok:false,code:'live_superseded'};
     const ticket=id();j.tickets.clear();j.tickets.set(ticket,{scope:j.scope,rev:room.rev,expires:Date.now()+15000});
+    // An observation is a look around the partner's own room: the facts of its own objects come
+    // with it (and change with the room, as the fan's does once the gate has risen).
+    room.look(role);
     return {ok:true,ticket,scope:j.scope,view:room.view(role)};
   }
   command(room,role,b){

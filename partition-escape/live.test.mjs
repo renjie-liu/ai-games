@@ -62,3 +62,25 @@ test('worker-first terminal reason is not replaced by disconnect cleanup',()=>{
   assert.equal(h.finish(r,'live_text_bytes_limit'),true);h.stop(r,'browser_disconnected');
   assert.equal(events.filter(e=>e.type==='closed').length,1);assert.equal(j.stopReason,'live_text_bytes_limit');assert.equal(r.worker.east.message,'live_text_bytes_limit');
 });
+
+test('an observation is a look around the partner\'s own room: its facts come with it, change with the room, and stay its own',()=>{
+  const {h,r,j}=setup(),rev=r.rev,events=r.events.length;
+  const first=h.observe(r,'east',j.scope).view;
+  // Nothing was inspected, yet the partner knows what each of its four objects does.
+  assert.deepEqual(first.notes.map(n=>n.id).sort(),['brake-rule','fan-rule','gate-rule','key-found']);
+  assert.ok(first.notes.find(n=>n.id==='gate-rule').text.includes('断电会落下'));
+  assert.ok(first.scene.every(o=>o.inspected));
+  // Looking is not an event: the room's revision and its public record are untouched.
+  assert.equal(r.rev,rev);assert.equal(r.events.length,events);
+  // West's facts are never in it, and west's own view has none of east's.
+  assert.equal(JSON.stringify(first).includes('西门一旦推开'),false);
+  assert.equal(JSON.stringify(r.view('west')).includes('手闸只能固定'),false);
+  // Once the gate has risen, the fan shows what is behind it: the next look carries that fact.
+  r.command('west',{type:'action',id:'power-on'});
+  const second=h.observe(r,'east',j.scope).view;
+  assert.ok(second.notes.find(n=>n.id==='brace-found').text.includes('手闸保持'));
+  assert.equal(second.notes.filter(n=>n.id==='gate-rule').length,1,'a fact is noted once');
+  // A waiting proposal says which seat's actions are shared, so the partner can tell its own controls apart.
+  assert.deepEqual(second.scene.find(o=>o.id==='brake').actions,[{id:'hold-brake',label:'拉住手闸',shared:false}]);
+  assert.deepEqual(second.scene.find(o=>o.id==='hatch').actions,[{id:'send-key',label:'递出钥匙',shared:true}]);
+});
