@@ -39,6 +39,7 @@ const out=path.resolve(env('E2E_OUT','.runs/e2e-voice'));
 const chromePath=env('E2E_CHROME','/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
 const voice=env('E2E_VOICE','Tingting');                 // any installed voice that speaks the lines' language
 const TURN_MS=Number(env('E2E_TURN_MS','60000'));        // how long to wait for one request to take effect
+const WIN_CLOSE_MS=Number(env('E2E_WIN_CLOSE_MS','45000')); // how long a won game may take to end its session: the page keeps it up to 20 s for the partner's last line
 const GAP_MS=Number(env('E2E_GAP_MS','800'));            // silence between the two opening sentences: the voice detection ends an utterance after 700 ms
 const runs=path.resolve(env('E2E_RUNS','.runs'));         // where the server keeps its run records, to read the worker's own log
 // Who the player is: someone who knows only what the west room shows and proposes cutting the power
@@ -173,6 +174,7 @@ try{
     return {state:text('#live-state'),heard:text('#live-you'),partner:text('#live-partner'),receipt:text('#live-result'),
       scene:text('#scene-state'),pending:document.querySelector('#pending')?.innerText.replace(/\n+/g,' | ')||'',
       overlay:document.querySelector('#overlay')?.innerText.replace(/\n+/g,' | ').slice(0,120)||'',
+      ended:document.querySelector('#live-stop')?.disabled===true,
       played:window.__e2e.played,scheduled:window.__e2e.scheduled,quiet:window.__e2e.quiet(),mic:window.__e2e.micRequests};
   });
   async function until(check,ms,every=250){
@@ -302,12 +304,14 @@ try{
   await shot('04-end');
   const final=await view();result.complete=final.complete===true;result.rating=final.rating??null;
   if(result.complete){
-    // Winning must close the microphone by itself: the winning screen covers the stop button.
-    const closed=await until(async()=>{const u=await ui();return /已通关/.test(u.state)?u:null;},30000);
+    // Winning must end the session by itself: the winning screen covers the stop button. The page
+    // says "won" at once and keeps the connection for the partner's last line, so the words alone
+    // do not show it: the session is over when the stop button has gone dead.
+    const closed=await until(async()=>{const u=await ui();return u.ended&&/已通关/.test(u.state)?u:null;},WIN_CLOSE_MS);
     result.closed_after_win=closed?closed.state:'still open: '+(await ui()).state;result.overlay=(await ui()).overlay;
     log('after winning:',result.closed_after_win);
   }
-  if(!/已通关|语音已停止|麦克风关/.test((await ui()).state)){
+  if(!(await ui()).ended){
     await page.evaluate(()=>{const b=document.querySelector('#live-stop');if(b&&!b.disabled)b.click();});await delay(1500);
   }
   await shot('05-after');
