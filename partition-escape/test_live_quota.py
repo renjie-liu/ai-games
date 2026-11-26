@@ -68,6 +68,41 @@ class HumanPlaytestQuota(unittest.TestCase):
             Ledger()
 
 
+class HostedGrant(unittest.TestCase):
+    """deploy/grant.py: the one command with which the owner of a hosted server says how many
+    voice connections it may ever start."""
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.directory = Path(temp.name) / 'live'
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('hosted_grant', Path(__file__).parent / 'deploy' / 'grant.py')
+        self.grant = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.grant)
+
+    def test_it_writes_a_grant_the_worker_accepts_and_never_a_second_one(self):
+        self.assertEqual(self.grant.mint(self.directory, 100)['remaining'], 100)
+        status = quota_status(self.directory)
+        self.assertEqual((status['connectionLimit'], status['projectVerified'], status['invites']), (100, True, {}))
+        self.assertEqual(self.directory.stat().st_mode & 0o077, 0, "the grant is its owner's to read")
+        before = (self.directory / 'authorization.json').read_text()
+        with self.assertRaisesRegex(SystemExit, 'already holds a grant'):
+            self.grant.mint(self.directory, 500)
+        self.assertEqual((self.directory / 'authorization.json').read_text(), before)
+
+    def test_it_takes_a_whole_number_of_connections_and_the_owners_word_on_billing(self):
+        for bad in (0, -5, 2.5, '100', True):
+            with self.assertRaisesRegex(SystemExit, 'whole number', msg=str(bad)):
+                self.grant.mint(self.directory, bad)
+        script = str(Path(__file__).parent / 'deploy' / 'grant.py')
+        for arguments in (['100'], ['100', '--yes'], ['many', '--billing-is-on'], []):
+            run = subprocess.run([sys.executable, script, *arguments], capture_output=True, text=True, cwd=self.directory.parent)
+            self.assertNotEqual(run.returncode, 0, arguments)
+            self.assertIn('--billing-is-on', run.stderr)
+        self.assertFalse(self.directory.exists())
+
+
 class SeveralSessionsShareOneLedger(unittest.TestCase):
     """A hosted server runs more than one voice session at a time (live-limits.json,
     server.concurrent_sessions). Each session is its own worker process with its own Ledger on the

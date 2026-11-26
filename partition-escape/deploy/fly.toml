@@ -1,0 +1,32 @@
+# A hosted server on Fly.io (HOSTING.md). One machine with one volume, always: the rooms are in the
+# server's memory and the ledger is one file, so a second machine would be a second game with a
+# second count.
+
+app = "CHANGE-ME"             # the name given to `fly apps create`
+primary_region = "CHANGE-ME"  # near the players, in a region where the Gemini API answers (not Hong Kong)
+
+[build]
+  dockerfile = "Dockerfile"
+
+[mounts]
+  source = "partition_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # With nobody at a page the machine stops and the rooms end with it; the next visitor starts it.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  # A player with the microphone open is about twenty short requests a second and one long one.
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 150
+    hard_limit = 300
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "1gb"

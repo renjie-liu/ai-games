@@ -46,6 +46,8 @@ PY
 | `session.max_output_tokens` | 1024 | 单次生成的输出上限。模型的思考也算在里面：2026-11-26 的真实记录里，上限为 256 时，思考用掉 220 到 244 个 token 的回合，回复被截在半句或完全没有声音 |
 | `session.usage_stop_usd` | 1.00 | 按服务商返回用量估算的费用到这个数就结束本段 |
 | `updates.*` | 60 批，每批 2400 字节 | 真人按钮结果同步进模型上下文的次数与大小 |
+| `server.concurrent_sessions` | 1 | 整个服务同时进行的语音段数。本机一次一段；公网部署见 [HOSTING.md](HOSTING.md) |
+| `server.heartbeat_lost_ms` / `stream_keepalive_ms` / `quota_refresh_ms` | 6000 / 15000 / 2000 | 页面多久没有消息就结束本段；安静的下行连接多久发一行保活；剩余次数多久重新读一次 |
 
 要改某一项，不必动仓库里的文件：写一个只含要改的键的 JSON，用 `PARTITION_LIVE_LIMITS` 指向它再启动服务。写错键名或给了非正数时，服务会指出 `live_limits_invalid`，不会带着半套上限运行。
 
