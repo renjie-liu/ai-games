@@ -164,7 +164,10 @@ export class LiveHub {
     // A look around the partner's own room: the facts of its own objects come with it (and change
     // with the room, as the fan's does once the gate has risen).
     room.look(role);
-    return {view:room.view(role),ticket:this.issue(room,j)};
+    const view=room.view(role),effect=room.preview(role);
+    // A proposal waiting for the partner says what confirming it now would do to the partner's side.
+    if(effect)view.pending={...view.pending,if_confirmed_now:effect};
+    return {view,ticket:this.issue(room,j)};
   }
   observe(room,role,scope){
     const j=this.get(room);if(role!==j.seat||j.ended||j.speaking||scope!==j.scope)return {ok:false,code:'live_superseded'};

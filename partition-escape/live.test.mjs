@@ -131,3 +131,22 @@ test('a look or a word from the other seat leaves the partner\'s ticket good; a 
   ticket=stale.ticket;r.command('west',{type:'action',id:'power-off'});
   assert.equal(h.command(r,'east',{ticket,command:{type:'inspect',id:'gate'}}).code,'live_superseded');
 });
+// In real games of 2026-11-26 the partner confirmed a power cut with nothing holding the gate three
+// times, and the gate fell each time. It had the facts; it drew the wrong conclusion.
+test('a proposal waiting for the partner says what confirming it now would do to the partner\'s side',()=>{
+  const {h,r,j}=setup();
+  const look=()=>h.observe(r,'east',j.scope).view;
+  assert.equal(look().pending,null);
+  r.command('west',{type:'action',id:'power-on'});r.command('west',{type:'action',id:'power-off'});
+  // Nothing holds the gate: confirming now drops it.
+  assert.deepEqual(look().pending.if_confirmed_now,{gateOpen:false,fanSpinning:false});
+  // The partner gets ready under the waiting proposal; the answer to that action already shows the new outcome.
+  const held=h.command(r,'east',{ticket:h.observe(r,'east',j.scope).ticket,command:{type:'action',id:'hold-brake'}});
+  assert.deepEqual(held.view.pending.if_confirmed_now,{fanSpinning:false});
+  const accepted=h.command(r,'east',{ticket:held.ticket,command:{type:'accept',id:held.view.pending.id}});
+  assert.equal(accepted.receipt.outcome,'applied');assert.equal(accepted.view.local.gateOpen,true);assert.equal(accepted.view.pending,null);
+  // The seat that proposed, the audience and the other players' views never carry it.
+  r.command('west',{type:'action',id:'power-on'});r.command('west',{type:'action',id:'power-off'});
+  for(const role of ['west','watch'])assert.equal(JSON.stringify(r.view(role)).includes('if_confirmed_now'),false);
+  assert.equal(r.preview('west'),null);
+});

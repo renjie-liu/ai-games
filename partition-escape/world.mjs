@@ -18,6 +18,9 @@ const props = {
     {id:'fan',name:'检修风扇',kind:'fan',position:[-1.8,1.3,-2.6]},
     {id:'hatch',name:'传物槽',kind:'hatch',position:[-2.6,0.9,0.1]}]
 };
+// What a seat can see of the state from inside its own room.
+const localOf = (role,s) => role==='west' ? {power:s.power,keyHere:s.keyTransferred,unlocked:s.unlocked,doorOpen:s.doorOpen} :
+  {gateOpen:gateOpen(s),fanSpinning:s.power,holdingBrake:s.brake,braceSeen:s.braceSeen,braced:s.braced,keyHere:!s.keyTransferred,outside:s.partnerOut};
 function fact(seat,id,s) {
   const facts = seat === 'west' ? {
     plaque:['interlock','西门一旦推开，两侧动力立即断开。关门可恢复联锁。两个人必须一起走。'],
@@ -45,6 +48,16 @@ export class Room {
     this.event('system','ready','两侧已接通。先查看自己房间里的物件，再把发现告诉另一侧。','rules');
   }
   role(token){return Object.keys(this.tokens).find(s=>this.tokens[s]===token);}
+  // What confirming the waiting proposal right now would change in `role`'s own room, by the same
+  // rules that will decide it: only what that seat can see, and only what would differ. Null when
+  // nothing waits for this seat. A seat can foresee this from the facts of its own objects; said
+  // outright, it is not left to be worked out wrongly (a gate dropped by a confirmation given too soon).
+  preview(role){
+    const p=this.pending;if(!p||p.from===role)return null;
+    const trial=transition(this.state,p.action,p.from==='west'?'player':'partner');if(!trial.ok)return null;
+    const now=localOf(role,this.state),then=localOf(role,trial.state);
+    return Object.fromEntries(Object.keys(then).filter(k=>then[k]!==now[k]).map(k=>[k,then[k]]));
+  }
   // What a seat learns by simply looking around its own room: the current fact of each of its own
   // objects goes into its notes. No event and no revision, because nothing in the world changed.
   // For the voice partner, which cannot spend a turn on every object before it can be of any help.
@@ -67,8 +80,7 @@ export class Room {
     // Public physical outcomes only; no private inventory, plaque, mechanism facts or legal-action oracle.
     if(role==='watch')return {...base,public:{doorOpen:this.state.doorOpen,gateOpen:gateOpen(this.state),power:this.state.power,escaped:won(this.state)},scene:[],notes:[]};
     const s=this.state;
-    const local=role==='west' ? {power:s.power,keyHere:s.keyTransferred,unlocked:s.unlocked,doorOpen:s.doorOpen} :
-      {gateOpen:gateOpen(s),fanSpinning:s.power,holdingBrake:s.brake,braceSeen:s.braceSeen,braced:s.braced,keyHere:!s.keyTransferred,outside:s.partnerOut};
+    const local=localOf(role,s);
     const inspected=new Set(this.notes[role].map(n=>n.object));
     const objectActions=role==='west'? {power:[s.power?'power-off':'power-on'],door:[!s.unlocked?'unlock':s.doorOpen?'close-door':'open-door']} :
       {hatch:!s.keyTransferred?['send-key']:[],brake:[s.brake?'release-brake':'hold-brake'],fan:s.braceSeen&&!s.braced?['brace']:[],gate:['leave']};

@@ -39,7 +39,11 @@ const chromePath=env('E2E_CHROME','/Applications/Google Chrome.app/Contents/MacO
 const voice=env('E2E_VOICE','Tingting');                 // any installed voice that speaks the lines' language
 const TURN_MS=Number(env('E2E_TURN_MS','60000'));        // how long to wait for one request to take effect
 const GAP_MS=Number(env('E2E_GAP_MS','800'));            // silence between the two opening sentences: the voice detection ends an utterance after 700 ms
-const runs=path.resolve(env('E2E_RUNS','.runs'));        // where the server keeps its run records, to read the worker's own log
+const runs=path.resolve(env('E2E_RUNS','.runs'));
+// Who the player is. `dictated` knows the whole solution and tells the partner every step in order.
+// `west-only` knows only what the west room shows, names no east object or action, and proposes
+// cutting the power before the partner has done anything about the gate, as a person does.
+const scenario=env('E2E_SCENARIO','dictated');        // where the server keeps its run records, to read the worker's own log
 const {chromium}=createRequire(import.meta.url)(env('E2E_PLAYWRIGHT','playwright'));
 fs.mkdirSync(out,{recursive:true});
 const OPENING=['你好，我在西间。','请把你那边的黄铜钥匙从传物槽递给我。'];
@@ -210,7 +214,7 @@ try{
       const reachedAt=(Date.now()-spokenAt)/1000;
       await until(async()=>{const u=await ui();return u.played>start.played&&u.quiet;},25000);   // let the reply play out
       const end=await ui();
-      const attempt={said:parts.join(' … '),speech_s:+spokenFor.toFixed(2),heard:end.heard,partner:end.partner,receipt:end.receipt,
+      const attempt={said:parts.join(' … '),speech_s:+spokenFor.toFixed(2),heard:end.heard,partner:end.partner,receipt:end.receipt,state_after:end.state,
         first_reply_s:firstReply&&+firstReply.toFixed(2),reached_s:done?+reachedAt.toFixed(2):null,reply_audio_s:+(end.played-start.played).toFixed(2)};
       record.tries.push(attempt);
       log(`${name}: ${done?'done':'not yet'} | heard「${attempt.heard.replace(/^我听到：/,'')}」| reply ${attempt.reply_audio_s}s`);
@@ -235,7 +239,7 @@ try{
   }
   const signal=name=>v=>name in (v.signals||{});
   const press=async selector=>{await page.locator(selector).click();await delay(500);};
-  const plan=[
+  const dictated=[
     ['key offered',[OPENING,'请现在把黄铜钥匙递给我。','请递出钥匙。'],
       v=>v.pending?.action==='send-key',async()=>{
         await shot('02-key-offered');await press('#accept');await press('#use-key');
@@ -254,6 +258,29 @@ try{
     ['both outside',['西门开了。请走向共同出口，我们一起出去。','请现在走向共同出口。','请走向共同出口。'],
       v=>v.complete===true,null],
   ];
+  const westOnly=[
+    ['key offered',[['你好，我在西间。我这边有出口铭牌、动力台、上了锁的西门和传物槽。','西门要一把黄铜钥匙才能开，你那边有的话请递给我。'],'你那边有钥匙吗？能递给我吗？','请把钥匙从传物槽递过来。'],
+      v=>v.pending?.action==='send-key',async()=>{
+        await shot('02-key-offered');await press('#accept');await press('#use-key');
+        await press('[data-object="power"]');await press('#inspect [data-action="power-on"]');
+        // The proposal comes first: nothing holds the gate yet.
+        await press('#inspect [data-action="power-off"]');
+        result.while_proposal_waits=await page.evaluate(()=>({pending:document.querySelector('#pending')?.innerText.replace(/\n+/g,' | '),
+          buttons:[...document.querySelectorAll('#inspect [data-action]')].map(b=>b.dataset.action+(b.disabled?' (disabled)':''))}));
+      },{gapMs:GAP_MS,replyRequired:true}],
+    ['power cut with the gate still up',['钥匙收到了，门锁开了，我也接通了动力。我已经提了切断动力，你那边准备好了再确认。',
+      '断电后你那边的闸门不能落下来。你先把它固定住，再确认我的提议。','切断动力的提议还在等你，你准备好了吗？还差什么？'],
+      v=>v.local.power===false&&!v.pending&&'hold-brake' in (v.signals||{}),null],
+    ['gate stays up by itself',['动力断了。你那边还要做什么，才能腾出手和我一起离开？','你现在能走开吗？还差什么？','你那边有没有东西可以代替你撑住闸门？'],
+      signal('brace'),async()=>{await press('[data-object="door"]');await press('#inspect [data-action="open-door"]');}],
+    ['door confirmed',['我提了推开西门，你那边准备好了就确认。','推开西门的提议还在等你，你准备好了吗？','请确认推开西门。'],
+      v=>v.local.doorOpen===true,null],
+    ['both outside',['门开了，我们一起走吧。','你可以出来了吗？','我们一起出去吧。'],
+      v=>v.complete===true,null],
+  ];
+  const plan={dictated,'west-only':westOnly}[scenario];
+  if(!plan)throw Error('unknown E2E_SCENARIO: '+scenario);
+  result.scenario=scenario;
   for(const [name,lines,reached,then,options={}] of plan){
     if(!await turn(name,lines,reached,options)){result.problem=name+' not reached';break;}
     const last=result.steps.at(-1).tries.at(-1);
