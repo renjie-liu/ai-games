@@ -1,5 +1,6 @@
 """Connection accounting only. No player audio, game session or provider access."""
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -219,3 +220,47 @@ class SeveralSessionsShareOneLedger(unittest.TestCase):
                     {'name': '朋友'}, {'connections': 2}, '朋友'):
             with self.assertRaisesRegex(RuntimeError, 'live_invite_invalid', msg=str(bad)):
                 Ledger(invite=bad)
+
+
+class TwoProcessesWriteAtOnce(unittest.TestCase):
+    """The tests above take turns inside one process. On a server the sessions are separate
+    processes writing whenever a frame of audio arrives; this runs two of them flat out on one
+    ledger and counts what is left."""
+    WRITER = ('import sys;from pathlib import Path;import live_budget;'
+              'live_budget.ROOT=Path(sys.argv[1]);live_budget.SERVER["concurrent_sessions"]=2;'
+              'ledger=live_budget.Ledger();row=ledger.reserve();print(row["attempt"],flush=True);sys.stdin.readline();'
+              '[ledger.debit(sys.argv[2],1) for _ in range(int(sys.argv[3]))];ledger.finish("done");ledger.close()')
+    WRITES = 250
+
+    def test_every_write_of_both_is_in_the_file_at_the_end(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / '.live').mkdir()
+            grant = {'schema': 2, 'authorization': 'two-writers', 'connectionLimit': 5, 'projectVerified': True}
+            (root / '.live' / 'authorization.json').write_text(json.dumps(grant))
+            (root / '.live' / 'ledger.json').write_text(json.dumps(
+                {'authorization': 'two-writers', 'limits': grant_limits(grant), 'attempts': []}))
+            limits = root / 'limits.json'
+            limits.write_text(json.dumps({'session': {'turns': 1000, 'tools': 1000}}))
+            writers = [subprocess.Popen([sys.executable, '-c', self.WRITER, str(root), field, str(self.WRITES)],
+                                        cwd=Path(__file__).parent, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+                                        env={**os.environ, 'PARTITION_LIVE_LIMITS': str(limits)})
+                       for field in ('turns', 'tools')]
+            try:
+                attempts = sorted(int(writer.stdout.readline()) for writer in writers)
+                self.assertEqual(attempts, [1, 2], 'each took a connection of its own')
+                for writer in writers:          # both are holding; let them go at the same moment
+                    writer.stdin.write('\n')
+                    writer.stdin.flush()
+                for writer in writers:
+                    self.assertEqual(writer.wait(120), 0)
+            finally:
+                for writer in writers:
+                    writer.kill()
+                    writer.stdin.close()
+                    writer.stdout.close()
+            rows = json.loads((root / '.live' / 'ledger.json').read_text())['attempts']
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(sorted((row['turns'], row['tools']) for row in rows), [(0, self.WRITES), (self.WRITES, 0)])
+            self.assertEqual({row['status'] for row in rows}, {'done'})
+            self.assertEqual([p.name for p in (root / '.live').glob('*.tmp')], [], 'no half-written file is left behind')
