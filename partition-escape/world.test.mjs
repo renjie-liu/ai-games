@@ -5,7 +5,7 @@ import {won} from './engine.mjs';
 const act=(r,s,id)=>{const x=r.command(s,{type:'action',id});assert.equal(x.ok,true,x.message);if(r.pending){const y=r.command(s==='west'?'east':'west',{type:'accept',id:r.pending.id});assert.equal(y.ok,true,y.message);}return x;};
 const solution=[['east','send-key'],['west','unlock'],['west','power-on'],['east','hold-brake'],['west','power-off'],['east','brace'],['east','release-brake'],['west','open-door'],['east','leave']];
 for(const controllers of [{west:'human',east:'human'},{west:'human',east:'script'},{west:'script',east:'human'},{west:'script',east:'script'}]){
-  test(`one ruleset: ${controllers.west}+${controllers.east}`,()=>{const r=new Room(controllers);for(const [s,id] of solution)act(r,s,id);assert.ok(won(r.state));});
+  test(`the mechanisms alone: ${controllers.west}+${controllers.east}`,()=>{const r=new Room(controllers,{rules:null});for(const [s,id] of solution)act(r,s,id);assert.ok(won(r.state));});
 }
 test('private facts and meshes stay private until deliberately shared',()=>{
   const r=new Room();r.command('west',{type:'inspect',id:'plaque'});r.command('east',{type:'inspect',id:'brake'});

@@ -140,9 +140,9 @@ class UpdateTests(unittest.IsolatedAsyncioTestCase):
 
 
     async def test_a_waiting_action_is_checked_for_its_shape_not_against_a_list(self):
-        # Which actions wait for the other seat differs by rule set (a support to put in, in a room
-        # with a choice of them). An update that carries one has to get through; a name that is
-        # not an action id still does not.
+        # Which actions wait for the other seat is the room's to say: a support to put in is one.
+        # An update that carries one has to get through; a name that is not an action id still
+        # does not.
         pending=lambda action:{'id':'a'*12,'from':'east','action':action,'label':'装上刻着圆圈的支撑'}
         for action in ('power-off','open-door','send-key','brace-3','brace-12'):
             p=packet();p['update']['pending']=pending(action);self.assertTrue(valid_update(p['update']),action)

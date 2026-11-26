@@ -86,15 +86,14 @@ function command(c){
   };
   commandTail=commandTail.then(perform,perform);return commandTail;
 }
-async function createRoom(controllers,rules){
-  // Without `rules` the server picks the rule set by the kind of room.
-  const response=await fetch('/api/rooms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rules?{controllers,rules}:{controllers})});
+async function createRoom(controllers){
+  const response=await fetch('/api/rooms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({controllers})});
   const result=await response.json();
   if(!response.ok)throw Error(result.error||'创建房间失败');
   return result;
 }
 function lobby(){
-  app.innerHTML=`<header class="topbar">${brand}<span class="badge">LOCAL PROTOTYPE / 01</span></header><main class="lobby"><div class="lobby-grid"><section><div class="eyebrow">一堵墙 · 两个房间 · 同一个出口</div><h1>你看不到的，<br><em>另一侧看得见。</em></h1><p class="intro">先别急着开你的门。查看自己的机关，把发现告诉墙后的人，一起找到离开的办法。</p><div class="setup"><div class="eyebrow">选择这次合作</div><div class="seats"><label class="seat-choice"><span>01 / 西席 · 动力与出口</span><select id="west" disabled></select></label><label class="seat-choice"><span>02 / 东席 · 检修与闸门</span><select id="east" disabled></select></label><label class="seat-choice rules-choice"><span>03 / 规则</span><select id="rules" disabled></select></label></div><button class="primary" id="create" disabled>创建这次合作 ↗</button><p class="scope">正在读取本机可用席位…</p><div id="invite" aria-live="polite"></div></div></section><div class="preview" id="preview"><div class="preview-label"><span>WEST / 暖光</span><span>两侧线索各自私有</span><span>EAST / 冷光</span></div></div></div><div class="feature-row"><span>◈ 固定规则，真实机关</span><span>↔ 交换发现，商量行动</span><span>↶ 错了可以调整，没有突然失败</span></div></main>`;
+  app.innerHTML=`<header class="topbar">${brand}<span class="badge">LOCAL PROTOTYPE / 01</span></header><main class="lobby"><div class="lobby-grid"><section><div class="eyebrow">一堵墙 · 两个房间 · 同一个出口</div><h1>你看不到的，<br><em>另一侧看得见。</em></h1><p class="intro">先别急着开你的门。查看自己的机关，把发现告诉墙后的人，一起找到离开的办法。</p><div class="setup"><div class="eyebrow">选择这次合作</div><div class="seats"><label class="seat-choice"><span>01 / 西席 · 动力与出口</span><select id="west" disabled></select></label><label class="seat-choice"><span>02 / 东席 · 检修与闸门</span><select id="east" disabled></select></label></div><button class="primary" id="create" disabled>创建这次合作 ↗</button><p class="scope">正在读取本机可用席位…</p><div id="invite" aria-live="polite"></div></div></section><div class="preview" id="preview"><div class="preview-label"><span>WEST / 暖光</span><span>两侧线索各自私有</span><span>EAST / 冷光</span></div></div></div><div class="feature-row"><span>◈ 固定规则，真实机关</span><span>↔ 交换发现，商量行动</span><span>↶ 错了可以调整，没有突然失败</span></div></main>`;
   async function loadSeats(){
     const response=await fetch('/api/capabilities');
     if(!response.ok)throw Error('capabilities unavailable');
@@ -115,18 +114,11 @@ function lobby(){
       if(c.modelEnabled)for(const seat of [west,east])seat.add(new Option('真实模型 · 已启用调用','model'));
       if(c.live?.enabled){east.add(new Option('Gemini Live · 语音AI','live'));east.value='live';}
       west.disabled=false;east.disabled=false;
-      $('.scope').textContent=c.live?.enabled?`Gemini Live 由你点击开启麦克风，每段最多 ${c.live.seconds} 秒；可能实际计费。`:'脚本席位使用固定策略。';
+      // A stand-in has not learned the battery or the choice of supports: say what its room lacks.
+      const about=c.live?.enabled?`Gemini Live 由你点击开启麦克风，每段最多 ${c.live.seconds} 秒；可能实际计费。`:'脚本席位使用固定策略。';
+      const fit=()=>{$('.scope').textContent=about+([west.value,east.value].some(v=>v==='script'||v==='model')?'脚本和模型席位是开发用的替身，还不会用备用电池和挑支撑：和它们开的房间只有基础机关。':'');};
+      west.onchange=east.onchange=fit;fit();
     }
-    // Which rules: the server's choice for this kind of room unless the organiser picks another.
-    const rules=$('#rules');let picked=false;
-    for(const set of c.rules.sets)rules.add(new Option([set.title,set.cells?`备用电池每组 ${set.cells} 格`:'',set.choice?'支撑要挑':'一根木撑'].filter(Boolean).join(' · '),set.name));
-    const fit=()=>{
-      const seats=[west.value,east.value],scripted=seats.some(v=>v==='script'||v==='model');
-      // A scripted or model seat knows one brace only.
-      for(const option of rules.options)option.disabled=scripted&&c.rules.sets.find(set=>set.name===option.value).choice;
-      if(!picked||rules.selectedOptions[0]?.disabled)rules.value=c.rules.rooms[seats.includes('live')?'live':'other'];
-    };
-    west.onchange=east.onchange=fit;rules.onchange=()=>{picked=true;};fit();rules.disabled=false;
     $('#create').disabled=false;
   }
   loadSeats().catch(()=>{$('.scope').textContent='无法读取席位配置，请刷新页面。';});
@@ -134,7 +126,7 @@ function lobby(){
   $('#create').onclick=async()=>{
     const b=$('#create');b.disabled=true;b.textContent='正在接通两侧…';
     try{
-      const d=await createRoom({west:$('#west').value,east:$('#east').value},$('#rules').value);
+      const d=await createRoom({west:$('#west').value,east:$('#east').value});
       $('#invite').innerHTML=`<div class="invite"><strong>房间已准备好</strong><p class="small">这是组织者入口。把各席链接交给对应玩家；玩家页面只能看到自己的房间。观众只看公开事件与建筑机位。</p>${Object.entries(d.links).filter(([,u])=>u).map(([s,u])=>`<a class="button ${s==='watch'?'':'primary'}" href="${esc(u)}" target="_blank" rel="noopener">${s==='watch'?'打开只读观众':'进入'+seatName[s]} ↗</a>`).join('')}<p class="small">邀请第二位真人：右键对应入口复制链接。服务限本机；同机两个独立标签页可玩。远程联网尚未实现。</p></div>`;
     }catch(e){$('#invite').textContent=e.message;}finally{b.disabled=false;b.textContent='再开一个房间';}
   };

@@ -4,9 +4,8 @@
 import http from 'node:http';
 import {Room} from './world.mjs';
 import {LiveHub} from './live.mjs';
-// PARTITION_FIXTURE_RULES names a rule set of room-rules.json; without it the room has none.
-const room=new Room({west:'human',east:'live'},{rules:process.env.PARTITION_FIXTURE_RULES||'classic',
-  ...(process.env.PARTITION_FIXTURE_SEED?{seed:Number(process.env.PARTITION_FIXTURE_SEED)}:{})});
+// PARTITION_FIXTURE_SEED makes the same puzzle every time; without it the room draws its own.
+const room=new Room({west:'human',east:'live'},process.env.PARTITION_FIXTURE_SEED?{seed:Number(process.env.PARTITION_FIXTURE_SEED)}:{});
 const hub=new LiveHub('.','http://127.0.0.1',true);
 const job=hub.get(room);
 const pipe={writable:true,writableLength:0,write(line){process.stdout.write(line);return true;},end(line){if(line)process.stdout.write(line);}};

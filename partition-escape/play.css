@@ -50,8 +50,6 @@
 .inspect .small{color:var(--muted);font-size:13px;margin-top:10px}
 /* How the game went, on the closing card. */
 .victory .rating{color:var(--ink);font-size:17px}.victory .rating span{color:var(--warm);font-size:26px;letter-spacing:.12em;margin-right:10px;vertical-align:-2px}
-/* The rules choice sits under the two seats on the opening page. */
-.rules-choice{grid-column:1/-1}
 /* A waiting proposal stays in sight while the side column scrolls: deciding on a support means
    reading the load chart above it, and on a short window the card would otherwise sit below the fold. */
 @media(min-width:681px){#pending:not(:empty){position:sticky;bottom:0;z-index:3;box-shadow:0 -10px 24px #0b1114cc}}

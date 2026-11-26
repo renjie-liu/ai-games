@@ -4,6 +4,9 @@ import {initialState, transition, gateOpen, won, actionsFor, braceAction, rating
 import {RULES, makePuzzle, seeded} from './room-rules.mjs';
 
 export const opposite = s => s === 'west' ? 'east' : 'west';
+// A fixed script, or a text model driven through the harness, sitting in for a player. Neither has
+// learned the battery or the choice of supports, so a room with one of them is the mechanisms alone.
+export const standIn = controllers => Object.values(controllers).some(c => c === 'script' || c === 'model');
 // Actions that change the other room too: one seat proposes, the other confirms. A room with a
 // choice of supports adds putting one in (Room.joint): west holds the table that decides it.
 export const SHARED = new Set(['power-off','open-door','send-key']);
@@ -24,16 +27,13 @@ const props = {
 const CHART = {id:'chart',name:'承重表',kind:'plaque',position:[2.2,1.6,-2.5]};
 const CHART_LEAD = '机械支撑按刻着的记号查额定承重（公斤），额定承重不能低于闸重。读哪一列，要看东侧闸轨上检修牌的颜色。';
 export class Room {
-  // `rules` names a rule set of room-rules.json; `seed` makes its puzzle again. Without `rules` the
-  // room is the one with a single brace and no battery.
-  constructor(controllers={west:'human',east:'script'},{rules='classic',seed=randomBytes(4).readUInt32BE(0),config=RULES}={}) {
+  // `rules` is what room-rules.json adds to the mechanisms, and `seed` makes the same puzzle from
+  // it again. With `rules` null, or with a stand-in in a seat, the room is the mechanisms alone:
+  // no battery, one brace, no rating.
+  constructor(controllers={west:'human',east:'script'},{rules=RULES,seed=randomBytes(4).readUInt32BE(0)}={}) {
     if(!['west','east'].every(s=>['human','script','model','live'].includes(controllers[s]))) throw Error('无效控制器');
-    const set=typeof rules==='string'&&Object.hasOwn(config.rule_sets,rules)?config.rule_sets[rules]:null;
-    if(!set)throw Error('没有这套规则。');
-    // The scripted and the model seat know one brace; they have not learned to choose among several.
-    if(set.supports&&Object.values(controllers).some(c=>c==='script'||c==='model'))throw Error('脚本和模型席位还不会挑支撑，只能用没有支撑选择的规则。');
     if(!Number.isSafeInteger(seed)||seed<0)throw Error('无效种子：要一个不小于 0 的整数。');
-    this.rules=rules; this.seed=seed; this.puzzle=makePuzzle(set,seeded(seed));
+    this.seed=seed; this.puzzle=rules&&!standIn(controllers)?makePuzzle(rules,seeded(seed)):null;
     const supports=this.puzzle?.supports||[];
     this.actions=actionsFor(this.puzzle);
     this.labels={...labels,...(this.puzzle?.cells?{'swap-pack':'换上备用电池组'}:{}),

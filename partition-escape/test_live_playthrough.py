@@ -5,9 +5,11 @@ The production worker runs in-process against the real Room and the real LiveHub
 `client.aio.live.connect` (live_scripted.py). No key, no network, no microphone, and the
 checkout's own `.live` grant is never read: the ledger root is a temporary directory.
 
-What the scripted partner does is the shortest honest game: it looks at its four objects,
-hands the key over, holds the brake, confirms the two shared actions, fits the brace and
-walks out. The player talks for about five seconds a turn and the partner answers for four.
+What the scripted partner does in the shortest honest game: it looks at its four objects,
+hands the key over, holds the brake, confirms the two shared actions, offers the support the
+player's table picks, lets go and walks out. The player talks for about five seconds a turn and
+the partner answers for four. The scripted partner and the test's player each use only what
+their own room shows, as the two seats have to: neither is told the answer.
 """
 import asyncio
 import base64
@@ -34,8 +36,7 @@ PARTNER_SECONDS = 4
 
 class LiveRoom(unittest.IsolatedAsyncioTestCase):
     """The production worker against the real room and hub, with a scripted provider. No tests of its own."""
-    # The rule set of the room (room-rules.json) and the seed of its puzzle; None is the room without one.
-    RULES = None
+    # The seed of the room's puzzle; None lets the room draw its own.
     SEED = None
 
     async def asyncSetUp(self):
@@ -78,8 +79,8 @@ class LiveRoom(unittest.IsolatedAsyncioTestCase):
     def room_env(self):
         override = Path(self.temp.name) / 'limits.json'
         override.write_text(json.dumps(self.FAST))
-        rules = {'PARTITION_FIXTURE_RULES': self.RULES, 'PARTITION_FIXTURE_SEED': str(self.SEED)} if self.RULES else {}
-        return {**os.environ, 'PARTITION_LIVE_LIMITS': str(override), **rules}
+        seed = {} if self.SEED is None else {'PARTITION_FIXTURE_SEED': str(self.SEED)}
+        return {**os.environ, 'PARTITION_LIVE_LIMITS': str(override), **seed}
 
     def limit_patches(self):
         import live_budget
@@ -199,75 +200,8 @@ class LiveRoom(unittest.IsolatedAsyncioTestCase):
 
 
 class WholeGameInOneSession(LiveRoom):
-    async def test_the_partner_can_get_ready_under_a_waiting_proposal(self):
-        # The order a person plays in (real game of 2026-11-26): west proposes cutting the power as
-        # soon as the gate is up, and only then does the partner hold the gate and confirm.
-        await self.speak(('action', 'send-key'))
-        view = (await self.west({'type': 'inspect', 'id': 'hatch'}))['view']
-        await self.west_button({'type': 'accept', 'id': view['pending']['id']})
-        await self.west_button({'type': 'action', 'id': 'unlock'})
-        await self.west_button({'type': 'action', 'id': 'power-on'})
-        await self.west_button({'type': 'action', 'id': 'power-off'})
-        await self.speak(('action', 'hold-brake'), ('accept', None))
-        public = (await asyncio.to_thread(self.get, self.tokens['watch']))['public']
-        self.assertEqual((public['power'], public['gateOpen']), (False, True), 'the gate must stay up through the power cut')
-        await asyncio.to_thread(self.post, '/live-input', self.tokens['west'], {'type': 'stop'})
-        await asyncio.wait_for(self.run_task, 10)
-
-    async def test_the_shortest_honest_game_fits_one_session(self):
-        await self.whole_game(tool_calls=22)
-
-    async def test_a_partner_that_uses_the_tickets_it_is_handed_spends_one_tool_call_per_action(self):
-        self.use_handed_tickets = True
-        await self.whole_game(tool_calls=11)
-
-    async def whole_game(self, tool_calls):
-        for thing in ('plaque', 'power', 'door', 'hatch'):
-            await self.west({'type': 'inspect', 'id': thing})
-        await self.speak(('inspect', 'hatch'), ('inspect', 'gate'))
-        await self.west_button({'type': 'share', 'id': 'interlock'})
-        await self.speak(('action', 'send-key'))
-        view = (await self.west({'type': 'inspect', 'id': 'hatch'}))['view']
-        await self.west_button({'type': 'accept', 'id': view['pending']['id']})
-        await self.west_button({'type': 'action', 'id': 'unlock'})
-        await self.west_button({'type': 'action', 'id': 'power-on'})
-        await self.speak(('inspect', 'brake'), ('action', 'hold-brake'))
-        await self.west_button({'type': 'share', 'id': 'coupling'})
-        await self.west_button({'type': 'action', 'id': 'power-off'})
-        await self.type('我提了断电，你确认一下。', ('accept', None))
-        await self.speak(('inspect', 'fan'), ('action', 'brace'))
-        await self.speak(('action', 'release-brake'))
-        await self.west_button({'type': 'action', 'id': 'open-door'})
-        await self.speak(('accept', None))
-        await self.speak(('action', 'leave'))
-
-        final = await asyncio.to_thread(self.post, '/command', self.tokens['west'], {'type': 'inspect', 'id': 'door'})
-        self.assertTrue(final['view']['complete'], 'both players should be outside')
-        self.assertIsNone(self.closed(), 'the session must still be open when the game is won')
-        row = self.session.ledger.row
-        self.assertEqual(row['tools'], tool_calls)
-        # The shortest game must leave room for a real one: detours, repeats and small talk.
-        used = {k: row[k] / row['limits'][k] for k in ('input_seconds', 'output_seconds', 'turns', 'tools', 'text_bytes')}
-        used['usage_stop_usd'] = row['estimated_usd'] / row['limits']['usage_stop_usd']
-        self.assertLess(max(used.values()), .5, used)
-        self.assertEqual(self.live.audio_in, 7 * PLAYER_SECONDS * 32000)
-
-        await asyncio.to_thread(self.post, '/live-input', self.tokens['west'], {'type': 'stop'})
-        await asyncio.wait_for(self.run_task, 10)
-        self.assertEqual(self.closed(), 'user_stop')
-        print(f'\nwhole game with {tool_calls} tool calls, share of each session cap used:', {k: round(v, 3) for k, v in used.items()}, file=sys.stderr)
-
-
-class WholeGameWithAChoiceOfSupports(LiveRoom):
-    """The rule set with a battery and a choice of supports, through the same worker and hub.
-
-    The scripted partner and the test's player each use only what their own room shows, as the
-    two seats have to: the partner reads the supports, the slot and the tag off its own view, the
-    player the table and the gate's weight off the west view. Neither is told the answer."""
-    RULES = 'standard'
-    # In this room the two supports east would offer first are the weak ones.
+    # In the room this seed makes, the two supports east would offer first are the weak ones.
     SEED = 20261129
-    use_handed_tickets = True
 
     def east_knows(self):
         """What the partner can say about the supports, from the view the worker handed it."""
@@ -305,6 +239,7 @@ class WholeGameWithAChoiceOfSupports(LiveRoom):
 
     async def to_the_supports(self):
         """Up to where a support can go in: the gate up on the brake, the power cut, one cell used."""
+        self.use_handed_tickets = True
         for thing in ('plaque', 'power', 'chart'):
             await self.west({'type': 'inspect', 'id': thing})
         await self.speak(('action', 'send-key'))
@@ -321,6 +256,70 @@ class WholeGameWithAChoiceOfSupports(LiveRoom):
 
     async def pending(self):
         return (await self.west({'type': 'inspect', 'id': 'chart'}))['view']['pending']
+
+    async def test_the_partner_can_get_ready_under_a_waiting_proposal(self):
+        # The order a person plays in (real game of 2026-11-26): west proposes cutting the power as
+        # soon as the gate is up, and only then does the partner hold the gate and confirm.
+        await self.speak(('action', 'send-key'))
+        view = (await self.west({'type': 'inspect', 'id': 'hatch'}))['view']
+        await self.west_button({'type': 'accept', 'id': view['pending']['id']})
+        await self.west_button({'type': 'action', 'id': 'unlock'})
+        await self.west_button({'type': 'action', 'id': 'power-on'})
+        await self.west_button({'type': 'action', 'id': 'power-off'})
+        await self.speak(('action', 'hold-brake'), ('accept', None))
+        public = (await asyncio.to_thread(self.get, self.tokens['watch']))['public']
+        self.assertEqual((public['power'], public['gateOpen']), (False, True), 'the gate must stay up through the power cut')
+        await asyncio.to_thread(self.post, '/live-input', self.tokens['west'], {'type': 'stop'})
+        await asyncio.wait_for(self.run_task, 10)
+
+    async def test_the_shortest_honest_game_fits_one_session(self):
+        await self.whole_game(tool_calls=22)
+
+    async def test_a_partner_that_uses_the_tickets_it_is_handed_spends_one_tool_call_per_action(self):
+        self.use_handed_tickets = True
+        await self.whole_game(tool_calls=11)
+
+    async def whole_game(self, tool_calls):
+        for thing in ('plaque', 'power', 'door', 'hatch', 'chart'):
+            await self.west({'type': 'inspect', 'id': thing})
+        await self.speak(('inspect', 'hatch'), ('inspect', 'gate'))
+        await self.west_button({'type': 'share', 'id': 'interlock'})
+        await self.speak(('action', 'send-key'))
+        view = (await self.west({'type': 'inspect', 'id': 'hatch'}))['view']
+        await self.west_button({'type': 'accept', 'id': view['pending']['id']})
+        await self.west_button({'type': 'action', 'id': 'unlock'})
+        await self.west_button({'type': 'action', 'id': 'power-on'})
+        await self.speak(('inspect', 'brake'), ('action', 'hold-brake'))
+        await self.west_button({'type': 'share', 'id': 'coupling'})
+        await self.west_button({'type': 'action', 'id': 'power-off'})
+        await self.type('我提了断电，你确认一下。', ('accept', None))
+        # The partner says which tag hangs and which supports fit; the player's table picks among them.
+        tag, fitting, offered = self.east_knows()
+        mine = (await self.west({'type': 'inspect', 'id': 'chart'}))['view']
+        right = next(mark for mark in fitting if self.west_decides(mine, tag, mark))
+        await self.speak(('inspect', 'fan'), ('action', offered[right]))
+        await self.west_button({'type': 'accept', 'id': (await self.pending())['id']})
+        await self.speak(('action', 'release-brake'))
+        await self.west_button({'type': 'action', 'id': 'open-door'})
+        await self.speak(('accept', None))
+        await self.speak(('action', 'leave'))
+
+        final = await asyncio.to_thread(self.post, '/command', self.tokens['west'], {'type': 'inspect', 'id': 'door'})
+        self.assertTrue(final['view']['complete'], 'both players should be outside')
+        self.assertEqual(final['view']['rating'], {'stars': 3, 'powerOns': 1, 'packs': 0})
+        self.assertIsNone(self.closed(), 'the session must still be open when the game is won')
+        row = self.session.ledger.row
+        self.assertEqual(row['tools'], tool_calls)
+        # The shortest game must leave room for a real one: detours, repeats and small talk.
+        used = {k: row[k] / row['limits'][k] for k in ('input_seconds', 'output_seconds', 'turns', 'tools', 'text_bytes')}
+        used['usage_stop_usd'] = row['estimated_usd'] / row['limits']['usage_stop_usd']
+        self.assertLess(max(used.values()), .5, used)
+        self.assertEqual(self.live.audio_in, 7 * PLAYER_SECONDS * 32000)
+
+        await asyncio.to_thread(self.post, '/live-input', self.tokens['west'], {'type': 'stop'})
+        await asyncio.wait_for(self.run_task, 10)
+        self.assertEqual(self.closed(), 'user_stop')
+        print(f'\nwhole game with {tool_calls} tool calls, share of each session cap used:', {k: round(v, 3) for k, v in used.items()}, file=sys.stderr)
 
     async def test_the_partner_keeps_hearing_the_player_through_a_wrong_support_and_a_new_pack(self):
         # What the player does while a support waits to be confirmed, after one gave way, and at

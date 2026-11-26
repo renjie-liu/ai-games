@@ -1,15 +1,15 @@
-"""The typed real-run script's player for a room with a choice of supports: the two things it
-works out for itself. Offline; no server, no model."""
+"""The typed real-run script's player: the two things it works out for itself about the choice
+of supports. Offline; no server, no model."""
 import json
 import subprocess
 import unittest
 from pathlib import Path
 
-from live_text_playthrough import RULES_FOR, chart_of, tag_heard
+from live_text_playthrough import chart_of, tag_heard
 
 ROOT = Path(__file__).resolve().parent
-# A real west view of a room made with the rule set, and the truth of its puzzle, from the server's own code.
-ROOM = """import('./world.mjs').then(({Room})=>{const r=new Room({west:'human',east:'live'},{rules:'standard',seed:Number(process.argv[1])});
+# A real west view of the room and the truth of its puzzle, from the server's own code.
+ROOM = """import('./world.mjs').then(({Room})=>{const r=new Room({west:'human',east:'live'},{seed:Number(process.argv[1])});
 r.look('west');console.log(JSON.stringify({view:r.view('west'),puzzle:r.puzzle}));})"""
 
 
@@ -36,13 +36,6 @@ class WhatThePlayerWorksOut(unittest.TestCase):
         self.assertIsNone(tag_heard('黄铜钥匙已经递给你了。', tags), 'the brass key is not a tag')
         self.assertIsNone(tag_heard('不是红色，是黄色。', tags), 'two colours named: ask again')
         self.assertIsNone(tag_heard('', tags))
-
-    def test_every_player_names_the_rules_it_is_written_for(self):
-        rules = json.loads((ROOT / 'room-rules.json').read_text())['rule_sets']
-        self.assertTrue(set(RULES_FOR.values()) <= set(rules))
-        self.assertIn('supports', rules[RULES_FOR['supports']])
-        for scenario in ('dictated', 'proposal-first', 'west-only'):
-            self.assertNotIn('supports', rules[RULES_FOR[scenario]])
 
 
 if __name__ == '__main__':

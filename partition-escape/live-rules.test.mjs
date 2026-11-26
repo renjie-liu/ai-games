@@ -1,4 +1,4 @@
-// The voice partner in a room with a choice of supports: what the hub shows it and lets it do.
+// The voice partner in the room: what the hub shows it of the choice of supports and lets it do.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Room} from './world.mjs';
@@ -6,7 +6,7 @@ import {LiveHub} from './live.mjs';
 import {braceAction} from './engine.mjs';
 
 function setup(seed=5){
-  const r=new Room({west:'human',east:'live'},{rules:'standard',seed}),h=new LiveHub('.','http://127.0.0.1',true),j=h.get(r);
+  const r=new Room({west:'human',east:'live'},{seed}),h=new LiveHub('.','http://127.0.0.1',true),j=h.get(r);
   Object.assign(j,{seat:'east',started:true,worker:{stdin:{writable:true,writableLength:0,write(){}}}});
   return {r,h,j};
 }

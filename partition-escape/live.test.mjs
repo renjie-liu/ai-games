@@ -10,7 +10,7 @@ test('Live tool uses normal engine; shared action waits for human button',()=>{c
 test('speech onset invalidates prior ticket, including late complete tool',()=>{const {h,r}=setup(),o=h.observe(r,'east',h.get(r).scope),rev=r.rev;h.input(r,{type:'start'});assert.equal(h.command(r,'east',{ticket:o.ticket,command:{type:'inspect',id:'hatch'}}).code,'live_superseded');assert.equal(r.rev,rev);});
 test('re-observe after end gets fresh authority; duplicates do not execute',()=>{const {h,r}=setup();h.input(r,{type:'start'});assert.equal(h.observe(r,'east',h.get(r).scope).ok,false);h.input(r,{type:'end'});const o=h.observe(r,'east',h.get(r).scope);const b={ticket:o.ticket,command:{type:'inspect',id:'hatch'}};assert.ok(h.command(r,'east',b).ok);const rev=r.rev;assert.equal(h.command(r,'east',b).code,'live_superseded');assert.equal(r.rev,rev);});
 test('world revision, expiration, pause and wrong seat cannot bypass gate',()=>{for(const mode of ['rev','expired','wrong-seat','pause']){const {h,r,j}=setup(),o=h.observe(r,'east',j.scope);if(mode==='rev')r.command('west',{type:'action',id:'power-on'});if(mode==='expired')j.tickets.get(o.ticket).expires=0;if(mode==='pause')r.command('west',{type:'pause'});const rev=r.rev;assert.equal(h.command(r,mode==='wrong-seat'?'west':'east',{ticket:o.ticket,command:{type:'inspect',id:'hatch'}}).code,'live_superseded');assert.equal(r.rev,rev);}});
-test('actual permissions and rules remain rejected, no forged seat or batch',()=>{const {h,r}=setup();assert.equal(call(h,r,{type:'action',id:'power-on'}).code,'permission_denied');assert.equal(call(h,r,{type:'action',id:'brace'}).receipt.code,'rule_rejected');assert.equal(call(h,r,{type:'inspect',id:'hatch',seat:'west'}).code,'invalid_tool');assert.equal(call(h,r,[{type:'inspect',id:'hatch'}]).code,'invalid_tool');});
+test('actual permissions and rules remain rejected, no forged seat or batch',()=>{const {h,r}=setup();assert.equal(call(h,r,{type:'action',id:'power-on'}).code,'permission_denied');assert.equal(call(h,r,{type:'action',id:'hold-brake'}).receipt.code,'rule_rejected');assert.equal(call(h,r,{type:'inspect',id:'hatch',seat:'west'}).code,'invalid_tool');assert.equal(call(h,r,[{type:'inspect',id:'hatch'}]).code,'invalid_tool');});
 test('own observe never includes other unshared notes',()=>{const {h,r,j}=setup();r.command('west',{type:'inspect',id:'plaque'});const o=h.observe(r,'east',j.scope);assert.equal(JSON.stringify(o).includes('interlock'),false);assert.equal(JSON.stringify(o).includes(r.tokens.west),false);});
 test('worklet fixture detects onset, retains preroll, limits silence, ends turn',()=>{let C;const events=[];vm.runInNewContext(fs.readFileSync(new URL('./mic-worklet.js',import.meta.url),'utf8'),{AudioWorkletProcessor:class{constructor(){this.port={postMessage:e=>events.push(e)};}},sampleRate:16000,registerProcessor:(n,c)=>C=c});const c=new C();const frame=v=>c.process([[new Float32Array(800).fill(v)]]);for(let i=0;i<20;i++)frame(0);assert.equal(events.length,0);frame(.1);frame(.1);assert.equal(events[0].type,'start');assert.equal(events.filter(e=>e.type==='audio').length,3);for(let i=0;i<14;i++)frame(0);assert.equal(events.at(-1).type,'end');const count=events.length;for(let i=0;i<20;i++)frame(0);assert.equal(events.length,count);});
 
@@ -78,7 +78,7 @@ test('an observation is a look around the partner\'s own room: its facts come wi
   // Once the gate has risen, the fan shows what is behind it: the next look carries that fact.
   r.command('west',{type:'action',id:'power-on'});
   const second=h.observe(r,'east',j.scope).view;
-  assert.ok(second.notes.find(n=>n.id==='brace-found').text.includes('手闸保持'));
+  assert.ok(second.notes.find(n=>n.id==='supports-found').text.includes('手闸保持'));
   assert.equal(second.notes.filter(n=>n.id==='gate-rule').length,1,'a fact is noted once');
   // A waiting proposal says which seat's actions are shared, so the partner can tell its own controls apart.
   assert.deepEqual(second.scene.find(o=>o.id==='brake').actions,[{id:'hold-brake',label:'拉住手闸',shared:false}]);
@@ -100,7 +100,7 @@ test('every answer to the partner carries the next ticket; one ticket is still o
   assert.equal(reused.code,'live_superseded');assert.equal(r.rev,rev);assert.equal(reused.receipt.command,'已作废的操作');
   assert.equal(h.command(r,'east',{ticket:reused.ticket,command:{type:'inspect',id:'gate'}}).ok,true);
   // A rule refusal also leaves the partner able to act on what it now sees.
-  const refused=h.command(r,'east',{ticket:h.observe(r,'east',j.scope).ticket,command:{type:'action',id:'brace'}});
+  const refused=h.command(r,'east',{ticket:h.observe(r,'east',j.scope).ticket,command:{type:'action',id:'hold-brake'}});
   assert.equal(refused.receipt.code,'rule_rejected');assert.ok(refused.ticket);
 });
 test('no ticket is handed out while the player speaks, and speech voids the one in hand',()=>{

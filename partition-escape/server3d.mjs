@@ -5,7 +5,6 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawn} from 'node:child_process';
 import {Room} from './world.mjs';
-import {RULES,rulesFor} from './room-rules.mjs';
 import {createVoiceService} from './voice.mjs';
 import {LiveHub} from './live.mjs';
 const root=path.dirname(fileURLToPath(import.meta.url));
@@ -54,9 +53,7 @@ const server=http.createServer(async(req,res)=>{
     if(req.headers.origin && ![origin,`http://localhost:${port}`].includes(req.headers.origin))return send(res,403,{error:'跨站请求被拒绝'});
     const u=new URL(req.url,origin);
     if(u.pathname==='/api/health'&&req.method==='GET')return send(res,200,{ok:true,localOnly:true,tts:tts.status().mode,live:live.status()});
-    if(u.pathname==='/api/capabilities'&&req.method==='GET')return send(res,200,{liveOnly,modelEnabled:process.env.PARTITION_ALLOW_MODEL==='1'&&!!process.env.PARTITION_MODEL_CONFIG&&!!process.env.PARTITION_PRICE_TABLE,tts:tts.status(),live:live.status(),
-      // The rule sets a room can be made with, and which one each kind of room gets when none is named.
-      rules:{rooms:RULES.rooms,sets:Object.entries(RULES.rule_sets).map(([name,set])=>({name,title:set.title,choice:!!set.supports,cells:set.battery_cells??null}))}});
+    if(u.pathname==='/api/capabilities'&&req.method==='GET')return send(res,200,{liveOnly,modelEnabled:process.env.PARTITION_ALLOW_MODEL==='1'&&!!process.env.PARTITION_MODEL_CONFIG&&!!process.env.PARTITION_PRICE_TABLE,tts:tts.status(),live:live.status()});
     if(u.pathname==='/api/rooms'&&req.method==='POST'){
       if(rooms.size>=20)return send(res,429,{error:'本地房间已满，请重启服务释放。'});
       const b=await body(req);
@@ -67,14 +64,14 @@ const server=http.createServer(async(req,res)=>{
       if(Object.values(b.controllers||{}).includes('model')&&process.env.PARTITION_ALLOW_MODEL!=='1')return send(res,403,{error:'真实模型尚未获准启用。本地默认只运行脚本 stub。'});
       if(Object.values(b.controllers||{}).includes('model')&&(!process.env.PARTITION_MODEL_CONFIG||!process.env.PARTITION_PRICE_TABLE))return send(res,400,{error:'真实模型需要明确的现有 harness 配置和价格表。'});
       if(Object.values(b.controllers||{}).includes('model')&&(!process.env.PARTITION_MODEL_LEDGER||Object.values(b.controllers).filter(x=>x==='model').length!==1))return send(res,400,{error:'本轮 smoke 仅允许一个模型席位，且必须提供共享请求限额账本。'});
-      // A request may name a rule set; otherwise the kind of room decides (room-rules.json).
-      const r=new Room(b.controllers,{rules:b.rules??rulesFor(b.controllers)});rooms.set(r.id,r);
-      // The seed makes a room's puzzle again (new Room(controllers,{rules,seed})). It is the whole
+      // There is one room (room-rules.json); only a scripted or a model seat gets the mechanisms alone.
+      const r=new Room(b.controllers);rooms.set(r.id,r);
+      // The seed makes a room's puzzle again (new Room(controllers,{seed})). It is the whole
       // answer, so it stays on this side: in the operator's terminal, never in a response.
-      if(r.puzzle)console.log(`room ${r.id} · rules ${r.rules} · seed ${r.seed}`);
+      if(r.puzzle)console.log(`room ${r.id} · seed ${r.seed}`);
       for(const s of ['west','east'])if(!['human','live'].includes(r.controllers[s]))await startSeat(r,s);
       const link=(role)=>`${role==='watch'?'/watch':'/play'}#room=${r.id}&key=${r.tokens[role]}`;
-      return send(res,201,{id:r.id,rules:r.rules,links:{west:r.controllers.west==='human'?link('west'):null,east:r.controllers.east==='human'?link('east'):null,watch:link('watch')}});
+      return send(res,201,{id:r.id,links:{west:r.controllers.west==='human'?link('west'):null,east:r.controllers.east==='human'?link('east'):null,watch:link('watch')}});
     }
     const m=u.pathname.match(/^\/api\/rooms\/([a-f0-9]{16})(?:\/(command|worker|studio|voice|voice-status|voice-disable|live-stream|live-start|live-input|live-observe|live-command|live-status|live-renew|live-trace))?$/);
     if(m){

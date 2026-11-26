@@ -1,13 +1,16 @@
-// A room made with the rule set that adds a battery, a choice of supports and a rating.
-// world.test.mjs keeps pinning the room without them.
+// The room: the mechanisms with what room-rules.json adds to them (a battery, a choice of supports,
+// a rating). world.test.mjs keeps pinning the mechanisms alone, which is what a scripted or a model
+// seat plays.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Room} from './world.mjs';
 import {won,braceAction} from './engine.mjs';
-import {RETOLD_WORDS} from './room-rules.mjs';
+import {RETOLD_WORDS,RULES} from './room-rules.mjs';
 
 const HUMANS={west:'human',east:'human'};
-const make=(seed=3,controllers=HUMANS)=>new Room(controllers,{rules:'standard',seed});
+const make=(seed=3,controllers=HUMANS)=>new Room(controllers,{seed});
+// The mechanisms alone: no battery, one brace, no rating.
+const bare=(controllers=HUMANS)=>new Room(controllers,{rules:null});
 const other=s=>s==='west'?'east':'west';
 const ok=(r,seat,command)=>{const x=r.command(seat,command);assert.equal(x.ok,true,`${seat} ${JSON.stringify(command)}: ${x.message}`);return x;};
 // A seat's own move, or a joint one proposed and then confirmed by the other seat.
@@ -19,9 +22,20 @@ const weak=r=>braceAction(r.puzzle.supports.findIndex(s=>s.fits&&!s.holds));
 const tooLong=r=>braceAction(r.puzzle.supports.findIndex(s=>!s.fits));
 const text=(r,role)=>{r.look(role);return JSON.stringify(r.view(role));};
 
-test('a room made without naming rules is the room as it was',()=>{
-  const r=new Room(HUMANS);
-  assert.equal(r.puzzle,null);assert.equal(r.rules,'classic');
+test('there is one room: people and the voice partner always get it',()=>{
+  for(const controllers of [HUMANS,{west:'human',east:'live'},{west:'live',east:'human'}]){
+    const r=new Room(controllers);
+    assert.equal(r.puzzle.cells,RULES.battery_cells);assert.equal(r.puzzle.supports.length,4);
+    assert.ok(r.view('west').scene.some(o=>o.id==='chart'));
+    assert.equal('rules' in r,false,'a room has no rule set to name');
+  }
+});
+test('a scripted or a model seat has not learned the battery or the choice: its room is the mechanisms alone',()=>{
+  for(const controllers of [{west:'human',east:'script'},{west:'script',east:'human'},{west:'script',east:'script'},{west:'human',east:'model'},{west:'model',east:'script'}])
+    assert.equal(new Room(controllers,{seed:3}).puzzle,null,JSON.stringify(controllers));
+  assert.equal(new Room().puzzle,null,'the default seats include a script');
+  const r=bare();
+  assert.equal(r.puzzle,null);
   const w=r.view('west'),e=r.view('east');
   for(const view of [w,e,r.view('watch')])assert.equal('rating' in view,false);
   assert.deepEqual(Object.keys(w.local),['power','keyHere','unlocked','doorOpen']);
@@ -29,14 +43,11 @@ test('a room made without naming rules is the room as it was',()=>{
   play(r,[['west','power-on']]);
   assert.deepEqual(r.view('east').scene.find(o=>o.id==='fan').actions.map(a=>a.id),['brace']);
 });
-test('a seed makes the same room again; a rule set has to exist; a scripted seat cannot take a choice of supports',()=>{
+test('a seed makes the same room again, and a room made without one draws its own',()=>{
   assert.deepEqual(make(11).puzzle,make(11).puzzle);
   assert.notDeepEqual(make(11).puzzle,make(12).puzzle);
-  assert.ok(Number.isInteger(new Room(HUMANS,{rules:'standard'}).seed));
-  assert.throws(()=>new Room(HUMANS,{rules:'hard'}),/规则/);
-  for(const controllers of [{west:'human',east:'script'},{west:'script',east:'human'},{west:'human',east:'model'}])
-    assert.throws(()=>new Room(controllers,{rules:'standard'}),/支撑/);
-  assert.equal(new Room({west:'human',east:'live'},{rules:'standard'}).rules,'standard');
+  assert.ok(Number.isInteger(new Room(HUMANS).seed));
+  assert.deepEqual(new Room({west:'human',east:'live'},{seed:11}).puzzle,make(11).puzzle);
 });
 test('what decides the support is split across the wall, and stays there',()=>{
   const r=make(),p=r.puzzle;
@@ -154,8 +165,8 @@ test('what the other seat hears says when the gate came down or went up',()=>{
   assert.match(heard(),/^东席 · 松开手闸。.*闸门落下/);
   play(r,[['west','power-on'],['east','hold-brake'],['west','power-off'],['east',right(r)],['east','release-brake']]);
   assert.match(heard(),/^东席 · 松开手闸。墙内传来机关动作的声音。$/);
-  // The same in a room without a rule set.
-  const plain=play(new Room(HUMANS),[['west','power-on'],['west','power-off']]);
+  // The same with the mechanisms alone.
+  const plain=play(bare(),[['west','power-on'],['west','power-off']]);
   assert.match(plain.view('east').events.filter(e=>e.type==='action').at(-1).text,/闸门落下/);
 });
 
@@ -227,11 +238,10 @@ test('what confirming would do never says whether an untried support will hold',
   assert.deepEqual(held.preview('east'),{});
 });
 test('a refusal is told in the terms of the seat that hears it, and says the real reason',()=>{
-  for(const rules of ['classic','standard']){
-    const r=new Room(HUMANS,{rules,seed:5});
+  for(const r of [bare(),make(5)]){
     play(r,[['east','send-key']]);
     const again=r.command('east',{type:'action',id:'send-key'});
-    assert.equal(again.ok,false);assert.equal(again.message,'钥匙已经递给西席了。',rules);
+    assert.equal(again.ok,false);assert.equal(again.message,'钥匙已经递给西席了。');
   }
   // Reaching behind a spinning fan, proposed by east: "you", not a name.
   const r=play(make(5),[['west','power-on'],['east','hold-brake']]);
@@ -243,13 +253,13 @@ test('a refusal is told in the terms of the seat that hears it, and says the rea
   const refused=late.command('west',{type:'accept',id:late.pending.id});
   assert.equal(refused.ok,false);assert.match(refused.message,/东席搭档没有伸手/);assert.ok(!refused.message.includes('你没有伸手'));
   // After the game is over the reason is that it is over.
-  const done=play(new Room(HUMANS),[['east','send-key'],['west','unlock'],['west','power-on'],['east','hold-brake'],['west','power-off'],
+  const done=play(bare(),[['east','send-key'],['west','unlock'],['west','power-on'],['east','hold-brake'],['west','power-off'],
     ['east','brace'],['west','open-door'],['east','leave']]);
   assert.match(done.command('east',{type:'action',id:'send-key'}).message,/已经走出去了/);
 });
 test('a seed has to be a whole number that can be kept',()=>{
-  for(const seed of [NaN,-1,1.5,'7',2**60,null])assert.throws(()=>new Room(HUMANS,{rules:'standard',seed}),/种子/,String(seed));
-  assert.equal(new Room(HUMANS,{rules:'standard',seed:0}).seed,0);
+  for(const seed of [NaN,-1,1.5,'7',2**60,null])assert.throws(()=>new Room(HUMANS,{seed}),/种子/,String(seed));
+  assert.equal(new Room(HUMANS,{seed:0}).seed,0);
 });
 test('the words kept out of marks and tags are the ones the retelling rewrites',()=>{
   const r=make();

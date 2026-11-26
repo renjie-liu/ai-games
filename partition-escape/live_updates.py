@@ -8,8 +8,8 @@ import time
 from live_budget import UPDATES  # batches, events, batch_bytes, total_bytes, interval_ms: live-limits.json
 
 def encode(value):return json.dumps(value,ensure_ascii=False,separators=(',',':'))
-# Which actions wait for the other seat is the room's to say (world.mjs, Room.joint) and differs by
-# rule set. The worker checks that a waiting action is named like one, not which one it is.
+# Which actions wait for the other seat is the room's to say (world.mjs, Room.joint): the supports
+# of a room are among them. The worker checks that a waiting action is named like one, not which one it is.
 ACTION_ID=re.compile(r'[a-z][a-z0-9-]{0,39}')
 def valid_update(u):
     if not isinstance(u,dict) or set(u)!={'rev','events','receipts','public','pending'}:return False

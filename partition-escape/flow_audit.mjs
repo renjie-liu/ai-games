@@ -1,8 +1,10 @@
 // Walks every state the rules can reach, with the proposal layer on top, and reports where a
 // player can get stuck. Offline, no model: the real engine (engine.mjs) and the real Room (world.mjs).
 //
-//   node flow_audit.mjs [rules] [seed]   prints the findings as JSON; rules is a rule set of
-//                                        room-rules.json (default: the room without one)
+//   node flow_audit.mjs [seed]          the room, with the puzzle that seed makes (default 1)
+//   node flow_audit.mjs --bare          the mechanisms alone, which is what a scripted or a model seat plays
+//
+// Prints the findings as JSON.
 //
 // It answers three questions:
 //  1. From every reachable position, can the game still be won? (no dead ends)
@@ -12,8 +14,8 @@
 import {initialState,transition,won,gateOpen,actionsFor} from './engine.mjs';
 import {Room} from './world.mjs';
 
-const [rules='classic',seed='1']=process.argv.slice(2);
-const newRoom=()=>new Room({west:'human',east:'human'},{rules,seed:Number(seed)});
+const args=process.argv.slice(2),bare=args.includes('--bare'),seed=Number(args.find(a=>a!=='--bare')??1);
+const newRoom=()=>new Room({west:'human',east:'human'},bare?{rules:null}:{seed});
 const {puzzle,joint}=newRoom(),{player,partner}=actionsFor(puzzle);
 // Counters do not make a position different.
 const COUNTERS=['moves','packs','powerOns'];
@@ -64,7 +66,7 @@ for(const [,s] of states){
     }
   }
 }
-const report={rules,seed:puzzle?Number(seed):null,reachable_positions:states.size,winning_positions:[...states.values()].filter(won).length,
+const report={room:puzzle?'the room':'the mechanisms alone',seed:puzzle?seed:null,reachable_positions:states.size,winning_positions:[...states.values()].filter(won).length,
   dead_ends:deadEnds.map(brief),
   accepting_drops_the_gate:acceptingUndoes,
   own_moves_refused_while_a_proposal_waits:{count:refusedWhileWaiting.length,
