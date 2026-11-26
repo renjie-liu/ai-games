@@ -113,6 +113,9 @@ test('an invitation added while the server runs counts at once; a broken file re
   const broken=await room(CODE);
   assert.equal(broken.status,403);assert.doesNotMatch(JSON.stringify(broken.data),/invites_invalid|short/);
   assert.match(printed(),/invites_invalid/);
+  // Asked again and again, the server says it once: a visitor cannot fill the operator's log.
+  for(let i=0;i<5;i++)await room(CODE);
+  assert.equal(printed().match(/invites_invalid/g).length,1);
 });
 test('on this machine nothing changed: no invitation, no public address',async t=>{
   const {ask,room,port}=await server(t,null);

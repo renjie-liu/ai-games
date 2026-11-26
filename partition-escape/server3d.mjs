@@ -26,8 +26,13 @@ const answered=req=>(localHosts.includes(req.headers.host)&&fromHere(req))||(pub
 // goes to the operator's log and never to the caller.
 function invitationOf(req){
   try{return findInvite(loadInvites(hosting.invites_file),req.headers[INVITE_HEADER]);}
-  catch(e){console.error(e.message);return null;}
+  catch(e){
+    // Anyone can make the server look at the file: the same complaint is logged once a minute, not once a request.
+    if(e.message!==complained.message||Date.now()-complained.at>60_000){console.error(e.message);complained={message:e.message,at:Date.now()};}
+    return null;
+  }
 }
+let complained={message:'',at:0};
 // When each invitation made its rooms, for the hourly cap.
 const roomsMade=new Map();
 const rooms=new Map(), children=new Set();
