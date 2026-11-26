@@ -12,23 +12,31 @@ const invalid=why=>new Error(`room_rules_invalid: ${why} (check room-rules.json 
 const SET_KEYS=['title','battery_cells','supports','marks','tags','gate_weights_kg','margins_kg','slot_cm','fit_lengths_cm','long_lengths_cm','stars'];
 // A choice of supports needs all of these or none.
 const CHOICE_KEYS=SET_KEYS.slice(2,10);
+// Words the room rewrites when it tells a seat what the rules said (world.mjs, Room.told): the
+// rules name the partner in the third person. A mark or a tag is put into those messages, so it
+// cannot contain one.
+export const RETOLD_WORDS=Object.freeze(['阿澄','东席搭档','他']);
+// What the checks below take for sane. A cell is drawn as one square on the page and a mark is said
+// aloud and sits in a button; the rest only has to stay a number that can be kept exactly.
+const MOST_CELLS=12,MOST_LETTERS=8,MOST=1e6;
 const plain=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
-const whole=(v,least=1)=>Number.isInteger(v)&&v>=least;
+const whole=(v,least=1,most=MOST)=>Number.isSafeInteger(v)&&v>=least&&v<=most;
 const distinct=(v,ok)=>Array.isArray(v)&&v.length>0&&v.every(ok)&&new Set(v).size===v.length;
 const word=v=>typeof v==='string'&&v.trim().length>0;
+const spoken=v=>word(v)&&v===v.trim()&&[...v].length<=MOST_LETTERS&&!RETOLD_WORDS.some(w=>v.includes(w));
 const freeze=v=>{if(v&&typeof v==='object'){Object.values(v).forEach(freeze);Object.freeze(v);}return v;};
 function checkSet(name,set){
   const no=why=>{throw invalid(`rule set ${name}: ${why}`);};
   const unknown=Object.keys(set).find(k=>!SET_KEYS.includes(k));
   if(unknown)no(`unknown name ${unknown}`);
   if(!word(set.title))no('needs a title');
-  if('battery_cells' in set&&!whole(set.battery_cells))no('battery_cells is a whole number of at least 1');
+  if('battery_cells' in set&&!whole(set.battery_cells,1,MOST_CELLS))no(`battery_cells is a whole number from 1 to ${MOST_CELLS}`);
   const given=CHOICE_KEYS.filter(k=>k in set);
   if(given.length&&given.length!==CHOICE_KEYS.length)no(`a choice of supports needs all of ${CHOICE_KEYS.join(', ')}`);
   if(given.length){
     const {supports:n,marks,tags,gate_weights_kg:weights,margins_kg:margins,slot_cm:slot,fit_lengths_cm:fit,long_lengths_cm:long}=set;
     if(!plain(n)||Object.keys(n).sort().join()!=='too_long,weak'||!whole(n.weak,0)||!whole(n.too_long,0))no('supports counts weak and too_long');
-    if(!distinct(marks,word)||!distinct(tags,word))no('marks and tags are lists of different words');
+    if(!distinct(marks,spoken)||!distinct(tags,spoken))no(`marks and tags are lists of different words: no spaces around them, at most ${MOST_LETTERS} letters, none of ${RETOLD_WORDS.join(' ')}`);
     if(marks.length<1+n.weak+n.too_long)no('fewer marks than supports');
     // Under every tag but the true one, some support that fits has to look strong enough; each needs its own.
     if(tags.length-1>n.weak)no('more tags than there are weak supports to mislead with');
@@ -62,6 +70,8 @@ export function mergeRules(defaults,changes={}){
   }
   const rooms={...defaults.rooms,...changes.rooms};
   if(Object.keys(rooms).sort().join()!=='live,other'||Object.values(rooms).some(n=>!Object.hasOwn(sets,n)))throw invalid('rooms names a rule set for live and for other');
+  // A room with a scripted or a model seat is one of the other rooms, and those seats know one brace.
+  if(sets[rooms.other].supports)throw invalid('rooms.other is what scripted and model seats get, and they cannot take a choice of supports');
   return freeze({rooms,rule_sets:sets});
 }
 export function loadRules(override=process.env.PARTITION_ROOM_RULES,root=here){

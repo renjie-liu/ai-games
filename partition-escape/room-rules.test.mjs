@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {loadRules,mergeRules,makePuzzle,seeded,RULES} from './room-rules.mjs';
+import {loadRules,mergeRules,makePuzzle,seeded,rulesFor,RETOLD_WORDS,RULES} from './room-rules.mjs';
 
 const DEFAULTS=JSON.parse(fs.readFileSync(new URL('./room-rules.json',import.meta.url),'utf8'));
 const override=changes=>{const file=path.join(fs.mkdtempSync(path.join(os.tmpdir(),'rules-')),'rules.json');fs.writeFileSync(file,JSON.stringify(changes));return file;};
@@ -16,22 +16,46 @@ test('the defaults are the file and nothing else; an override changes only what 
   assert.deepEqual(loaded.rule_sets.standard,{...DEFAULTS.rule_sets.standard,battery_cells:3});
   assert.deepEqual(loaded.rule_sets.classic,DEFAULTS.rule_sets.classic);
 });
-test('a typo, a room kind that names no rule set, or a puzzle that cannot be built is refused',()=>{
-  const bad=[{room:{}},{rooms:{live:'hard'}},{rooms:{voice:'classic'}},{rule_sets:{standard:{battery_cell:2}}},
-    {rule_sets:{standard:{battery_cells:0}}},{rule_sets:{standard:{battery_cells:1.5}}},{rule_sets:{standard:{title:''}}},
-    // fewer marks than supports
-    {rule_sets:{standard:{marks:['三角','圆圈']}}},{rule_sets:{standard:{marks:['三角','三角','方块','菱形']}}},
+test('a typo, a room kind that names no rule set, or a puzzle that cannot be built is refused, each with its reason',()=>{
+  const standard=changes=>({rule_sets:{standard:changes}});
+  const bad=[
+    [{room:{}},/rooms and rule_sets/],[{rooms:{live:'hard'}},/names a rule set/],[{rooms:{voice:'classic'}},/names a rule set/],
+    // scripted and model seats get `other`, and they cannot take a choice of supports
+    [{rooms:{other:'standard'}},/scripted/],
+    [standard({battery_cell:2}),/unknown name battery_cell/],[standard({title:''}),/title/],
+    [standard({battery_cells:0}),/battery_cells/],[standard({battery_cells:1.5}),/battery_cells/],[standard({battery_cells:1e20}),/battery_cells/],[standard({battery_cells:500}),/battery_cells/],
+    // a choice of supports needs every part of it
+    [{rule_sets:{half:{title:'半套',marks:['三角']}}},/needs all of/],
+    [standard({supports:{weak:2}}),/supports counts/],[standard({supports:{weak:-1,too_long:1}}),/supports counts/],[standard({supports:{weak:2,too_long:1,strong:1}}),/supports counts/],
+    [standard({marks:['三角','圆圈']}),/fewer marks/],[standard({marks:['三角','三角','方块','菱形']}),/different words/],
+    // a mark is said aloud and put into messages: no stray spaces, nothing the retelling rewrites, not long
+    [standard({marks:['三角',' 三角','方块','菱形']}),/different words/],[standard({marks:['他','圆圈','方块','菱形']}),/different words/],
+    [standard({marks:['三角形状的大记号啊','圆圈','方块','菱形']}),/different words/],[standard({tags:['红','阿澄']}),/different words/],
     // every other tag needs a support that would look right under it
-    {rule_sets:{standard:{tags:['红','黄','蓝','绿']}}},
+    [standard({tags:['红','黄','蓝','绿']}),/more tags/],
+    [standard({gate_weights_kg:[200,200]}),/weights and margins/],[standard({gate_weights_kg:[]}),/weights and margins/],[standard({margins_kg:[40,'60',80]}),/weights and margins/],
+    [standard({gate_weights_kg:[1e20]}),/weights and margins/],
+    [standard({margins_kg:[200,60,80]}),/as large as a gate weight/],[standard({margins_kg:[40]}),/too few margins/],
     // a length that is said to fit but does not, and one said to be too long that fits
-    {rule_sets:{standard:{fit_lengths_cm:[90]}}},{rule_sets:{standard:{long_lengths_cm:[110]}}},
-    {rule_sets:{standard:{slot_cm:[120,100]}}},{rule_sets:{standard:{margins_kg:[200]}}},
-    {rule_sets:{standard:{stars:{three:{power_on:1}}}}},{rule_sets:{standard:{stars:{three:{power_ons:-1}}}}},
+    [standard({slot_cm:[120,100]}),/slot_cm/],[standard({fit_lengths_cm:[90]}),/said to fit/],[standard({long_lengths_cm:[110]}),/said to be too long/],
+    [standard({stars:{three:{power_on:1}}}),/star tier/],[standard({stars:{three:{power_ons:-1}}}),/star tier/],[standard({stars:{four:{power_ons:1}}}),/stars has/],
     // stars count cells, so they need a battery
-    {rule_sets:{bare:{title:'x',stars:{two:{spare_packs:0}}}}},[]];
-  for(const changes of bad)assert.throws(()=>loadRules(override(changes)),/room_rules_invalid/,JSON.stringify(changes));
+    [{rule_sets:{bare:{title:'x',stars:{two:{spare_packs:0}}}}},/need battery_cells/],[[],/rooms and rule_sets/]];
+  for(const [changes,reason] of bad){
+    assert.throws(()=>loadRules(override(changes)),e=>/room_rules_invalid/.test(e.message)&&reason.test(e.message),JSON.stringify(changes));
+  }
   assert.throws(()=>loadRules('/nonexistent/rules.json'),/room_rules_invalid/);
   assert.throws(()=>mergeRules(DEFAULTS,{rule_sets:{standard:null}}),/room_rules_invalid/);
+});
+test('the kind of room decides the rule set when none is named',()=>{
+  assert.equal(rulesFor({west:'human',east:'live'}),'standard');assert.equal(rulesFor({west:'live',east:'human'}),'standard');
+  for(const controllers of [{west:'human',east:'human'},{west:'human',east:'script'},{west:'script',east:'script'},undefined])assert.equal(rulesFor(controllers),'classic');
+  const swapped=loadRules(override({rooms:{live:'classic'}}));
+  assert.equal(rulesFor({west:'human',east:'live'},swapped),'classic');
+});
+test('no default mark or tag is a word the retelling rewrites',()=>{
+  assert.ok(RETOLD_WORDS.length>0);
+  for(const word of [...standard.marks,...standard.tags])assert.ok(!RETOLD_WORDS.some(w=>word.includes(w)),word);
 });
 test('the first rule set has no puzzle to generate',()=>{
   assert.equal(makePuzzle(RULES.rule_sets.classic,seeded(1)),null);
@@ -73,6 +97,9 @@ test('where the right support sits and which tag hangs both vary',()=>{
   const where=new Set(),tags=new Set();
   for(let seed=0;seed<200;seed++){const p=makePuzzle(standard,seeded(seed));where.add(p.supports.findIndex(s=>s.holds));tags.add(p.tag);}
   assert.deepEqual([...where].sort(),[0,1,2,3]);assert.deepEqual([...tags].sort(),[...standard.tags].sort());
+  // Which mark the right support carries varies too: no mark gives the answer away.
+  const marked=new Set(Array.from({length:300},(_,seed)=>makePuzzle(standard,seeded(seed)).supports.find(s=>s.holds).mark));
+  assert.deepEqual([...marked].sort(),[...standard.marks].sort());
 });
 test('a rule set may have a battery without a choice of supports, and the other way round',()=>{
   const rules=loadRules(override({rule_sets:{cells:{title:'只限电',battery_cells:3},pick:{...DEFAULTS.rule_sets.standard,title:'只挑撑',battery_cells:undefined,stars:undefined}}}));

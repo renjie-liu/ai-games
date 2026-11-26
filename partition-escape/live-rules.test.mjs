@@ -69,3 +69,17 @@ test('what confirming a proposal would do is the same for a weak support as for 
   };
   assert.equal(shown(s=>s.fits&&!s.holds),shown(s=>s.holds));
 });
+test('with the gate left on the power alone, the partner is not told which support will hold before it is tried',()=>{
+  const shown=pick=>{
+    const state=setup(),{r}=state,east=ready(state);
+    east.act({type:'action',id:idOf(r,pick)});west(r,{type:'accept',id:r.pending.id});
+    west(r,{type:'action',id:'power-on'});east.look();east.act({type:'action',id:'release-brake'});
+    west(r,{type:'action',id:'power-off'});
+    const view=east.look(),marks=new RegExp(r.puzzle.supports.map(s=>s.mark).join('|'),'g');
+    return {foreseen:view.pending.if_confirmed_now,all:JSON.stringify({local:view.local,pending:view.pending.if_confirmed_now,notes:view.notes}).replace(marks,'某')};
+  };
+  const weak=shown(s=>s.fits&&!s.holds),right=shown(s=>s.holds);
+  assert.equal(weak.all,right.all);
+  assert.deepEqual(Object.keys(right.foreseen),['fanSpinning','untried_support']);
+});
+

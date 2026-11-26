@@ -32,6 +32,7 @@ export class Room {
     if(!set)throw Error('没有这套规则。');
     // The scripted and the model seat know one brace; they have not learned to choose among several.
     if(set.supports&&Object.values(controllers).some(c=>c==='script'||c==='model'))throw Error('脚本和模型席位还不会挑支撑，只能用没有支撑选择的规则。');
+    if(!Number.isSafeInteger(seed)||seed<0)throw Error('无效种子：要一个不小于 0 的整数。');
     this.rules=rules; this.seed=seed; this.puzzle=makePuzzle(set,seeded(seed));
     const supports=this.puzzle?.supports||[];
     this.actions=actionsFor(this.puzzle);
@@ -89,7 +90,17 @@ export class Room {
     const p=this.pending;if(!p||p.from===role)return null;
     const trial=transition(this.state,p.action,this.actor(p.from),this.puzzle);if(!trial.ok)return null;
     const now=this.local(role),then=this.local(role,trial.state);
-    return Object.fromEntries(Object.keys(then).filter(k=>then[k]!==now[k]).map(k=>[k,then[k]]));
+    const changed=Object.fromEntries(Object.keys(then).filter(k=>then[k]!==now[k]).map(k=>[k,then[k]]));
+    // Whether a support that has not borne the gate yet will bear it is not something a seat can
+    // foresee: it is what letting go finds out. When confirming would leave the gate on such a
+    // support alone, what depends on that is left out and the seat is told so instead. Otherwise
+    // this would say which support is the right one before it is tried.
+    const s=this.state,t=trial.state;
+    if(this.puzzle?.supports&&s.braced&&!s.loadTested&&!t.power&&!t.brake){
+      for(const k of ['gateOpen','braced','support'])delete changed[k];
+      if(role==='east')changed.untried_support='确认后只有支撑托着闸门。它还没有承过重，承不承得住到那时才知道。';
+    }
+    return changed;
   }
   // What a seat learns by simply looking around its own room: the current fact of each of its own
   // objects goes into its notes. No event and no revision, because nothing in the world changed.
@@ -183,9 +194,10 @@ export class Room {
       if(this.pending.from===role)return {ok:false,code:'permission_denied',message:'应由对面确认。'};
       const p=this.pending;this.pending=null;this.changes++;
       if(c.type==='decline'){this.event(role,'decision','暂缓共同动作，继续商量。',undefined,{proposalId:p.id,proposal:p.action,proposer:p.from,resolution:'decline'});return {ok:true,message:'已暂缓提议，机关保持原状。'};}
-      const result=this.execute(p.from,p.action);
+      const result=this.apply(p.from,p.action);
       if(result.ok)this.event(role,'decision',`确认共同动作：${this.labels[p.action]}，已执行。`,undefined,{proposalId:p.id,proposal:p.action,proposer:p.from,resolution:'accept'});
-      return {...result,message:result.ok?`${names[p.from]}已完成「${this.labels[p.action]}」。`:result.message};
+      // The seat that confirmed is the one that hears why it could not be done.
+      return {ok:result.ok,message:result.ok?`${names[p.from]}已完成「${this.labels[p.action]}」。`:this.told(role,p.action,false,result.message)};
     }
     if(c.type==='action'){
       if(!this.actions[this.actor(role)].has(c.id))return {ok:false,code:'permission_denied',message:'这个机关不在你这一侧。'};
@@ -209,17 +221,25 @@ export class Room {
     this.messages.push(msg);this.event(role,type,msg.text);return {ok:true,message:'已发送。文字不会自动操作机关。'};
   }
   // What the rules said, in the terms of the seat that is told. The rules name the partner in the
-  // third person; told to the partner itself, "he" is "you".
+  // third person; told to the partner itself, "he" is "you" (the words are RETOLD_WORDS in
+  // room-rules.mjs, which keeps them out of marks and tags).
   told(role,action,ok,text){
     let message=text.replaceAll('阿澄','东席搭档');
     if(role==='east'){
-      message=message.replaceAll('需要你这边先供电','需要西席先供电').replaceAll('东席搭档','你').replaceAll('他','你');
-      if(action==='send-key')message=ok?'你把黄铜钥匙递给了西席。钥匙已不在你这边。':'钥匙已经递给西席了。';
+      message=message.replaceAll('需要你这边先供电','需要西席先供电').replaceAll('东席搭档','你').replaceAll('他','你')
+        .replace('钥匙已经在你这边了。','钥匙已经递给西席了。');
+      if(action==='send-key'&&ok)message='你把黄铜钥匙递给了西席。钥匙已不在你这边。';
       if(action==='leave'&&ok)message='你穿过稳住的东闸，与西席搭档一起走到墙外。';
     }
     return message;
   }
+  // A seat's own move: carried out by the rules and told to that seat.
   execute(role,action){
+    const r=this.apply(role,action);
+    return {ok:r.ok,message:this.told(role,action,r.ok,r.message)};
+  }
+  // Carries `action` out for the seat it belongs to. The message is the rules' own wording.
+  apply(role,action){
     const up=gateOpen(this.state),r=transition(this.state,action,this.actor(role),this.puzzle);
     if(r.ok){
       this.state=r.state;this.changes++;
@@ -228,6 +248,6 @@ export class Room {
       const heard=won(this.state)?'两个人一起走到了墙外。':up&&!gateOpen(this.state)?'墙后传来闸门落下的声音。':!up&&gateOpen(this.state)?'墙后传来闸门升起的声音。':'墙内传来机关动作的声音。';
       this.event(role,'action',`${names[role]} · ${this.labels[action]}。${heard}`);this.signals[action]=this.rev;
     }
-    return {ok:r.ok,message:this.told(role,action,r.ok,r.message)};
+    return r;
   }
 }

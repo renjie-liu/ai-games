@@ -69,6 +69,9 @@ const server=http.createServer(async(req,res)=>{
       if(Object.values(b.controllers||{}).includes('model')&&(!process.env.PARTITION_MODEL_LEDGER||Object.values(b.controllers).filter(x=>x==='model').length!==1))return send(res,400,{error:'本轮 smoke 仅允许一个模型席位，且必须提供共享请求限额账本。'});
       // A request may name a rule set; otherwise the kind of room decides (room-rules.json).
       const r=new Room(b.controllers,{rules:b.rules??rulesFor(b.controllers)});rooms.set(r.id,r);
+      // The seed makes a room's puzzle again (new Room(controllers,{rules,seed})). It is the whole
+      // answer, so it stays on this side: in the operator's terminal, never in a response.
+      if(r.puzzle)console.log(`room ${r.id} · rules ${r.rules} · seed ${r.seed}`);
       for(const s of ['west','east'])if(!['human','live'].includes(r.controllers[s]))await startSeat(r,s);
       const link=(role)=>`${role==='watch'?'/watch':'/play'}#room=${r.id}&key=${r.tokens[role]}`;
       return send(res,201,{id:r.id,rules:r.rules,links:{west:r.controllers.west==='human'?link('west'):null,east:r.controllers.east==='human'?link('east'):null,watch:link('watch')}});

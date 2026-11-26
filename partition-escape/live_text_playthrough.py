@@ -312,10 +312,18 @@ class Player:
             self.button({'type': 'action', 'id': 'unlock'})
             self.button({'type': 'action', 'id': 'power-on'})
             self.button({'type': 'action', 'id': 'power-off'})
+        known = {}
         def tag():
-            _, tags, _ = chart_of(self.view())
-            asked = [s for s in self.steps if s['step'] in ('tag learned', 'support in the slot')]
-            return tag_heard(''.join(t['partner_said'] for s in asked for t in s['tries']), tags)
+            # Once heard, the tag is kept: the partner naming another colour later in passing
+            # (a column of the table, say) must not unlearn it.
+            if 'tag' not in known:
+                _, tags, _ = chart_of(self.view())
+                asked = [s for s in self.steps if s['step'] == 'tag learned']
+                heard = tag_heard(''.join(t['partner_said'] for s in asked for t in s['tries']), tags)
+                if heard is None:
+                    return None
+                known['tag'] = heard
+            return known['tag']
         def strong_enough(mark):
             weight, _, table = chart_of(self.view())
             return table[mark][tag()] >= weight
