@@ -156,7 +156,8 @@ export class Room {
     if(r.ok){this.state=r.state;this.event(role,'action',`${names[role]} · ${labels[action]}。${won(this.state)?'两个人一起走到了墙外。':'墙内传来机关动作的声音。'}`);this.signals[action]=this.rev;}
     let message=r.message.replaceAll('阿澄','东席搭档');
     if(role==='east'){
-      message=message.replaceAll('东席搭档','你').replaceAll('需要你这边先供电','需要西席先供电');
+      // The rules speak of the partner in the third person; told to the partner itself, "he" is "you".
+      message=message.replaceAll('需要你这边先供电','需要西席先供电').replaceAll('东席搭档','你').replaceAll('他','你');
       if(action==='send-key')message=r.ok?'你把黄铜钥匙递给了西席。钥匙已不在你这边。':'钥匙已经递给西席了。';
       if(action==='leave'&&r.ok)message='你穿过稳住的东闸，与西席搭档一起走到墙外。';
     }

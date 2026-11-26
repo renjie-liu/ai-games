@@ -135,3 +135,26 @@ test('the proposer may also keep working while its proposal waits; the rules dec
   // Opening the door cuts the power by the interlock, whatever the power was when the door was proposed.
   assert.equal(r.state.doorOpen,true);assert.equal(r.state.power,false);assert.equal(before.power,true);assert.equal(r.pending,null);
 });
+
+// The rules' sentences were written about the partner in the third person. Told to the partner
+// itself they read "你拉住手闸…只要他不松手，断电也不会落门": the one sentence that says holding the
+// brake makes the power cut safe pointed at somebody else. In a real game on 2026-11-26 the partner,
+// holding the brake, refused to confirm the power cut until it had fitted the brace, which needs the
+// power cut.
+test('what east is told about its own actions speaks to east throughout',()=>{
+  const r=new Room(),said=[];
+  const east=id=>{const x=r.command('east',{type:'action',id});said.push(x.message);return x;};
+  east('hold-brake');east('brace');east('leave');                      // refused at the start
+  act(r,'east','send-key');act(r,'west','unlock');act(r,'west','power-on');
+  east('brace');                                                        // fan spinning
+  const held=east('hold-brake');assert.equal(held.ok,true);
+  assert.ok(held.message.includes('只要你不松手，断电也不会落门'),held.message);
+  act(r,'west','power-off');east('leave');east('brace');
+  const released=east('release-brake');assert.ok(released.message.includes('你的双手'),released.message);
+  east('release-brake');act(r,'west','open-door');east('leave');
+  assert.ok(won(r.state));
+  for(const text of said){assert.equal(/他|阿澄|东席搭档/.test(text),false,text);}
+  // West is still told about the partner in the third person.
+  const west=new Room();act(west,'east','send-key');
+  assert.ok(west.command('west',{type:'action',id:'open-door'}).message.includes('门仍然锁着'));
+});
