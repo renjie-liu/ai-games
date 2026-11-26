@@ -3,10 +3,14 @@ No polling, retries, client creation, private seat reads, or new authorization.
 """
 import asyncio
 import json
+import re
 import time
 from live_budget import UPDATES  # batches, events, batch_bytes, total_bytes, interval_ms: live-limits.json
 
 def encode(value):return json.dumps(value,ensure_ascii=False,separators=(',',':'))
+# Which actions wait for the other seat is the room's to say (world.mjs, Room.joint) and differs by
+# rule set. The worker checks that a waiting action is named like one, not which one it is.
+ACTION_ID=re.compile(r'[a-z][a-z0-9-]{0,39}')
 def valid_update(u):
     if not isinstance(u,dict) or set(u)!={'rev','events','receipts','public','pending'}:return False
     if type(u['rev']) is not int or u['rev']<1:return False
@@ -29,7 +33,7 @@ def valid_update(u):
     if p is not None:
         if not isinstance(p,dict) or set(p)!={'id','from','action','label'}:return False
         if not isinstance(p['id'],str) or len(p['id'])!=12 or any(x not in '0123456789abcdef' for x in p['id']):return False
-        if p['from'] not in ('west','east') or p['action'] not in ('power-off','open-door','send-key') or not isinstance(p['label'],str) or len(p['label'])>100:return False
+        if p['from'] not in ('west','east') or not isinstance(p['action'],str) or not ACTION_ID.fullmatch(p['action']) or not isinstance(p['label'],str) or len(p['label'])>100:return False
     return len(encode(u).encode())<=UPDATES['batch_bytes']
 
 class ContextUpdates:

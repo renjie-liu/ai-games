@@ -139,6 +139,15 @@ class UpdateTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(o.sent);self.assertIsNone(u.pending);self.assertEqual(o.rows[-1]['room_event_ids'],[5]);self.assertEqual(o.rows[-1]['request_ids'],['1'*24]);self.assertEqual(o.rows[-1]['status'],'canceled')
 
 
+    async def test_a_waiting_action_is_checked_for_its_shape_not_against_a_list(self):
+        # Which actions wait for the other seat differs by rule set (a support to put in, in a room
+        # with a choice of them). An update that carries one has to get through; a name that is
+        # not an action id still does not.
+        pending=lambda action:{'id':'a'*12,'from':'east','action':action,'label':'装上刻着圆圈的支撑'}
+        for action in ('power-off','open-door','send-key','brace-3','brace-12'):
+            p=packet();p['update']['pending']=pending(action);self.assertTrue(valid_update(p['update']),action)
+        for action in ('','Brace-3','brace 3','3-brace','brace_3','x'*41,7,None,['brace-3'],'装支撑'):
+            p=packet();p['update']['pending']=pending(action);self.assertFalse(valid_update(p['update']),repr(action))
     async def test_carried_snapshot_is_explicitly_historical_not_refreshed_authority(self):
         o=Owner();o.turn_open=True;u=await self.start(o);b=packet()
         b['update']['pending']={'id':'a'*12,'from':'west','action':'open-door','label':'打开门'}

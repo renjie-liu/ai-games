@@ -303,7 +303,8 @@ class WholeGameWithAChoiceOfSupports(LiveRoom):
         views += [r.get('view') for r in self.live.responses if isinstance(r, dict)]
         return [note['text'] for view in views if view for note in view.get('notes', [])]
 
-    async def test_a_wrong_offer_is_declined_and_the_right_support_wins_three_stars(self):
+    async def to_the_supports(self):
+        """Up to where a support can go in: the gate up on the brake, the power cut, one cell used."""
         for thing in ('plaque', 'power', 'chart'):
             await self.west({'type': 'inspect', 'id': thing})
         await self.speak(('action', 'send-key'))
@@ -315,10 +316,48 @@ class WholeGameWithAChoiceOfSupports(LiveRoom):
         await self.speak(('action', 'hold-brake'))
         await self.west_button({'type': 'action', 'id': 'power-off'})
         await self.type('我提了断电，你确认一下。', ('accept', None))
-        # The partner now sees the supports. It offers each one that fits; the player decides each
-        # against the table, declining what is too weak.
         await self.speak()
-        tag, fitting, offered = self.east_knows()
+        return self.east_knows()
+
+    async def pending(self):
+        return (await self.west({'type': 'inspect', 'id': 'chart'}))['view']['pending']
+
+    async def test_the_partner_keeps_hearing_the_player_through_a_wrong_support_and_a_new_pack(self):
+        # What the player does while a support waits to be confirmed, after one gave way, and at
+        # the console has to reach the partner like any other move: each button here fails the test
+        # if its public result is not delivered.
+        tag, fitting, offered = await self.to_the_supports()
+        mine = (await self.west({'type': 'inspect', 'id': 'chart'}))['view']
+        weak = next(m for m in fitting if not self.west_decides(mine, tag, m))
+        right = next(m for m in fitting if self.west_decides(mine, tag, m))
+        await self.speak(('action', offered[weak]))
+        await self.west_button({'type': 'share', 'id': 'interlock'})          # a clue, while the proposal waits
+        await self.west_button({'type': 'accept', 'id': (await self.pending())['id']})
+        await self.speak(('action', 'release-brake'))
+        public = (await asyncio.to_thread(self.get, self.tokens['watch']))['public']
+        self.assertFalse(public['gateOpen'], 'the weak support gives way')
+        await self.west_button({'type': 'action', 'id': 'power-on'})          # the second and last cell
+        await self.speak(('action', 'hold-brake'))
+        await self.west_button({'type': 'action', 'id': 'power-off'})
+        await self.type('再来一次，你确认断电。', ('accept', None))
+        await self.speak(('action', offered[right]))
+        await self.west_button({'type': 'accept', 'id': (await self.pending())['id']})
+        await self.speak(('action', 'release-brake'))
+        swapped = await self.west_button({'type': 'action', 'id': 'swap-pack'})
+        self.assertEqual(swapped['view']['local']['packs'], 1)
+        await self.west_button({'type': 'action', 'id': 'open-door'})
+        await self.speak(('accept', None), ('action', 'leave'))
+        final = (await self.west({'type': 'inspect', 'id': 'door'}))['view']
+        self.assertEqual(final['rating'], {'stars': 1, 'powerOns': 2, 'packs': 1})
+        self.assertIsNone(self.closed(), 'the session must still be open when the game is won')
+        self.assertFalse([r for r in self.session.public if r['kind'] == 'context_update' and r['status'] == 'rejected'])
+        await asyncio.to_thread(self.post, '/live-input', self.tokens['west'], {'type': 'stop'})
+        await asyncio.wait_for(self.run_task, 10)
+
+    async def test_a_wrong_offer_is_declined_and_the_right_support_wins_three_stars(self):
+        # The partner sees the supports. It offers each one that fits; the player decides each
+        # against the table, declining what is too weak.
+        tag, fitting, offered = await self.to_the_supports()
         self.assertEqual(len(fitting), 3, 'three supports fit the slot')
         self.assertEqual(len(offered), 4, 'the one that does not fit can still be asked for')
         declined = accepted = 0
