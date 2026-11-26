@@ -45,9 +45,9 @@ def chart_of(view):
 
 
 def tag_heard(said, tags):
-    """The one tag colour the partner named, or None when it named none or more than one.
-    The colour has to come as a colour ("黄色", "黄牌"): the brass key is "黄铜" and is not a tag."""
-    named = [tag for tag in tags if tag + '色' in said or tag + '牌' in said]
+    """The one tag colour the partner named in a reply, or None when it named none or more than one.
+    The colour has to come as a colour ("黄色", "黄牌", "黄的"): the brass key is "黄铜" and is not a tag."""
+    named = [tag for tag in tags if any(tag + end in said for end in ('色', '牌', '的'))]
     return named[0] if len(named) == 1 else None
 
 
@@ -318,8 +318,9 @@ class Player:
             # (a column of the table, say) must not unlearn it.
             if 'tag' not in known:
                 _, tags, _ = chart_of(self.view())
-                asked = [s for s in self.steps if s['step'] == 'tag learned']
-                heard = tag_heard(''.join(t['partner_said'] for s in asked for t in s['tries']), tags)
+                # The latest reply that names exactly one colour: a reply that named two is asked about again.
+                replies = [t['partner_said'] for s in self.steps for t in s['tries']]
+                heard = next((tag_heard(reply, tags) for reply in reversed(replies) if tag_heard(reply, tags)), None)
                 if heard is None:
                     return None
                 known['tag'] = heard
@@ -334,9 +335,11 @@ class Player:
                     '其中放得进槽的那一根，请你提议装上，我来确认。',
                     '我没同意刚才那根：按表它承不住。请换一根放得进槽、承重也够的。',
                     '装支撑的提议我还没有看到。你那边还差什么？', '请提议装上那根放得进槽、承重也够的支撑。']
+        # A partner that is quick offers a support in the same turn in which it confirms the power cut.
+        offered = lambda v: bool(v.get('pending')) and v['pending']['from'] == 'east' and v['pending']['action'].startswith('brace-')
         def decided(view):
             pending = view.get('pending')
-            if pending and pending['from'] == 'east' and pending['action'].startswith('brace-'):
+            if offered(view):
                 mark = re.fullmatch(r'装上刻着(.+)的支撑', pending['label']).group(1)
                 self.button({'type': 'accept' if strong_enough(mark) else 'decline', 'id': pending['id']})
                 view = self.view()
@@ -347,7 +350,7 @@ class Player:
              lambda v: (v.get('pending') or {}).get('action') == 'send-key', key_power_propose),
             ('power cut with the gate still up', ['钥匙收到了，门锁开了，我也接通了动力。备用电池只有两格，所以我已经提了切断动力，你那边准备好了再确认。',
                                                   '断电后你那边的闸门不能落下来。你先把它固定住，再确认我的提议。', '切断动力的提议还在等你，你准备好了吗？还差什么？'],
-             lambda v: v['local']['power'] is False and not v.get('pending') and self.public()['gateOpen'] is True, None),
+             lambda v: v['local']['power'] is False and (not v.get('pending') or offered(v)) and self.public()['gateOpen'] is True, None),
             ('tag learned', ['动力断了。我这边墙上有一张承重表，按支撑上刻的记号查承重，分几列，读哪一列要看你那边闸轨上检修牌的颜色。那块牌子是什么颜色？',
                              '你那边闸轨上的检修牌是什么颜色？', '请只告诉我检修牌的颜色。'],
              lambda v: tag() is not None, None),

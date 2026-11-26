@@ -32,6 +32,7 @@ class WhatThePlayerWorksOut(unittest.TestCase):
         tags = ['红', '黄']
         self.assertEqual(tag_heard('闸轨上挂着一块黄色检修牌。', tags), '黄')
         self.assertEqual(tag_heard('是红牌。', tags), '红')
+        self.assertEqual(tag_heard('牌子是黄的。', tags), '黄')
         self.assertIsNone(tag_heard('黄铜钥匙已经递给你了。', tags), 'the brass key is not a tag')
         self.assertIsNone(tag_heard('不是红色，是黄色。', tags), 'two colours named: ask again')
         self.assertIsNone(tag_heard('', tags))
