@@ -9,7 +9,7 @@ function call(h,r,c){const o=h.observe(r,'east',h.get(r).scope);assert.ok(o.ok);
 test('Live tool uses normal engine; shared action waits for human button',()=>{const {h,r}=setup();assert.equal(call(h,r,{type:'action',id:'send-key'}).receipt.outcome,'proposed');assert.equal(r.state.keyTransferred,false);assert.equal(r.command('west',{type:'accept',id:r.pending.id}).receipt.outcome,'applied');assert.equal(r.state.keyTransferred,true);});
 test('speech onset invalidates prior ticket, including late complete tool',()=>{const {h,r}=setup(),o=h.observe(r,'east',h.get(r).scope),rev=r.rev;h.input(r,{type:'start'});assert.equal(h.command(r,'east',{ticket:o.ticket,command:{type:'inspect',id:'hatch'}}).code,'live_superseded');assert.equal(r.rev,rev);});
 test('re-observe after end gets fresh authority; duplicates do not execute',()=>{const {h,r}=setup();h.input(r,{type:'start'});assert.equal(h.observe(r,'east',h.get(r).scope).ok,false);h.input(r,{type:'end'});const o=h.observe(r,'east',h.get(r).scope);const b={ticket:o.ticket,command:{type:'inspect',id:'hatch'}};assert.ok(h.command(r,'east',b).ok);const rev=r.rev;assert.equal(h.command(r,'east',b).code,'live_superseded');assert.equal(r.rev,rev);});
-test('world revision, expiration, pause and wrong seat cannot bypass gate',()=>{for(const mode of ['rev','expired','wrong-seat','pause']){const {h,r,j}=setup(),o=h.observe(r,'east',j.scope);if(mode==='rev')r.command('west',{type:'inspect',id:'plaque'});if(mode==='expired')j.tickets.get(o.ticket).expires=0;if(mode==='pause')r.command('west',{type:'pause'});const rev=r.rev;assert.equal(h.command(r,mode==='wrong-seat'?'west':'east',{ticket:o.ticket,command:{type:'inspect',id:'hatch'}}).code,'live_superseded');assert.equal(r.rev,rev);}});
+test('world revision, expiration, pause and wrong seat cannot bypass gate',()=>{for(const mode of ['rev','expired','wrong-seat','pause']){const {h,r,j}=setup(),o=h.observe(r,'east',j.scope);if(mode==='rev')r.command('west',{type:'action',id:'power-on'});if(mode==='expired')j.tickets.get(o.ticket).expires=0;if(mode==='pause')r.command('west',{type:'pause'});const rev=r.rev;assert.equal(h.command(r,mode==='wrong-seat'?'west':'east',{ticket:o.ticket,command:{type:'inspect',id:'hatch'}}).code,'live_superseded');assert.equal(r.rev,rev);}});
 test('actual permissions and rules remain rejected, no forged seat or batch',()=>{const {h,r}=setup();assert.equal(call(h,r,{type:'action',id:'power-on'}).code,'permission_denied');assert.equal(call(h,r,{type:'action',id:'brace'}).receipt.code,'rule_rejected');assert.equal(call(h,r,{type:'inspect',id:'hatch',seat:'west'}).code,'invalid_tool');assert.equal(call(h,r,[{type:'inspect',id:'hatch'}]).code,'invalid_tool');});
 test('own observe never includes other unshared notes',()=>{const {h,r,j}=setup();r.command('west',{type:'inspect',id:'plaque'});const o=h.observe(r,'east',j.scope);assert.equal(JSON.stringify(o).includes('interlock'),false);assert.equal(JSON.stringify(o).includes(r.tokens.west),false);});
 test('worklet fixture detects onset, retains preroll, limits silence, ends turn',()=>{let C;const events=[];vm.runInNewContext(fs.readFileSync(new URL('./mic-worklet.js',import.meta.url),'utf8'),{AudioWorkletProcessor:class{constructor(){this.port={postMessage:e=>events.push(e)};}},sampleRate:16000,registerProcessor:(n,c)=>C=c});const c=new C();const frame=v=>c.process([[new Float32Array(800).fill(v)]]);for(let i=0;i<20;i++)frame(0);assert.equal(events.length,0);frame(.1);frame(.1);assert.equal(events[0].type,'start');assert.equal(events.filter(e=>e.type==='audio').length,3);for(let i=0;i<14;i++)frame(0);assert.equal(events.at(-1).type,'end');const count=events.length;for(let i=0;i<20;i++)frame(0);assert.equal(events.length,count);});
@@ -114,4 +114,20 @@ test('no ticket is handed out while the player speaks, and speech voids the one 
   const after=h.command(r,'east',{ticket:first.ticket,command:{type:'action',id:'send-key'}});
   assert.equal(after.code,'live_superseded');assert.equal(r.pending,null);
   assert.equal(h.command(r,'east',{ticket:after.ticket,command:{type:'action',id:'send-key'}}).receipt.outcome,'proposed');
+});
+// A person clicks around their own room while talking: 30 inspections in one real game of 2026-11-26.
+test('a look or a word from the other seat leaves the partner\'s ticket good; a change of the room voids it',()=>{
+  const {h,r,j}=setup();
+  let ticket=h.observe(r,'east',j.scope).ticket;
+  r.command('west',{type:'inspect',id:'plaque'});r.command('west',{type:'hint'});
+  r.command('west',{type:'share',id:'interlock'});r.command('west',{type:'say',text:'你那边有什么？'});
+  const acted=h.command(r,'east',{ticket,command:{type:'inspect',id:'hatch'}});
+  assert.equal(acted.ok,true,'the room did not change, so what the partner saw still holds');
+  // West moves a mechanism: what the partner saw is no longer the room.
+  r.command('west',{type:'action',id:'power-on'});
+  const stale=h.command(r,'east',{ticket:acted.ticket,command:{type:'action',id:'send-key'}});
+  assert.equal(stale.code,'live_superseded');assert.equal(r.pending,null);
+  // So does a proposal coming or going.
+  ticket=stale.ticket;r.command('west',{type:'action',id:'power-off'});
+  assert.equal(h.command(r,'east',{ticket,command:{type:'inspect',id:'gate'}}).code,'live_superseded');
 });

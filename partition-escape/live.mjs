@@ -151,9 +151,12 @@ export class LiveHub {
   notify(room,role,command,result){this.get(room).updates.enqueue(role,command,result);}
 
   // A ticket says: the partner has seen the room as it is now, in the current control scope. It is
-  // good for one command. Speech from the player voids it (input), and so does any change of the room.
+  // good for one command. Speech from the player voids it (input), and so does a change of the room
+  // itself. The other seat looking at an object, asking for a hint or sharing a clue changes nothing
+  // the partner saw, and leaves the ticket good: a ticket handed over at the end of the player's turn
+  // would otherwise die at the player's next click.
   issue(room,j){
-    const ticket=id();j.tickets.clear();j.tickets.set(ticket,{scope:j.scope,rev:room.rev,expires:Date.now()+TICKET_MS});
+    const ticket=id();j.tickets.clear();j.tickets.set(ticket,{scope:j.scope,changes:room.changes,expires:Date.now()+TICKET_MS});
     return ticket;
   }
   // The room as the partner sees it now, with a ticket for its next command.
@@ -174,7 +177,7 @@ export class LiveHub {
     // a tool round just to look again. While the player speaks there is none: the partner waits.
     const may=role===j.seat&&!j.ended&&!j.speaking;
     const answer=result=>may?{...result,...this.current(room,role,j)}:{...result,view:room.view(role)};
-    if(!may||!t||t.scope!==j.scope||t.rev!==room.rev||t.expires<Date.now()){
+    if(!may||!t||t.scope!==j.scope||t.changes!==room.changes||t.expires<Date.now()){
       return answer({ok:false,code:'live_superseded',message:may?'这张ticket已经失效，什么都没有执行。回执里是最新视图和新的ticket。':'搭档正在说话或本段已结束，什么都没有执行。',
         receipt:{requestId:id(),source:'live-gate',seat:role,command:'已作废的操作',outcome:'waiting',code:'live_superseded',roomEventIds:[],changes:{},proposalId:null}});
     }

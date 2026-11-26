@@ -89,6 +89,12 @@ class Session:
     # What this session has already put in front of the partner. A session keeps its whole context
     # and every tool round re-reads it, so a fact, clue or message is sent once, not with every view.
     told=None
+    just_told=None
+    def untell(self):
+        """The last view was not sent after all: what it would have told is still to be told."""
+        if self.told is None or self.just_told is None:return
+        self.told['notes']-=self.just_told['notes'];self.told['shared']-=self.just_told['shared'];self.told['messages']=self.just_told['messages']
+        self.just_told=None
     def fresh(self,view):
         """The partner's view with what it was already told in this session left out."""
         if self.told is None:self.told={'notes':set(),'shared':set(),'messages':0}
@@ -98,7 +104,9 @@ class Session:
         notes=[n for n in out.pop('notes',None) or [] if name(n) not in self.told['notes']]
         shared=[n for n in out.pop('shared',None) or [] if name(n) not in self.told['shared']]
         messages=[m for m in out.pop('messages',None) or [] if when(m)>self.told['messages']]
-        self.told['notes']|={name(n) for n in notes};self.told['shared']|={name(n) for n in shared}
+        # Remember what this view added, so it can be taken back if the view is never sent.
+        self.just_told={'notes':{name(n) for n in notes},'shared':{name(n) for n in shared},'messages':self.told['messages']}
+        self.told['notes']|=self.just_told['notes'];self.told['shared']|=self.just_told['shared']
         if messages:self.told['messages']=max(when(m) for m in messages)
         for key,new in (('notes',notes),('shared',shared),('messages',messages)):
             if new:out[key]=new
@@ -154,6 +162,7 @@ class Session:
             # Within the held reserve: keep the receipt and IDs, drop the view (observe again before acting).
             # A read-only observe is never truncated: without its view a ticket would invite blind actions.
             result=compact_receipt(result);wire=json.dumps(result,ensure_ascii=False);form='compact_receipt'
+            self.untell()
         size=len(wire.encode())
         if self.closed.is_set() or size>self.ledger.available('text_bytes'):
             reason='session_closed' if self.closed.is_set() else 'text_budget_limit'

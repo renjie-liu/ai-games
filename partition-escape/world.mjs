@@ -39,6 +39,9 @@ export class Room {
     this.tokens=Object.fromEntries(['west','east','watch'].map(s=>[s,randomBytes(24).toString('base64url')]));
     this.notes={west:[],east:[]}; this.shared=[]; this.messages=[]; this.events=[]; this.rev=0;
     this.paused=false; this.pending=null; this.hints={west:0,east:0}; this.worker={}; this.signals={}; this.created=Date.now();
+    // Counts changes of the room itself: a mechanism moved, a proposal came or went, play paused or
+    // resumed. `rev` counts every event, a look or a message included; this does not.
+    this.changes=0;
     this.event('system','ready','两侧已接通。先查看自己房间里的物件，再把发现告诉另一侧。','rules');
   }
   role(token){return Object.keys(this.tokens).find(s=>this.tokens[s]===token);}
@@ -95,11 +98,11 @@ export class Room {
   dispatch(role,c) {
     if(!['west','east'].includes(role))return {ok:false,code:'permission_denied',message:'观众只有只读权限。'};
     if(typeof c!=='object'||!c)return {ok:false,message:'无效操作。'};
-    if(c.type==='pause'){this.paused=!this.paused;this.event(role,'pause',this.paused?'已暂停双方行动。':'双方继续探索。');return {ok:true};}
+    if(c.type==='pause'){this.paused=!this.paused;this.changes++;this.event(role,'pause',this.paused?'已暂停双方行动。':'双方继续探索。');return {ok:true};}
     if(c.type==='cancel'){
       if(!this.pending||this.pending.id!==c.id)return {ok:false,code:'stale_proposal',retryable:true,message:'提议已过期，请重新查看。'};
       if(this.pending.from!==role)return {ok:false,code:'permission_denied',message:'只能撤回自己仍在等待的提议。'};
-      const p=this.pending;this.pending=null;
+      const p=this.pending;this.pending=null;this.changes++;
       this.event(role,'decision','撤回了共同动作，可以继续探索。',undefined,{proposalId:p.id,proposal:p.action,proposer:p.from,resolution:'cancel'});
       return {ok:true,message:'已撤回提议，机关保持原状。'};
     }
@@ -123,7 +126,7 @@ export class Room {
     if(c.type==='accept'||c.type==='decline'){
       if(!this.pending||this.pending.id!==c.id)return {ok:false,code:'stale_proposal',retryable:true,message:'这个共同动作已过期，请重新查看。'};
       if(this.pending.from===role)return {ok:false,code:'permission_denied',message:'应由对面确认。'};
-      const p=this.pending;this.pending=null;
+      const p=this.pending;this.pending=null;this.changes++;
       if(c.type==='decline'){this.event(role,'decision','暂缓共同动作，继续商量。',undefined,{proposalId:p.id,proposal:p.action,proposer:p.from,resolution:'decline'});return {ok:true,message:'已暂缓提议，机关保持原状。'};}
       const result=this.execute(p.from,p.action);
       if(result.ok)this.event(role,'decision',`确认共同动作：${labels[p.action]}，已执行。`,undefined,{proposalId:p.id,proposal:p.action,proposer:p.from,resolution:'accept'});
@@ -139,7 +142,7 @@ export class Room {
         if(this.pending)return {ok:false,code:'proposal_pending',retryable:true,message:'已有一个共同动作在等确认。先确认或暂缓它，再提新的。'};
         const trial=transition(this.state,c.id,role==='west'?'player':'partner');
         if(!trial.ok)return {ok:false,message:trial.message};
-        this.pending={id:randomBytes(6).toString('hex'),from:role,action:c.id,label:labels[c.id]};
+        this.pending={id:randomBytes(6).toString('hex'),from:role,action:c.id,label:labels[c.id]};this.changes++;
         this.event(role,'request',`提议${labels[c.id]}，等待对面准备好。`);return {ok:true,message:'已经向对面提出，请等对面确认。'};
       }
       return this.execute(role,c.id);
@@ -153,7 +156,7 @@ export class Room {
   }
   execute(role,action){
     const r=transition(this.state,action,role==='west'?'player':'partner');
-    if(r.ok){this.state=r.state;this.event(role,'action',`${names[role]} · ${labels[action]}。${won(this.state)?'两个人一起走到了墙外。':'墙内传来机关动作的声音。'}`);this.signals[action]=this.rev;}
+    if(r.ok){this.state=r.state;this.changes++;this.event(role,'action',`${names[role]} · ${labels[action]}。${won(this.state)?'两个人一起走到了墙外。':'墙内传来机关动作的声音。'}`);this.signals[action]=this.rev;}
     let message=r.message.replaceAll('阿澄','东席搭档');
     if(role==='east'){
       // The rules speak of the partner in the third person; told to the partner itself, "he" is "you".

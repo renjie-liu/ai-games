@@ -63,6 +63,18 @@ class LiveTests(unittest.TestCase):
         self.assertNotIn('shared',third);self.assertEqual(third['local'],{'gateOpen':True})
         # A new session starts from nothing told.
         self.assertEqual(len(Session.__new__(Session).fresh(later)['notes']),3)
+    def test_a_fact_in_a_view_that_was_never_sent_is_told_again(self):
+        from live_worker import Session
+        s=Session.__new__(Session)
+        note=lambda i:{'id':i,'text':'说明'+i}
+        view={'role':'east','notes':[note('gate-rule')],'shared':[],'messages':[{'seat':'west','text':'你好','at':10}],'scene':[]}
+        s.fresh(view)
+        later={**view,'notes':view['notes']+[note('brace-found')],'messages':view['messages']+[{'seat':'west','text':'动力接通了','at':20}]}
+        dropped=s.fresh(later);self.assertEqual([n['id'] for n in dropped['notes']],['brace-found'])
+        s.untell()   # the response had to be cut down to its receipt: the view did not go out
+        again=s.fresh(later)
+        self.assertEqual([n['id'] for n in again['notes']],['brace-found']);self.assertEqual([m['text'] for m in again['messages']],['动力接通了'])
+        self.assertNotIn('notes',s.fresh(later))
     def test_public_index_ignores_private_fields(self):
         from live_trace import page
         data={'events':[{'source':'gemini-live','kind':'tool_result','at_ms':2,'call_alias':'a'*24,'private':'SENTINEL','receipt':{'command':'查看本侧物件','outcome':'recorded','code':'ok','roomEventIds':[2],'private':'SENTINEL'},'harness_chunk':'chunk'}],'audit':{'status':'done','key':'SENTINEL'}}
