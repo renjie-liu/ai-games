@@ -67,12 +67,12 @@ test('only proposer can cancel; stale accept/cancel cannot mutate a replacement 
   assert.ok(r.command('west',{type:'accept',id:fresh}).ok);
   assert.equal(r.state.keyTransferred,true);
 });
-test('withdrawing power-off immediately restores both seats operations without changing power',()=>{
+test('withdrawing power-off leaves the power as it was and frees the next shared action',()=>{
   const r=new Room();act(r,'west','power-on');
   r.command('west',{type:'action',id:'power-off'});const id=r.pending.id;
-  assert.equal(r.command('east',{type:'action',id:'hold-brake'}).ok,false);
+  assert.equal(r.command('east',{type:'action',id:'send-key'}).code,'proposal_pending');
   assert.ok(r.command('west',{type:'cancel',id}).ok);assert.equal(r.state.power,true);
-  assert.ok(r.command('east',{type:'action',id:'hold-brake'}).ok);
+  assert.equal(r.command('east',{type:'action',id:'send-key'}).receipt.outcome,'proposed');
 });
 test('spectator geometry projection follows real public outcomes without inventory or clue facts',()=>{
   const r=new Room();const publicView=()=>r.view('watch').public;
@@ -104,4 +104,34 @@ test('public receipts omit private clues, arbitrary prose and inventory',()=>{
  const secret='SENTINEL-private-secret';const spoke=r.command('west',{type:'say',text:secret});assert.ok(!JSON.stringify(spoke.receipt).includes(secret));
  assert.equal(spoke.receipt.roomEventIds[0],r.rev);
  const invalid=r.command('east',{type:'action',id:secret});assert.ok(!JSON.stringify(invalid.receipt).includes(secret));
+});
+
+// A person proposes first and lets the other side get ready ("等待对面准备好", "我准备好了").
+// Seen in a real game on 2026-11-26: west proposed cutting the power with the gate up and nothing
+// holding it; the waiting proposal froze east's own brake, so east could neither get ready nor,
+// sensibly, confirm. flow_audit.mjs lists every such position.
+test('while a shared action waits, each seat still works its own controls; only a second shared action is refused',()=>{
+  const r=new Room();act(r,'east','send-key');act(r,'west','unlock');act(r,'west','power-on');
+  assert.equal(r.command('west',{type:'action',id:'power-off'}).receipt.outcome,'proposed');const id=r.pending.id;
+  // East gets ready under the waiting proposal, then confirms: the gate stays up.
+  const hold=r.command('east',{type:'action',id:'hold-brake'});assert.equal(hold.ok,true,hold.message);assert.equal(hold.receipt.outcome,'applied');
+  assert.equal(r.pending.id,id,'the proposal is still the one west made');
+  // A second shared action is still one too many, from either seat.
+  for(const [seat,action] of [['west','open-door'],['east','send-key']]){
+    const second=r.command(seat,{type:'action',id:action});
+    if(action==='open-door'){assert.equal(second.code,'proposal_pending');assert.equal(second.retryable,true);assert.equal(r.pending.id,id);}
+    else assert.equal(second.ok,false);
+  }
+  const accepted=r.command('east',{type:'accept',id});assert.equal(accepted.receipt.outcome,'applied');
+  assert.equal(r.state.power,false);assert.equal(r.view('watch').public.gateOpen,true,'the brake held the gate through the power cut');
+});
+test('the proposer may also keep working while its proposal waits; the rules decide at confirm time, on the state as it then is',()=>{
+  const r=new Room();act(r,'east','send-key');act(r,'west','unlock');
+  // East offers nothing here; west proposes opening the door, then powers on while it waits.
+  assert.equal(r.command('west',{type:'action',id:'open-door'}).receipt.outcome,'proposed');const id=r.pending.id;
+  assert.equal(r.command('west',{type:'action',id:'power-on'}).ok,true);
+  const before=structuredClone(r.state);
+  const accepted=r.command('east',{type:'accept',id});assert.equal(accepted.ok,true);
+  // Opening the door cuts the power by the interlock, whatever the power was when the door was proposed.
+  assert.equal(r.state.doorOpen,true);assert.equal(r.state.power,false);assert.equal(before.power,true);assert.equal(r.pending,null);
 });

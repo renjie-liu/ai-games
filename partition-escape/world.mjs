@@ -3,6 +3,8 @@ import {randomBytes} from 'node:crypto';
 import {initialState, transition, gateOpen, won, playerActions, partnerActions} from './engine.mjs';
 
 export const opposite = s => s === 'west' ? 'east' : 'west';
+// Actions that change the other room too: one seat proposes, the other confirms.
+export const SHARED = new Set(['power-off','open-door','send-key']);
 export const names = {west:'西席', east:'东席'};
 export const labels = {'power-on':'接通动力','power-off':'切断动力',unlock:'转动钥匙','open-door':'推开西门','close-door':'关上西门',
   'send-key':'递出钥匙','hold-brake':'拉住手闸',brace:'取出并安装木撑','release-brake':'松开手闸',leave:'走向共同出口'};
@@ -59,7 +61,7 @@ export class Room {
     const objectActions=role==='west'? {power:[s.power?'power-off':'power-on'],door:[!s.unlocked?'unlock':s.doorOpen?'close-door':'open-door']} :
       {hatch:!s.keyTransferred?['send-key']:[],brake:[s.brake?'release-brake':'hold-brake'],fan:s.braceSeen&&!s.braced?['brace']:[],gate:['leave']};
     return {...base,local,notes:this.notes[role],hintLevel:this.hints[role],scene:props[role].map(p=>({...p,inspected:inspected.has(p.id),
-      actions:(objectActions[p.id]||[]).map(id=>({id,label:labels[id]}))}))};
+      actions:(objectActions[p.id]||[]).map(id=>({id,label:labels[id],shared:SHARED.has(id)}))}))};
   }
   command(role,c) {
     const before=this.rev, pending=this.pending, physics=this.publicPhysics();
@@ -121,8 +123,11 @@ export class Room {
     if(c.type==='action'){
       const allowed=role==='west'?playerActions:partnerActions;
       if(!allowed.has(c.id))return {ok:false,code:'permission_denied',message:'这个机关不在你这一侧。'};
-      if(this.pending)return {ok:false,code:'proposal_pending',retryable:true,message:'先完成或暂缓当前共同动作。'};
-      if(['power-off','open-door','send-key'].includes(c.id)){
+      if(SHARED.has(c.id)){
+        // One shared action waits at a time. A seat's own controls stay free meanwhile: the point of
+        // proposing is to let the other side get ready before it confirms, and getting ready is an
+        // action (holding the gate before the power is cut). The rules decide again at confirm time.
+        if(this.pending)return {ok:false,code:'proposal_pending',retryable:true,message:'已有一个共同动作在等确认。先确认或暂缓它，再提新的。'};
         const trial=transition(this.state,c.id,role==='west'?'player':'partner');
         if(!trial.ok)return {ok:false,message:trial.message};
         this.pending={id:randomBytes(6).toString('hex'),from:role,action:c.id,label:labels[c.id]};

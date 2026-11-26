@@ -167,7 +167,27 @@ class WholeGameInOneSession(unittest.IsolatedAsyncioTestCase):
         await self.until(lambda: self.live.turns_done > done and len(self.seen('turn_complete')) > done,
                          f'the partner never finished {plan}')
 
+    def get(self, token):
+        request = urllib.request.Request(self.base, headers={'Authorization': 'Bearer ' + token})
+        with urllib.request.urlopen(request, timeout=10) as response:
+            return json.load(response)
+
     # --- the game --------------------------------------------------------------
+    async def test_the_partner_can_get_ready_under_a_waiting_proposal(self):
+        # The order a person plays in (real game of 2026-11-26): west proposes cutting the power as
+        # soon as the gate is up, and only then does the partner hold the gate and confirm.
+        await self.speak(('action', 'send-key'))
+        view = (await self.west({'type': 'inspect', 'id': 'hatch'}))['view']
+        await self.west_button({'type': 'accept', 'id': view['pending']['id']})
+        await self.west_button({'type': 'action', 'id': 'unlock'})
+        await self.west_button({'type': 'action', 'id': 'power-on'})
+        await self.west_button({'type': 'action', 'id': 'power-off'})
+        await self.speak(('action', 'hold-brake'), ('accept', None))
+        public = (await asyncio.to_thread(self.get, self.tokens['watch']))['public']
+        self.assertEqual((public['power'], public['gateOpen']), (False, True), 'the gate must stay up through the power cut')
+        await asyncio.to_thread(self.post, '/live-input', self.tokens['west'], {'type': 'stop'})
+        await asyncio.wait_for(self.run_task, 10)
+
     async def test_the_shortest_honest_game_fits_one_session(self):
         for thing in ('plaque', 'power', 'door', 'hatch'):
             await self.west({'type': 'inspect', 'id': thing})

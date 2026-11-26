@@ -164,7 +164,7 @@ function renderPanel(){
     if(!o)html='<div class="eyebrow">从一个小发现开始</div><h2>墙挡住了视线，<br>挡不住合作。</h2><p>查看一个物件，看看它能做什么。你不需要先读完教程。</p><p class="small">你无法操作对面的机关。把自己的发现发过去，让对面也参与下一步。</p>';
     else{
       const notes=view.notes.filter(n=>n.object===o.id),f=notes.at(-1);
-      html=`<div class="eyebrow">我看到 / ${seatName[view.role]}</div><h2>${esc(o.name)}</h2><p>${esc(f?.text||detailMessage)}</p>${f?`<button data-share="${esc(f.id)}" class="ghost">↗ 把这条发现告诉搭档</button>`:''}<div class="actions">${o.actions.map(a=>`<button data-action="${a.id}" ${view.paused||view.pending||view.complete?'disabled':''}>${esc(a.label)} <span aria-hidden="true">→</span></button>`).join('')}</div>`;
+      html=`<div class="eyebrow">我看到 / ${seatName[view.role]}</div><h2>${esc(o.name)}</h2><p>${esc(f?.text||detailMessage)}</p>${f?`<button data-share="${esc(f.id)}" class="ghost">↗ 把这条发现告诉搭档</button>`:''}<div class="actions">${o.actions.map(a=>`<button data-action="${a.id}" ${view.paused||view.complete||(view.pending&&a.shared)?'disabled':''}>${esc(a.label)} <span aria-hidden="true">→</span></button>`).join('')}</div>`;
     }
   }else if(tab==='notes'){
     const cards=[...view.notes.map(n=>({...n,mine:true})),...view.shared.filter(n=>n.seat!==view.role)];
