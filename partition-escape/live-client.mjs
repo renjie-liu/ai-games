@@ -68,7 +68,8 @@ export function setupLive({room,key,getView}){
   const capped=what=>`本段语音的${what}已用到上限`;
   const reasons={live_harness_mismatch:'配套的 harness 版本不对，请按 README 准备固定版本后重启服务',live_limits_invalid:'live-limits.json 或 PARTITION_LIVE_LIMITS 指向的文件有误，请修正后重启服务',
     live_runtime_check_failed:'本地语音环境检查失败，请检查 Python 安装',live_project_unverified:'项目费用和真人音频隐私设置待核实，麦克风关闭',
-    live_authorization_exhausted:'本轮连接额度已用完，未发起模型连接',live_authorization_required:'本机还没有连接授权，见 LIVE.md',gemini_key_unavailable:'服务端没有可用的 GEMINI_API_KEY',
+    live_authorization_exhausted:'本轮连接额度已用完，未发起模型连接',live_invite_exhausted:'这条邀请的语音次数已用完，未发起模型连接',
+    live_sessions_full:'现在同时在玩的人已满，请过一会儿再开始语音',live_session_already_running:'现在同时在玩的人已满，请过一会儿再开始语音',live_authorization_required:'本机还没有连接授权，见 LIVE.md',gemini_key_unavailable:'服务端没有可用的 GEMINI_API_KEY',
     session_deadline:capped('时长'),live_input_seconds_limit:capped('发言时长'),live_output_seconds_limit:capped('回复时长'),live_turns_limit:capped('对话轮数'),
     live_tools_limit:capped('机关操作次数'),live_text_bytes_limit:capped('文字上下文'),live_usage_stop:'本段语音的费用估算已到上限',
     provider_go_away_no_reconnect:'Gemini 结束了这次连接',user_stop:'已手动结束',tab_hidden:'切换了标签页',game_paused:'游戏已暂停',
