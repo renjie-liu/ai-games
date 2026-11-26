@@ -20,6 +20,35 @@ class RuntimeTests(unittest.TestCase):
             with self.subTest(module=module),patch('live_runtime.importlib.import_module',side_effect=load):
                 with self.assertRaisesRegex(RuntimeError,'^live_dependency_'+code+'$'):check()
 
+    def test_a_harness_checkout_that_is_not_the_pinned_one_is_named_before_any_session(self):
+        original=importlib.import_module
+        def load(name):
+            if name=='live_harness':raise ModuleNotFoundError("No module named 'harness.trace' at /PRIVATE_SENTINEL/path")
+            return original(name)
+        with patch('live_runtime.importlib.import_module',side_effect=load):
+            with self.assertRaisesRegex(RuntimeError,'^live_harness_mismatch$'):check()
+
+    def test_a_limits_file_that_cannot_be_used_is_named_before_any_session(self):
+        original=importlib.import_module
+        def load(name):
+            if name=='live_budget':raise RuntimeError('live_limits_invalid PRIVATE_SENTINEL')
+            return original(name)
+        with patch('live_runtime.importlib.import_module',side_effect=load):
+            with self.assertRaisesRegex(RuntimeError,'^live_limits_invalid$'):check()
+
+    def test_the_preflight_process_reports_a_wrong_harness_and_a_bad_override_as_codes_only(self):
+        import subprocess,sys
+        here=Path(__file__).resolve().parent
+        with tempfile.TemporaryDirectory() as empty:
+            bad=Path(empty)/'limits.json';bad.write_text('{"session":{"second":90}}')
+            cases=[({'PYTHONPATH':empty,'PARTITION_HARNESS_ROOT':empty},'live_harness_mismatch'),({'PARTITION_LIVE_LIMITS':str(bad)},'live_limits_invalid')]
+            for change,code in cases:
+                with self.subTest(code=code):
+                    r=subprocess.run([sys.executable,str(here/'live_runtime.py')],cwd=here,env={**os.environ,**change},capture_output=True,text=True,timeout=60)
+                    self.assertEqual(r.returncode,1)
+                    self.assertEqual(json.loads(r.stdout),{'ok':False,'code':code,'network_requests':0})
+                    self.assertNotIn(empty,r.stdout)
+
     def test_diagnostics_do_not_echo_exception_or_import_name(self):
         error=ImportError('PRIVATE_SENTINEL',name='PRIVATE_SENTINEL')
         self.assertEqual(diagnostic(error),'live_dependency_import')

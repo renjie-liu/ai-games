@@ -1,4 +1,5 @@
-"""Offline dependency preflight. Never reads credentials, ledger, or opens sockets."""
+"""Offline preflight: SDK dependencies, the limits file and the harness checkout.
+Never reads credentials or the ledger, and never opens a socket."""
 import importlib
 import json
 
@@ -18,6 +19,18 @@ def check():
             raise RuntimeError('live_dependency_socks')
         if label == 'websocket' and not hasattr(module, 'SocksProxy'):
             raise RuntimeError('live_dependency_socks')
+    # The caps every session runs under: a bad override must be said here, not found as a dead worker.
+    try:
+        importlib.import_module('live_budget')
+    except RuntimeError:
+        raise RuntimeError('live_limits_invalid') from None
+    # The worker's own imports. A harness checkout that is not the pinned one (README) lacks modules
+    # the tool bridge needs; without this check the worker dies on import and the page only sees
+    # that it stopped.
+    try:
+        importlib.import_module('live_harness')
+    except ImportError:
+        raise RuntimeError('live_harness_mismatch') from None
     return {'ok': True, 'code': 'ready', 'network_requests': 0}
 
 

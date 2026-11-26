@@ -13,6 +13,7 @@ const origin=`http://${host}:${port}`;
 const rooms=new Map(), children=new Set();
 const live=new LiveHub(root,origin,process.env.PARTITION_ALLOW_LIVE==='1');
 const liveOnly=process.env.PARTITION_LIVE_ONLY==='1';
+if(live.enabled&&!live.runtime.ready)console.error(`Gemini Live 语音不可用（${live.runtime.code}）。Python：${python}；harness：${pythonEnv.PARTITION_HARNESS_ROOT}。准备方法见 README 的「本机启动」。`);
 let tts;
 try{tts=createVoiceService({directory:path.join(root,'.voice'),mode:process.env.PARTITION_TTS_MODE||'off'});}
 catch{tts=createVoiceService();console.error('TTS unavailable: authorization, ledger, key or lock requires local review. Game remains available.');}

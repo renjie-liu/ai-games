@@ -13,12 +13,15 @@ const runFile=promisify(execFile);
 const id=()=>randomBytes(16).toString('hex');
 // How long after the worker's own session cap the server ends a session that did not end itself.
 const DEADLINE_GRACE_MS=5000;
+// The only reasons live_runtime.py may give; nothing else it prints reaches the page.
+const RUNTIME_CODES=['live_dependency_sdk','live_dependency_socks','live_dependency_http_proxy','live_dependency_websocket',
+  'live_harness_mismatch','live_limits_invalid','live_runtime_check_failed'];
 export function runtimeStatus(root,run=spawnSync){
   try{
-    const result=run(python,[path.join(root,'live_runtime.py')],{cwd:root,encoding:'utf8',timeout:5000,maxBuffer:4096});
+    const result=run(python,[path.join(root,'live_runtime.py')],{cwd:root,encoding:'utf8',timeout:15000,maxBuffer:4096,env:{...process.env,...pythonEnv}});
     const data=JSON.parse(result.stdout);
     if(result.status===0&&data.ok===true&&data.code==='ready')return {ready:true,code:'ready'};
-    if(['live_dependency_sdk','live_dependency_socks','live_dependency_http_proxy','live_dependency_websocket','live_runtime_check_failed'].includes(data.code))return {ready:false,code:data.code};
+    if(RUNTIME_CODES.includes(data.code))return {ready:false,code:data.code};
   }catch{}
   return {ready:false,code:'live_runtime_check_failed'};
 }

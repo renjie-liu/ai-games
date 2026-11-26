@@ -17,6 +17,7 @@ test('worklet fixture detects onset, retains preroll, limits silence, ends turn'
 test('runtime check admits only safe dependency codes, never subprocess text',async()=>{
   const {runtimeStatus}=await import('./live.mjs');
   assert.deepEqual(runtimeStatus('.',()=>({status:0,stdout:'{"ok":true,"code":"ready"}'})),{ready:true,code:'ready'});
+  for(const code of ['live_harness_mismatch','live_limits_invalid','live_dependency_sdk'])assert.deepEqual(runtimeStatus('.',()=>({status:1,stdout:JSON.stringify({ok:false,code})})),{ready:false,code});
   for(const result of [{status:1,stdout:'{"ok":false,"code":"live_dependency_socks"}'},{status:1,stdout:'PRIVATE_SENTINEL'},{status:0,stdout:'{"ok":false,"code":"PRIVATE_SENTINEL"}'}]){
     const status=runtimeStatus('.',()=>result);assert.equal(status.ready,false);assert.equal(JSON.stringify(status).includes('PRIVATE_SENTINEL'),false);
   }
