@@ -59,6 +59,14 @@ class LimitsFile(unittest.TestCase):
         self.assertGreater(DEFAULTS['updates']['batches'], 7)
 
 
+    def test_the_reply_cap_leaves_room_to_speak_after_thinking(self):
+        # The cap counts the model's thinking. In the real sessions of 2026-11-26, under a cap of 256,
+        # turns whose thinking took 138 to 244 tokens had their reply cut mid-sentence, and one had no
+        # voice at all (0 output tokens after 244 of thinking). A spoken reply of two sentences is up
+        # to about 200 tokens on top of that.
+        self.assertGreaterEqual(DEFAULTS['session']['max_output_tokens'], 244 + 200)
+
+
 class EarlierLedger(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()

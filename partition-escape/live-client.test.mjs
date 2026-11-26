@@ -8,7 +8,7 @@ const code=fs.readFileSync(new URL('./live-client.mjs',import.meta.url),'utf8').
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 const tick=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
 function fixture({gate,fixtureMode=false,segments=false,caps={seconds:60,inputSeconds:30,outputSeconds:20,usageStopUsd:.15}}={}){
-  const elements=new Map(),listeners={},calls=[],contexts=[],tracks=[],timers=new Map(),delays=[],delayOf=new Map(),wait=deferred(),micWaits=[];
+  const elements=new Map(),listeners={},calls=[],contexts=[],tracks=[],timers=new Map(),delays=[],delayOf=new Map(),worklets=[],wait=deferred(),micWaits=[];
   const view={role:'west',controllers:{east:'live'},paused:false};let nextTimer=0,micCalls=0,cancelCount=0,sourceCount=0,connectedSources=0,played=0;
   const el=id=>{if(!elements.has(id))elements.set(id,{id,disabled:['live-stop','live-interrupt'].includes(id),textContent:'',dataset:{},append(x){elements.set(x.id,x);}});return elements.get(id);};
   let pendingRead,rows=[];
@@ -40,7 +40,7 @@ function fixture({gate,fixtureMode=false,segments=false,caps={seconds:60,inputSe
     createBuffer(channels,length){return {duration:length/24000,getChannelData:()=>new Float32Array(length)};}
     createBufferSource(){const n={connect(){},start(){played++;},stop(){this.onended?.();}};this.sources.push(n);return n;}
   }
-  class AudioWorkletNode {constructor(){this.port={};}connect(t){return t;}disconnect(){}}
+  class AudioWorkletNode {constructor(){this.port={};worklets.push(this);}connect(t){return t;}disconnect(){}}
   const sandbox={document,window:{addEventListener:(k,f)=>listeners[k]=f},fetch,AudioContext,AudioWorkletNode,AbortController,TextDecoder,Uint8Array,DataView,
     atob:s=>Buffer.from(s,'base64').toString('binary'),btoa:s=>Buffer.from(s,'binary').toString('base64'),
     navigator:{mediaDevices:{getUserMedia:async()=>{micCalls++;if(gate!=='mic')return capture();const d=micWaits.length?deferred():wait;micWaits.push(d);return d.promise;}}},
@@ -48,7 +48,7 @@ function fixture({gate,fixtureMode=false,segments=false,caps={seconds:60,inputSe
     setTimeout:(f,ms)=>{timers.set(++nextTimer,f);delays.push(ms);delayOf.set(nextTimer,ms);return nextTimer;},clearTimeout:id=>timers.delete(id)};
   vm.createContext(sandbox);vm.runInContext(code,sandbox);
   const client=sandbox.setupLive({room:'offline-lifecycle',key:'fixture-token',getView:()=>view});
-  return {el,calls,contexts,tracks,timers,delays,delayOf,wait,micWaits,reader,document,view,client,push,capture,
+  return {el,calls,contexts,tracks,timers,delays,delayOf,worklets,wait,micWaits,reader,document,view,client,push,capture,
     start:()=>el(fixtureMode?'live-fixture':'live-start').onclick(),
     cancel:()=>el('live-stop').onclick(),
     background(){document.hidden=true;listeners.visibilitychange();},
@@ -229,4 +229,24 @@ test('winning the game closes the microphone after the reply in progress, or aft
   assert.equal([...f.timers.values()].length,3,'heartbeat, session cap and one grace timer');
   [...f.timers.entries()].filter(([id])=>f.delayOf.get(id)===20000).forEach(([,fn])=>fn());await tick();
   assert.equal(f.tracks[0].stopped,1);assert.equal(f.el('live-state').textContent,'已通关 · 麦克风已关闭');
+});
+test('a turn that ends without any voice says so; the page does not wait for the partner for good',async()=>{
+  const f=fixture();await tick();await f.start();f.push({type:'ready'});await tick();
+  const worklet=f.worklets.at(-1);
+  // The player speaks, the partner's turn completes, and no audio ever came.
+  worklet.port.onmessage({data:{type:'start'}});worklet.port.onmessage({data:{type:'end'}});await tick();
+  assert.equal(f.el('live-state').textContent,'正在等待搭档回应…');assert.ok(f.delays.includes(15000));
+  f.push({type:'turn_complete'});await tick();
+  assert.equal(f.el('live-state').textContent,'搭档这一轮没有出声 · 可以再说一遍');
+  // A turn with voice goes back to listening once it has played out.
+  worklet.port.onmessage({data:{type:'start'}});worklet.port.onmessage({data:{type:'end'}});await tick();
+  f.push({type:'audio',epoch:2,data:Buffer.alloc(4800).toString('base64')});await tick();
+  f.push({type:'turn_complete'});await tick();
+  assert.match(f.el('live-state').textContent,/搭档在说/,'still playing');
+  f.contexts[0].sources.forEach(n=>n.onended?.());await tick();
+  assert.equal(f.el('live-state').textContent,'在听 · 麦克风已开启');
+  // Nothing at all comes back: after a while the page says so.
+  worklet.port.onmessage({data:{type:'start'}});worklet.port.onmessage({data:{type:'end'}});await tick();
+  [...f.timers.entries()].filter(([id])=>f.delayOf.get(id)===15000).forEach(([,fn])=>fn());await tick();
+  assert.equal(f.el('live-state').textContent,'搭档还没有回应 · 可以再说一遍');
 });

@@ -43,7 +43,7 @@ PY
 | `session.input_seconds` / `output_seconds` | 300 / 300 | 真人发言、搭档回复各自的音频时长 |
 | `session.turns` / `tools` | 120 / 120 | 搭档的回合数、工具调用数（一个机关动作是「观察 + 操作」两次调用） |
 | `session.text_bytes` | 160000 | 发给模型的文字（设定、观察、回执、状态同步）总量 |
-| `session.max_output_tokens` | 256 | 单次回复的输出上限 |
+| `session.max_output_tokens` | 1024 | 单次生成的输出上限。模型的思考也算在里面：2026-11-26 的真实记录里，上限为 256 时，思考用掉 220 到 244 个 token 的回合，回复被截在半句或完全没有声音 |
 | `session.usage_stop_usd` | 1.00 | 按服务商返回用量估算的费用到这个数就结束本段 |
 | `updates.*` | 60 批，每批 2400 字节 | 真人按钮结果同步进模型上下文的次数与大小 |
 

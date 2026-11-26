@@ -88,7 +88,7 @@ export function setupLive({room,key,getView}){
     // belong to this attempt, never a later attempt or the visible stopped UI.
     if(document.hidden){leftTab=true;reason=tabMessage();}
     current=null;s.cancelled=true;s.active=false;
-    clearInterval(s.heartbeat);clearTimeout(s.timer);clearTimeout(s.finishTimer);
+    clearInterval(s.heartbeat);clearTimeout(s.timer);clearTimeout(s.finishTimer);clearTimeout(s.replyTimer);
     s.track?.getTracks().forEach(t=>t.stop());s.node?.disconnect();s.source?.disconnect();clearAudio(s);
     s.abort.abort();s.ctx?.close().catch(()=>{});
     const closeStream=()=>{s.streamAbort.abort();s.reader?.cancel().catch(()=>{});};
@@ -107,6 +107,22 @@ export function setupLive({room,key,getView}){
   // The partner is usually still saying its last line when the door opens: let that reply play
   // out, then stop. If no reply ends, stop after the grace period anyway.
   const WON='已通关 · 麦克风已关闭',WON_GRACE_MS=20000;
+  // How long the player waits after speaking before the page says the partner has not answered.
+  const NO_REPLY_HINT_MS=15000;
+  const LISTENING='在听 · 麦克风已开启';
+  // The player's turn is over: the page waits for the partner, and says so if nothing comes.
+  function awaitReply(s){
+    s.replied=false;s.awaiting=true;clearTimeout(s.replyTimer);
+    s.replyTimer=setTimeout(()=>{if(current===s&&s.active&&!s.replied&&!s.speaking)state('搭档还没有回应 · 可以再说一遍');},NO_REPLY_HINT_MS);
+  }
+  // The partner's turn is over. If nothing is playing, the page goes back to listening; if the
+  // turn had no voice at all, it says that instead of leaving "waiting for the partner" up for good.
+  function turnOver(s){
+    clearTimeout(s.replyTimer);
+    const awaited=s.awaiting;s.awaiting=false;
+    if(s.speaking||s.audioNodes.length)return;
+    state(s.replied||!awaited?LISTENING:'搭档这一轮没有出声 · 可以再说一遍');
+  }
   function finishWhenQuiet(s){
     if(current!==s||!s.finishing)return;
     if(s.turnDone&&!s.audioNodes.length)stop(WON,s);
@@ -142,9 +158,9 @@ export function setupLive({room,key,getView}){
     n.onended=()=>{
       s.audioNodes=s.audioNodes.filter(x=>x!==n);
       finishWhenQuiet(s);
-      if(valid(s)&&s.active&&!s.audioNodes.length)state(s.fixture?'离线 fixture · 没有麦克风或模型':s.listening?'在听 · 麦克风已开启':'已连接 · 正在启动收音');
+      if(valid(s)&&s.active&&!s.audioNodes.length)state(s.fixture?'离线 fixture · 没有麦克风或模型':s.listening?LISTENING:'已连接 · 正在启动收音');
     };
-    n.start(playAt);s.schedule=endAt;
+    n.start(playAt);s.schedule=endAt;s.replied=true;clearTimeout(s.replyTimer);
     state(s.fixture?'离线 fixture 提示音 · 非模型':'搭档在说 · 可以直接开口打断');
   }
   function listenWhenReady(s){
@@ -169,7 +185,11 @@ export function setupLive({room,key,getView}){
       target.textContent=(target.textContent+m.text).slice(-1500);
     }
     if(m.type==='tool'){const r=m.receipt;el('live-result').textContent=r?`${r.command} · ${r.outcome} · 房间事件 ${r.roomEventIds.map(x=>'#'+x).join('、')||'无新增'}（以机关回执为准）`:'工具未发出或被 harness 中止';}
-    if(m.type==='turn_complete'&&s.finishing){s.turnDone=true;finishWhenQuiet(s);}
+    if(m.type==='tool')s.replied=true;
+    if(m.type==='turn_complete'){
+      if(s.finishing){s.turnDone=true;finishWhenQuiet(s);}
+      if(current===s&&s.active&&!s.fixture)turnOver(s);
+    }
     if(m.type==='usage')el('live-budget').textContent=`保守费用估算 $${m.estimatedUsd.toFixed(6)}，非账单；credits未核验`;
     if(m.type==='closed')stop('语音已停止：'+reasonText(m.reason)+'。机关进度已保留，不会自动重连。',s);
   }
@@ -267,7 +287,7 @@ export function setupLive({room,key,getView}){
         s.node.port.onmessage=e=>{
           const m=e.data;if(!valid(s)||!s.active)return;
           if(m.type==='start'){const playing=s.audioNodes.length>0;s.speaking=true;s.epoch++;clearAudio(s);state('你在说…');send(s,{type:'start',playing});}
-          else if(m.type==='end'){s.speaking=false;send(s,{type:'end'});state('正在等待搭档回应…');}
+          else if(m.type==='end'){s.speaking=false;send(s,{type:'end'});state('正在等待搭档回应…');awaitReply(s);}
           else if(m.type==='audio'){const bytes=new Uint8Array(m.buffer);let str='';for(const b of bytes)str+=String.fromCharCode(b);send(s,{type:'audio',data:btoa(str)});}
         };
       }

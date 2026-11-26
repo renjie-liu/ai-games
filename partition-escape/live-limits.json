@@ -6,7 +6,7 @@
     "turns": 120,
     "tools": 120,
     "text_bytes": 160000,
-    "max_output_tokens": 256,
+    "max_output_tokens": 1024,
     "usage_stop_usd": 1.0
   },
   "updates": {
