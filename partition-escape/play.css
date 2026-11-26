@@ -25,3 +25,19 @@
 .trace-view h1{font-size:1.25rem;margin:0}
 .trace-view iframe{flex:1;min-height:80vh;width:100%;border:0}
 .trace-view [role=status]:empty{display:none}
+
+/* The side column scrolls as one piece, so an object's actions are never cut off by the panels
+   below it. Narrow screens keep their own stacked layout (rules above). */
+@media(min-width:681px){.side{overflow-y:auto}.inspect{flex:none;overflow:visible;min-height:0}}
+/* Voice panel: state, buttons and what was heard first; the long notes fold away. */
+#live-panel h2{font-size:16px;font-weight:600;margin:0 0 6px}#live-panel{padding-top:14px;padding-bottom:12px}#live-result{margin:8px 0 0}
+#live-state{margin:0;font-size:15px;line-height:1.6}
+#live-panel .actions{flex-direction:row;flex-wrap:wrap;gap:8px;margin-top:10px}
+#live-panel .actions>*{flex:1 1 auto;width:auto;text-align:center;justify-content:center;font-size:14px;padding:8px 10px;white-space:nowrap}
+#live-you,#live-partner{margin:10px 0 0;font-size:14px;line-height:1.6;max-height:92px;overflow:auto}
+#live-you:empty,#live-partner:empty,#live-result:empty,#live-budget:empty{display:none}
+#live-panel details{margin-top:10px}
+#live-panel summary{cursor:pointer;font-size:13px;color:var(--muted);padding:6px 0}
+#live-sync-state{font-size:13px;color:var(--muted);line-height:1.6;margin:8px 0 0}
+#live-sync-state[data-state=warning]{color:#ffcfba}
+#live-fixture{margin-top:10px;width:100%}

@@ -201,3 +201,15 @@ test('why a session stopped is said in words; a code the page does not know is s
     assert.match(f.el('live-state').textContent,shown);assert.match(f.el('live-state').textContent,/机关进度已保留/);
   }
 });
+
+test('the long notes fold away once voice starts and come back when the partner missed an update',async()=>{
+  const f=fixture({segments:true});await tick();
+  const html=f.el('live-panel').innerHTML,at=x=>html.indexOf(x);
+  // What the player acts on is first; the terms and caps follow inside the block that folds.
+  assert.ok(at('id="live-state"')<at('id="live-start"')&&at('id="live-start"')<at('id="live-details"'));
+  assert.ok(at('id="live-details"')<at('id="live-notice"')&&at('id="live-notice"')<at('id="live-sync-state"'));
+  assert.match(html,/<details id="live-details" open>/);
+  await f.start();assert.equal(f.el('live-details').open,false);
+  f.push({type:'sync_status',sync:sync(5,{phase:'active',not_delivered:1})});await tick();
+  assert.equal(f.el('live-details').open,true);assert.match(f.el('live-sync-state').textContent,/未送达/);
+});

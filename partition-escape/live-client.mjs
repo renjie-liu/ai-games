@@ -1,7 +1,7 @@
 export function setupLive({room,key,getView}){
   const panel=document.querySelector('#live-panel');if(!panel)return {stop(){},update(){}};
   const view=getView(),other=view.role==='west'?'east':'west';if(view.controllers[other]!=='live')return {stop(){},update(){}};
-  panel.innerHTML='<h2>与 Gemini Live 对话</h2><p class="small" id="live-notice">开启或继续语音，即确认你已满 18 岁、在<a href="https://aistudio.google.com/docs/available-regions" target="_blank" rel="noopener noreferrer">支持地区</a>试玩，并同意 Google 处理你的声音和本局游戏上下文。当前项目的数据设置未经核实；免费服务可能将内容用于产品改进或人工审核。请只谈游戏。<a href="https://aistudio.google.com/docs/terms" target="_blank" rel="noopener noreferrer">Google 数据条款</a></p><p class="small" id="live-caps">切换标签页会关闭麦克风并结束本段语音，返回后可在本局续聊。随时可点「结束语音」。</p><p id="live-state" role="status" aria-live="polite">麦克风关 · 尚未连接</p><p id="live-budget" class="small"></p><p id="live-sync-state" role="status" aria-live="polite">公开状态更新：尚未开启语音。</p><div class="actions"><button id="live-start" class="primary" aria-describedby="live-notice" disabled>开始语音</button><button id="live-continue" class="primary" aria-describedby="live-notice" hidden>在本局继续语音</button><a id="live-new-room" class="button primary" href="/play?join=live" hidden>开新房与 Gemini 通话</a><button id="live-stop" disabled>结束语音</button><button id="live-interrupt" disabled>打断 / 先等等</button></div><p id="live-you"></p><p id="live-partner"></p><p id="live-result" class="small"></p>';
+  panel.innerHTML='<h2>与 Gemini Live 对话</h2><p id="live-state" role="status" aria-live="polite">麦克风关 · 尚未连接</p><div class="actions"><button id="live-start" class="primary" aria-describedby="live-notice" disabled>开始语音</button><button id="live-continue" class="primary" aria-describedby="live-notice" hidden>在本局继续语音</button><a id="live-new-room" class="button primary" href="/play?join=live" hidden>开新房与 Gemini 通话</a><button id="live-stop" disabled>结束语音</button><button id="live-interrupt" disabled>打断 / 先等等</button></div><p id="live-you"></p><p id="live-partner"></p><p id="live-result" class="small"></p><details id="live-details" open><summary>语音说明、用量上限与数据条款</summary><p class="small" id="live-notice">开启或继续语音，即确认你已满 18 岁、在<a href="https://aistudio.google.com/docs/available-regions" target="_blank" rel="noopener noreferrer">支持地区</a>试玩，并同意 Google 处理你的声音和本局游戏上下文。当前项目的数据设置未经核实；免费服务可能将内容用于产品改进或人工审核。请只谈游戏。<a href="https://aistudio.google.com/docs/terms" target="_blank" rel="noopener noreferrer">Google 数据条款</a></p><p class="small" id="live-caps">切换标签页会关闭麦克风并结束本段语音，返回后可在本局续聊。随时可点「结束语音」。</p><p id="live-budget" class="small"></p><p id="live-sync-state" role="status" aria-live="polite">公开状态更新：尚未开启语音。</p></details>';
   const el=id=>document.getElementById(id);let current=null,used=false,touched=false,fixtureButton;
   let generation, closing;
   // What one voice session may use, as the server reports it (live-limits.json). Never a constant here.
@@ -49,7 +49,9 @@ export function setupLive({room,key,getView}){
     if(!d.queued&&!d.forwarded&&!d.sending&&!d.sent&&!d.not_delivered&&!d.uncertain&&d.phase==='active')text.push('尚无需要同步的按钮结果或分享。');
     text.push('机关是否执行，以画面上的结果为准。');
     el('live-sync-state').textContent='公开状态更新：'+text.join(' ');
-    el('live-sync-state').dataset.state=d.not_delivered||d.uncertain||d.untracked?'warning':'info';
+    const warning=!!(d.not_delivered||d.uncertain||d.untracked);
+    el('live-sync-state').dataset.state=warning?'warning':'info';
+    if(warning)el('live-details').open=true; // a gap in what the partner was told must not stay folded away
   }
   function syncStatus(d){
     const counts=['queued','forwarded','sending','sent','not_delivered','uncertain'];
@@ -255,6 +257,7 @@ export function setupLive({room,key,getView}){
         };
       }
       el('live-stop').textContent='结束语音';el('live-interrupt').disabled=false;
+      el('live-details').open=false; // the terms were on screen when the player pressed start; make room for the game
       s.heartbeat=setInterval(()=>send(s,{type:'heartbeat'}),2000);
       // The server ends the session at its cap in any case; this only says so in the page's own words.
       if(caps.seconds)s.timer=setTimeout(()=>stop(`本段语音已到 ${duration(caps.seconds)} 上限，机关进度已保留，不会自动重连。`,s),caps.seconds*1000);
