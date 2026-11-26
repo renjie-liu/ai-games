@@ -19,6 +19,18 @@ npm start
 
 默认为 <http://127.0.0.1:4174/>。需要其他端口时，可用 `PORT=4180 npm start`。已有独立 harness 环境时，可通过 `PARTITION_HARNESS_ROOT` 和 `PARTITION_PYTHON` 指定 checkout 和解释器的绝对路径。
 
+游戏只认上面固定的 harness 提交。并列的 `ai-gaming` 如果正停在别的分支上，不必切换它，从它导出一份固定版本即可：
+
+```sh
+mkdir ai-gaming-pinned
+git -C ai-gaming archive 65d0749207965af98819a8dd2f222478b0795f56 | tar -x -C ai-gaming-pinned
+uv sync --frozen --project ai-gaming-pinned
+uv pip install --python ai-gaming-pinned/.venv/bin/python -r ai-games/partition-escape/requirements-live.txt
+export PARTITION_HARNESS_ROOT="$PWD/ai-gaming-pinned"
+```
+
+harness 版本或依赖不对时，服务启动会在终端写明所用的 Python 和 harness 路径，西席页面的语音面板也会说明原因（例如「配套的 harness 版本不对」），不会等到开麦后才失败。
+
 服务启动后就能打开游戏主页。实际通话还需要在启动环境中配置 `GEMINI_API_KEY` 和本机连接授权。首次安装的配置方法见 [Live 配置说明](LIVE.md)。
 
 ## 开始合作
@@ -27,6 +39,8 @@ npm start
 2. 点击「开始语音」，阅读页面提示并允许麦克风。出现「在听」后，可以直接与 Gemini 交谈。你的语音、游戏上下文和工具回执会通过本机后端发给 Google。
 3. Gemini 递出钥匙后，西席点「接过黄铜钥匙」，再点「用钥匙打开西门门锁」。机关状态和提议以房间显示为准。
 4. 切去观战标签时，游戏会关闭麦克风。回西席点「在本局继续语音」可发起下一段连接，沿用房间与钥匙进度。重启 Node 服务会清空内存房间。
+
+一段语音默认最长 10 分钟。离线验收里（脚本化的模型端，见「开发验证」），整局在一段语音内走完，各项用量不到上限的三分之一；真人配真实 Gemini 的整局还没有验收过。东席每做一个动作都要先看一眼现场再动手，所以说完话到机关响动通常要等几秒。一段语音结束后（到时、切了标签页或手动结束），机关进度都在，点「在本局继续语音」接着玩；新的一段不记得上一段说过的话，但能看到房间当前的状态、线索和最近的对讲。各项上限的默认值和改法见 [Live 配置说明](LIVE.md)。
 
 会话总览按段展示机关执行结果、回执送达状态、请求 ID 和房间事件 ID。例如，递钥匙可以已产生提议，同时模型仍未收到回执。观战链接是只读凭证，请只分享给要邀请的观众。
 
@@ -38,5 +52,7 @@ export PARTITION_HARNESS_ROOT=/absolute/path/to/ai-gaming
 export PYTHONPATH="$PARTITION_HARNESS_ROOT/src"
 "$PARTITION_HARNESS_ROOT/.venv/bin/python" -m unittest discover -s . -p 'test_live*.py'
 ```
+
+`test_live_playthrough.py` 是通关验收：生产 worker、真实的 LiveHub 和规则引擎，对着一个脚本化的模型端（`live_scripted.py`）在一段语音里走完整局，不读密钥、不联网、不用麦克风。改动上限或 worker 后先跑它。
 
 这些是本机代码回归。真人语音验收需要玩家亲自开麦，确认听到回复，并将口头指定的动作与同一段 Trace 的房间事件对应。3D 渲染库使用 [Three.js 的 MIT 许可证](vendor/THREE-LICENSE.txt)。
