@@ -4,10 +4,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import fs from 'node:fs';
+import {LiveHub} from './live.mjs';
+import {Room} from './world.mjs';
 const code=fs.readFileSync(new URL('./live-client.mjs',import.meta.url),'utf8').replace('export function setupLive','function setupLive');
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 const tick=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
-function fixture({gate,fixtureMode=false,segments=false,caps={seconds:60,inputSeconds:30,outputSeconds:20,usageStopUsd:.15}}={}){
+function fixture({gate,onInput,fixtureMode=false,segments=false,caps={seconds:60,inputSeconds:30,outputSeconds:20,usageStopUsd:.15}}={}){
   const elements=new Map(),listeners={},calls=[],contexts=[],tracks=[],worklets=[],timers=new Map(),delays=[],delayOf=new Map(),wait=deferred(),micWaits=[];
   const view={role:'west',controllers:{east:'live'},paused:false};let nextTimer=0,micCalls=0,cancelCount=0,sourceCount=0,connectedSources=0,played=0;
   const el=id=>{if(!elements.has(id))elements.set(id,{id,disabled:['live-stop','live-interrupt'].includes(id),textContent:'',dataset:{},append(x){elements.set(x.id,x);}});return elements.get(id);};
@@ -27,9 +29,10 @@ function fixture({gate,fixtureMode=false,segments=false,caps={seconds:60,inputSe
     }
     if(kind==='renew'){generation++;phase='off';return response({generation});}
     if(kind==='input'){
-      const {type}=JSON.parse(opts.body);
+      const input=JSON.parse(opts.body),{type}=input;
+      onInput?.(input);
       if(type==='stop')phase='closed';
-      if(type==='audio'&&gate==='upload')await wait.promise;
+      if((type==='audio'&&gate==='upload')||(type==='start'&&gate==='talk-start')||(type==='end'&&gate==='talk-end'))await wait.promise;
     }
     if(kind==='stream'){if(gate==='stream')await wait.promise;return {ok:true,body};}
     if(kind==='start'){phase='active';if(gate==='start')await wait.promise;return response({ok:true});}
@@ -275,12 +278,84 @@ test('a talk start discarded at victory does not mute the final reply from the a
   capture({data:{type:'start'}}); // Locally interrupts, but the server has not received this new turn.
   f.view.complete=true;f.client.update();f.wait.resolve();await tick();
   assert.equal(f.calls.some(c=>c.body?.type==='start'),false);
+  assert.equal(f.calls.some(c=>c.body?.type==='end'),false,'a discarded start needs no end');
   const data=Buffer.alloc(48).toString('base64');
   f.push({type:'audio',epoch:2,data});await tick();
   assert.equal(f.stats().played,0,'a retired turn stays silent');
   f.push({type:'audio',epoch:3,data});await tick();
   assert.equal(f.stats().played,1,'the last accepted turn can still play');
   f.cancel();
+});
+
+for(const gate of [undefined,'talk-start'])test(`victory ends an accepted microphone turn without PCM (start HTTP response pending: ${Boolean(gate)})`,async()=>{
+  const room=new Room({west:'human',east:'live'}),hub=new LiveHub('.','http://127.0.0.1',false);
+  const job=hub.get(room),workerInputs=[];
+  job.started=true;
+  hub.write=(_room,input)=>{workerInputs.push(input);return true;};
+  const f=fixture({gate,onInput:input=>hub.input(room,input)});
+  hub.emit=(_room,event)=>f.push(event);
+  await tick();await f.start();f.push({type:'ready'});await tick();
+  const capture=f.worklets[0].port.onmessage;
+  const inputs=()=>f.calls.filter(c=>c.kind==='input').map(c=>c.body);
+  const frame={type:'audio',buffer:new ArrayBuffer(2)};
+  capture({data:{type:'start'}});await tick();
+  assert.equal(job.speaking,true);assert.equal(job.epoch,1);
+  capture({data:frame});capture({data:{type:'end'}});
+  assert.deepEqual(inputs(),[{type:'start'}]);
+  f.view.complete=true;f.client.update();f.client.update();
+  capture({data:frame});capture({data:{type:'end'}});
+  assert.equal(f.tracks[0].readyState,'ended');
+  await tick();
+  assert.deepEqual(inputs(),[{type:'start'},{type:'end'}]);
+  assert.equal(job.speaking,false);
+  assert.deepEqual(workerInputs.map(({type,epoch})=>[type,epoch]),[['start',1],['end',1]]);
+  f.wait.resolve();await tick();
+  const data=Buffer.alloc(48).toString('base64');
+  f.push({type:'audio',epoch:0,data});f.push({type:'audio',epoch:1,data});
+  f.push({type:'turn_complete'});await tick();
+  assert.equal(f.stats().played,1);
+  assert.equal(f.contexts[0].state,'running');
+  const deadline=[...f.timers].find(([id])=>f.delayOf.get(id)===20000)[1];
+  f.contexts[0].sources[0].onended();deadline();await tick();
+  assert.deepEqual(inputs(),[{type:'start'},{type:'end'},{type:'stop'}]);
+});
+
+test('victory does not resend a microphone end already in flight',async()=>{
+  const f=fixture({gate:'talk-end'});await tick();await f.start();f.push({type:'ready'});await tick();
+  const capture=f.worklets[0].port.onmessage;
+  capture({data:{type:'start'}});await tick();
+  f.push({type:'interrupted',epoch:1});await tick();
+  capture({data:{type:'end'}});await tick();
+  f.view.complete=true;f.client.update();f.wait.resolve();await tick();
+  f.push({type:'turn_complete'});await tick();
+  assert.deepEqual(f.calls.filter(c=>c.kind==='input').map(c=>c.body.type),['start','end','stop']);
+});
+
+test('only a matching late acknowledgement ends a turn whose start response was lost at victory',async()=>{
+  const f=fixture({gate:'talk-start'});await tick();await f.start();f.push({type:'ready'});await tick();
+  const inputs=()=>f.calls.filter(c=>c.kind==='input').map(c=>c.body.type);
+  f.worklets[0].port.onmessage({data:{type:'start'}});await tick();
+  f.view.complete=true;f.client.update();f.wait.reject(Error('response lost'));await tick();
+  f.push({type:'interrupted',epoch:0});await tick();
+  assert.deepEqual(inputs(),['start']);
+  f.push({type:'interrupted',epoch:1});f.push({type:'interrupted',epoch:1});await tick();
+  f.push({type:'turn_complete'});await tick();
+  assert.deepEqual(inputs(),['start','end','stop']);
+});
+
+test('victory ends an open turn after its in-flight PCM even when the worklet never emitted end',async()=>{
+  const f=fixture({gate:'upload'});await tick();await f.start();f.push({type:'ready'});await tick();
+  const capture=f.worklets[0].port.onmessage,inputs=()=>f.calls.filter(c=>c.kind==='input').map(c=>c.body.type);
+  capture({data:{type:'start'}});await tick();f.push({type:'interrupted',epoch:1});await tick();
+  const frame={type:'audio',buffer:new ArrayBuffer(2)};
+  capture({data:frame});await tick();capture({data:frame});
+  f.view.complete=true;f.client.update();capture({data:frame});
+  f.push({type:'turn_complete'});await tick(); // Earlier reply, before this input was closed.
+  assert.deepEqual(inputs(),['start','audio']);
+  f.wait.resolve();await tick();
+  assert.deepEqual(inputs(),['start','audio','end']);
+  f.push({type:'turn_complete'});await tick();
+  assert.deepEqual(inputs(),['start','audio','end','stop']);
 });
 
 test('on victory the microphone closes immediately even if the final reply never ends',async()=>{

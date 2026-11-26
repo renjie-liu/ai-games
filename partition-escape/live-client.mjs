@@ -112,11 +112,17 @@ export function setupLive({room,key,getView}){
     else if(syncSnapshot?.phase==='active')el('live-start').disabled=true;
     state(reason);syncStopped=true;renderSync();
   }
-  // A win ends capture immediately. Keep only the downlink and its heartbeat for the last reply.
+  // A win ends capture immediately. The last reply can still need a speech-end control.
   const WON='已通关 · 麦克风已关闭',WON_GRACE_MS=20000;
   function finishWhenQuiet(s){
     if(current!==s||!s.finishing)return;
     if(s.turnDone&&!s.audioNodes.length)stop(WON,s);
+  }
+  function finishAcknowledgedStart(s){
+    // While the start POST is pending, no PCM after it has left the serial queue.
+    // Its matching interrupted event is already enough to send the final end in order.
+    if(s.finishing&&s.voiceTurn==='starting'&&s.serverEpoch===s.voiceStartEpoch)
+      postInput(s,{type:'end'});
   }
   function gameWon(){
     const s=current;if(!s||s.finishing)return;
@@ -124,6 +130,13 @@ export function setupLive({room,key,getView}){
     s.finishing=true;s.turnDone=false;releaseCapture(s);
     // An unsent talk-start may have advanced the local epoch. Only the accepted turn owns the reply.
     s.epoch=s.serverEpoch;
+    finishAcknowledgedStart(s);
+    if(s.voiceTurn!=='idle'){
+      // Preserve wire order with an in-flight start or PCM. Queued capture is discarded.
+      s.upload.then(()=>{
+        if(valid(s)&&s.voiceTurn==='open')return postInput(s,{type:'end'});
+      });
+    }
     el('live-interrupt').disabled=true;
     state(WON+'，等待搭档说完');
     s.finishTimer=setTimeout(()=>stop(WON,s),WON_GRACE_MS);
@@ -134,16 +147,28 @@ export function setupLive({room,key,getView}){
     if(getView().paused){stop('游戏暂停 · 已关闭麦克风',s);return false;}
     return true;
   }
-  function postInput(s,b){
-    return api('input',b,s.abort.signal,s.generation).catch(()=>{
+  async function postInput(s,b){
+    // Track the turn at HTTP dispatch, independently of the worklet's local speaking state.
+    if(b.type==='start')s.voiceTurn='starting';
+    if(b.type==='end')s.voiceTurn='idle';
+    try{
+      await api('input',b,s.abort.signal,s.generation);
+      if(b.type==='start'&&s.voiceTurn==='starting')s.voiceTurn='open';
+    }catch{
+      // During victory a start with a lost HTTP response can still be acknowledged on the downlink.
       if(valid(s)&&(!s.finishing||b.type==='heartbeat'))stop('连接中断，未自动重连',s);
-    });
+    }
   }
   function send(s,b){
     const allowed=()=>valid(s)&&s.active&&!s.finishing;
     if(!allowed())return;
     if(++s.queued>30){stop('网络积压，语音已停止',s);return;}
-    s.upload=s.upload.then(()=>{if(allowed())return postInput(s,b);}).finally(()=>s.queued--);
+    const epoch=s.epoch;
+    s.upload=s.upload.then(()=>{
+      if(!allowed())return;
+      if(b.type==='start')s.voiceStartEpoch=epoch;
+      return postInput(s,b);
+    }).finally(()=>s.queued--);
   }
   function heartbeat(s){
     if(!valid(s)||!s.active||s.heartbeatRequest)return;
@@ -187,6 +212,7 @@ export function setupLive({room,key,getView}){
     if(m.type==='interrupted'){
       s.serverEpoch=Math.max(s.serverEpoch,m.epoch||0);
       s.epoch=Math.max(s.epoch,s.serverEpoch);clearAudio(s);
+      finishAcknowledgedStart(s);
     }
     if(m.type==='audio')playback(s,m);
     if(m.type==='transcript'){
@@ -195,7 +221,7 @@ export function setupLive({room,key,getView}){
       target.textContent=(target.textContent+m.text).slice(-1500);
     }
     if(m.type==='tool'){const r=m.receipt;el('live-result').textContent=r?`${r.command} · ${r.outcome} · 房间事件 ${r.roomEventIds.map(x=>'#'+x).join('、')||'无新增'}（以机关回执为准）`:'工具未发出或被 harness 中止';}
-    if(m.type==='turn_complete'&&s.finishing){s.turnDone=true;finishWhenQuiet(s);}
+    if(m.type==='turn_complete'&&s.finishing&&s.voiceTurn==='idle'){s.turnDone=true;finishWhenQuiet(s);}
     if(m.type==='usage')showEstimate(m.estimatedUsd);
     if(m.type==='closed'){
       showEstimate(m.audit?.estimated_usd);
@@ -245,7 +271,7 @@ export function setupLive({room,key,getView}){
   async function begin(mock=false,resume=false){
     if(current||(used&&!resume)||document.hidden||getView().paused||getView().complete)return;
     const s={fixture:mock,cancelled:false,active:false,listening:false,connected:false,startSent:false,
-      abort:new AbortController(),streamAbort:new AbortController(),audioNodes:[],schedule:0,upload:Promise.resolve(),queued:0,epoch:0,serverEpoch:0,speaking:false};
+      abort:new AbortController(),streamAbort:new AbortController(),audioNodes:[],schedule:0,upload:Promise.resolve(),queued:0,epoch:0,serverEpoch:0,speaking:false,voiceTurn:'idle'};
     current=s;touched=true;leftTab=false;el('live-continue').disabled=true;syncStopped=false;renderSync();el('live-start').disabled=true;if(fixtureButton)fixtureButton.disabled=true;
     el('live-stop').disabled=false;el('live-stop').textContent='取消启动';
     state(mock?'正在连接离线 fixture…':'正在检查本地语音环境与额度');
