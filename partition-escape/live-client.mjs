@@ -88,7 +88,7 @@ export function setupLive({room,key,getView}){
     // belong to this attempt, never a later attempt or the visible stopped UI.
     if(document.hidden){leftTab=true;reason=tabMessage();}
     current=null;s.cancelled=true;s.active=false;
-    clearInterval(s.heartbeat);clearTimeout(s.timer);
+    clearInterval(s.heartbeat);clearTimeout(s.timer);clearTimeout(s.finishTimer);
     s.track?.getTracks().forEach(t=>t.stop());s.node?.disconnect();s.source?.disconnect();clearAudio(s);
     s.abort.abort();s.ctx?.close().catch(()=>{});
     const closeStream=()=>{s.streamAbort.abort();s.reader?.cancel().catch(()=>{});};
@@ -102,6 +102,19 @@ export function setupLive({room,key,getView}){
     if(used||syncSnapshot?.phase==='closed')showNewRoom();
     else if(syncSnapshot?.phase==='active')el('live-start').disabled=true;
     state(reason);syncStopped=true;renderSync();
+  }
+  // The winning screen covers the stop button, so a won game must close the microphone itself.
+  // The partner is usually still saying its last line when the door opens: let that reply play
+  // out, then stop. If no reply ends, stop after the grace period anyway.
+  const WON='已通关 · 麦克风已关闭',WON_GRACE_MS=20000;
+  function finishWhenQuiet(s){
+    if(current!==s||!s.finishing)return;
+    if(s.turnDone&&!s.audioNodes.length)stop(WON,s);
+  }
+  function gameWon(){
+    const s=current;if(!s||s.finishing)return;
+    s.finishing=true;s.turnDone=false;
+    s.finishTimer=setTimeout(()=>stop(WON,s),WON_GRACE_MS);
   }
   function valid(s){
     if(current!==s||s.cancelled)return false;
@@ -128,6 +141,7 @@ export function setupLive({room,key,getView}){
     const n=s.ctx.createBufferSource();n.buffer=buffer;n.connect(s.ctx.destination);s.audioNodes.push(n);
     n.onended=()=>{
       s.audioNodes=s.audioNodes.filter(x=>x!==n);
+      finishWhenQuiet(s);
       if(valid(s)&&s.active&&!s.audioNodes.length)state(s.fixture?'离线 fixture · 没有麦克风或模型':s.listening?'在听 · 麦克风已开启':'已连接 · 正在启动收音');
     };
     n.start(playAt);s.schedule=endAt;
@@ -155,6 +169,7 @@ export function setupLive({room,key,getView}){
       target.textContent=(target.textContent+m.text).slice(-1500);
     }
     if(m.type==='tool'){const r=m.receipt;el('live-result').textContent=r?`${r.command} · ${r.outcome} · 房间事件 ${r.roomEventIds.map(x=>'#'+x).join('、')||'无新增'}（以机关回执为准）`:'工具未发出或被 harness 中止';}
+    if(m.type==='turn_complete'&&s.finishing){s.turnDone=true;finishWhenQuiet(s);}
     if(m.type==='usage')el('live-budget').textContent=`保守费用估算 $${m.estimatedUsd.toFixed(6)}，非账单；credits未核验`;
     if(m.type==='closed')stop('语音已停止：'+reasonText(m.reason)+'。机关进度已保留，不会自动重连。',s);
   }
@@ -293,5 +308,5 @@ export function setupLive({room,key,getView}){
     else if(leftTab&&!current)state(tabMessage());
   });
   window.addEventListener('pagehide',()=>stop('页面已关闭'));
-  return {stop,update(){if(getView().paused)stop('游戏暂停 · 已关闭麦克风');if(!touched)syncStatus(getView().liveSync);}};
+  return {stop,update(){if(getView().paused)stop('游戏暂停 · 已关闭麦克风');else if(getView().complete)gameWon();if(!touched)syncStatus(getView().liveSync);}};
 }

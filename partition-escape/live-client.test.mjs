@@ -8,7 +8,7 @@ const code=fs.readFileSync(new URL('./live-client.mjs',import.meta.url),'utf8').
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 const tick=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
 function fixture({gate,fixtureMode=false,segments=false,caps={seconds:60,inputSeconds:30,outputSeconds:20,usageStopUsd:.15}}={}){
-  const elements=new Map(),listeners={},calls=[],contexts=[],tracks=[],timers=new Map(),delays=[],wait=deferred(),micWaits=[];
+  const elements=new Map(),listeners={},calls=[],contexts=[],tracks=[],timers=new Map(),delays=[],delayOf=new Map(),wait=deferred(),micWaits=[];
   const view={role:'west',controllers:{east:'live'},paused:false};let nextTimer=0,micCalls=0,cancelCount=0,sourceCount=0,connectedSources=0,played=0;
   const el=id=>{if(!elements.has(id))elements.set(id,{id,disabled:['live-stop','live-interrupt'].includes(id),textContent:'',dataset:{},append(x){elements.set(x.id,x);}});return elements.get(id);};
   let pendingRead,rows=[];
@@ -32,23 +32,23 @@ function fixture({gate,fixtureMode=false,segments=false,caps={seconds:60,inputSe
     return response({ok:true});
   };
   class AudioContext {
-    constructor(){this.state='suspended';this.currentTime=0;this.destination={};this.audioWorklet={addModule:async()=>{if(gate==='module')await wait.promise;}};contexts.push(this);}
+    constructor(){this.state='suspended';this.currentTime=0;this.destination={};this.sources=[];this.audioWorklet={addModule:async()=>{if(gate==='module')await wait.promise;}};contexts.push(this);}
     async resume(){if(gate==='resume')await wait.promise;if(this.state!=='closed')this.state='running';}
     async close(){this.state='closed';}
     createMediaStreamSource(){sourceCount++;return {connect(t){connectedSources++;return t;},disconnect(){}};}
     createGain(){return {gain:{value:1},connect(t){return t;}};}
     createBuffer(channels,length){return {duration:length/24000,getChannelData:()=>new Float32Array(length)};}
-    createBufferSource(){return {connect(){},start(){played++;},stop(){this.onended?.();}};}
+    createBufferSource(){const n={connect(){},start(){played++;},stop(){this.onended?.();}};this.sources.push(n);return n;}
   }
   class AudioWorkletNode {constructor(){this.port={};}connect(t){return t;}disconnect(){}}
   const sandbox={document,window:{addEventListener:(k,f)=>listeners[k]=f},fetch,AudioContext,AudioWorkletNode,AbortController,TextDecoder,Uint8Array,DataView,
     atob:s=>Buffer.from(s,'base64').toString('binary'),btoa:s=>Buffer.from(s,'binary').toString('base64'),
     navigator:{mediaDevices:{getUserMedia:async()=>{micCalls++;if(gate!=='mic')return capture();const d=micWaits.length?deferred():wait;micWaits.push(d);return d.promise;}}},
     setInterval:f=>{timers.set(++nextTimer,f);return nextTimer;},clearInterval:id=>timers.delete(id),
-    setTimeout:(f,ms)=>{timers.set(++nextTimer,f);delays.push(ms);return nextTimer;},clearTimeout:id=>timers.delete(id)};
+    setTimeout:(f,ms)=>{timers.set(++nextTimer,f);delays.push(ms);delayOf.set(nextTimer,ms);return nextTimer;},clearTimeout:id=>timers.delete(id)};
   vm.createContext(sandbox);vm.runInContext(code,sandbox);
   const client=sandbox.setupLive({room:'offline-lifecycle',key:'fixture-token',getView:()=>view});
-  return {el,calls,contexts,tracks,timers,delays,wait,micWaits,reader,document,view,client,push,capture,
+  return {el,calls,contexts,tracks,timers,delays,delayOf,wait,micWaits,reader,document,view,client,push,capture,
     start:()=>el(fixtureMode?'live-fixture':'live-start').onclick(),
     cancel:()=>el('live-stop').onclick(),
     background(){document.hidden=true;listeners.visibilitychange();},
@@ -212,4 +212,21 @@ test('the long notes fold away once voice starts and come back when the partner 
   await f.start();assert.equal(f.el('live-details').open,false);
   f.push({type:'sync_status',sync:sync(5,{phase:'active',not_delivered:1})});await tick();
   assert.equal(f.el('live-details').open,true);assert.match(f.el('live-sync-state').textContent,/未送达/);
+});
+test('winning the game closes the microphone after the reply in progress, or after the grace period',async()=>{
+  // The partner's last line is still playing when the game is won: it is not cut off.
+  let f=fixture();await tick();await f.start();f.push({type:'ready'});await tick();
+  f.push({type:'audio',epoch:0,data:Buffer.alloc(4800).toString('base64')});await tick();
+  f.view.complete=true;f.client.update();await tick();
+  assert.equal(f.tracks[0].stopped,0);assert.ok(f.delays.includes(20000));
+  f.push({type:'turn_complete'});await tick();assert.equal(f.tracks[0].stopped,0,'audio is still playing');
+  f.contexts[0].sources.forEach(n=>n.onended());await tick();
+  assert.equal(f.tracks[0].stopped,1);assert.equal(f.el('live-state').textContent,'已通关 · 麦克风已关闭');assert.equal(f.timers.size,0);
+  assert.deepEqual(f.calls.filter(c=>c.kind==='input'&&c.body.type==='stop').length,1);
+  // No reply ever ends: the grace period closes it.
+  f=fixture();await tick();await f.start();f.push({type:'ready'});await tick();
+  f.view.complete=true;f.client.update();f.client.update();await tick();
+  assert.equal([...f.timers.values()].length,3,'heartbeat, session cap and one grace timer');
+  [...f.timers.entries()].filter(([id])=>f.delayOf.get(id)===20000).forEach(([,fn])=>fn());await tick();
+  assert.equal(f.tracks[0].stopped,1);assert.equal(f.el('live-state').textContent,'已通关 · 麦克风已关闭');
 });
