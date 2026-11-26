@@ -81,6 +81,9 @@ def initial_text(initial):
     return json.dumps({'initial_observation':initial},ensure_ascii=False)
 
 class Session:
+    # Counts for the public record of a session: how long each utterance was and what was going on
+    # when it began, how much the provider transcribed, how long each reply was. Never the words.
+    utterance=None;heard_chars=0;reply_bytes=0
     def __init__(self,fixture=False):
         self.fixture=fixture;self.api=SeatAPI();self.root=Path(os.environ['PARTITION_RUN_ROOT']);self.root.mkdir(parents=True,exist_ok=True)
         self.seat=os.environ['PARTITION_SEAT'];self.scope=os.environ['PARTITION_LIVE_SCOPE'];self.epoch=0
@@ -204,12 +207,17 @@ class Session:
             if kind=='stop':self.stop(node_stop_reason(b.get('reason')));return
             if kind=='game_update':self.updates.offer(b);continue
             if kind=='start':
+                awaited=self.turn_open
                 self.speaking=True;self.scope=b['scope'];self.epoch=b['epoch'];self.interrupt_reply()
+                self.utterance={'bytes':0,'partner_audio_playing':b.get('playing') is True,'reply_awaited':awaited,'reply_cut_off':self.drop_audio}
                 self.updates.rebind()
                 self.record('interrupted',trigger='local_voice');emit({'type':'interrupted','epoch':self.epoch})
                 if not self.fixture:await self.session.send_realtime_input(activity_start={})
             elif kind=='end':
                 self.speaking=False;self.turn_open=True
+                if self.utterance is not None:
+                    u=self.utterance;self.utterance=None
+                    self.record('utterance',seconds=round(u.pop('bytes')/32000,2),**u)
                 await self.send_content('Control scope '+self.scope+'. Previous tickets are invalid. Use observe if you need a current observation.',False)
                 if not self.fixture:await self.session.send_realtime_input(activity_end={})
                 self.turn_open=True
@@ -217,6 +225,7 @@ class Session:
                 audio=base64.b64decode(b['data'],validate=True)
                 if len(audio)%2 or len(audio)>6400:raise ValueError('invalid_pcm')
                 self.ledger.debit('input_seconds',len(audio)/32000)
+                if self.utterance is not None:self.utterance['bytes']+=len(audio)
                 if not self.fixture:
                     from google.genai import types
                     await self.session.send_realtime_input(audio=types.Blob(data=audio,mime_type='audio/pcm;rate=16000'))
@@ -245,13 +254,18 @@ class Session:
                     if getattr(item,'thought',False):continue
                     if item.inline_data and item.inline_data.mime_type.startswith('audio/pcm'):
                         pcm=item.inline_data.data;self.ledger.debit('output_seconds',len(pcm)/48000);self.turn_open=True;self.generating=True
+                        self.reply_bytes+=len(pcm)
                         if not self.drop_audio and not self.speaking:emit({'type':'audio','data':base64.b64encode(pcm).decode(),'rate':24000,'epoch':self.epoch})
                 for attr,who in [('input_transcription','you'),('output_transcription','partner')]:
                     t=getattr(content,attr,None)
-                    if t and t.text:emit({'type':'transcript','speaker':who,'text':t.text[:1000],'epoch':self.epoch})
+                    if t and t.text:
+                        if who=='you':self.heard_chars+=len(t.text)
+                        emit({'type':'transcript','speaker':who,'text':t.text[:1000],'epoch':self.epoch})
                 if content.turn_complete:
                     self.ledger.debit('turns',1);self.turn_open=False;self.drop_audio=False;self.generating=False
-                    self.record('turn_complete');emit({'type':'turn_complete'});self.updates.wake()
+                    self.record('turn_complete',heard_chars=self.heard_chars,reply_seconds=round(self.reply_bytes/48000,2))
+                    self.heard_chars=0;self.reply_bytes=0
+                    emit({'type':'turn_complete'});self.updates.wake()
     async def fixture_loop(self,initial):
         emit({'type':'ready','source':'offline-fixture','model':'offline-fixture','seconds':LIMITS['seconds']})
         # Artificial PCM tone, never a synthesized voice or environmental recording.

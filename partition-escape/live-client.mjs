@@ -266,7 +266,7 @@ export function setupLive({room,key,getView}){
         const silent=s.ctx.createGain();silent.gain.value=0;s.node.connect(silent).connect(s.ctx.destination);
         s.node.port.onmessage=e=>{
           const m=e.data;if(!valid(s)||!s.active)return;
-          if(m.type==='start'){s.speaking=true;s.epoch++;clearAudio(s);state('你在说…');send(s,{type:'start'});}
+          if(m.type==='start'){const playing=s.audioNodes.length>0;s.speaking=true;s.epoch++;clearAudio(s);state('你在说…');send(s,{type:'start',playing});}
           else if(m.type==='end'){s.speaking=false;send(s,{type:'end'});state('正在等待搭档回应…');}
           else if(m.type==='audio'){const bytes=new Uint8Array(m.buffer);let str='';for(const b of bytes)str+=String.fromCharCode(b);send(s,{type:'audio',data:btoa(str)});}
         };

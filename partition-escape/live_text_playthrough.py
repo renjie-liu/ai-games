@@ -27,12 +27,12 @@ from pathlib import Path
 import httpx
 
 TURN_TIMEOUT = 60      # seconds to wait for the partner to finish a turn
-RETRIES = 2            # extra tries of one request before giving the step up
 STOP_MARGIN = 20       # stop this long before the session's own cap
 
 
 class Player:
-    def __init__(self, origin, out, fixture=False, turn_timeout=TURN_TIMEOUT):
+    def __init__(self, origin, out, fixture=False, turn_timeout=TURN_TIMEOUT, scenario='dictated'):
+        self.scenario = scenario
         self.fixture = fixture
         self.turn_timeout = turn_timeout
         self.out = Path(out)
@@ -136,10 +136,10 @@ class Player:
                 'audio_s': round(sum(e['pcm_bytes'] for e in mine if e['type'] == 'audio') / 48000, 2)}
 
     def step(self, name, lines, reached):
-        """Ask until `reached(view)` holds, at most 1 + RETRIES times. Returns whether it did."""
+        """Say the lines in order until `reached(view)` holds. Returns whether it did."""
         record = {'step': name, 'tries': []}
         self.steps.append(record)
-        for line in lines[:1 + RETRIES]:
+        for line in lines:
             if self.closed:
                 break
             record['tries'].append(self.tell(line))
@@ -171,8 +171,35 @@ class Player:
         if not self.drain(lambda e: e['type'] == 'ready', 30):
             return self.finish(status, 'the provider never became ready')
         print(f"  {self.at():6.1f}s  ready", flush=True)
+        plan = getattr(self, 'plan_' + self.scenario.replace('-', '_'))()
+        problem = None
+        for name, lines, reached, then in plan:
+            if self.at() > seconds - STOP_MARGIN:
+                problem = 'out of time before ' + name
+                break
+            if not self.step(name, lines, reached):
+                problem = self.closed and f'session ended ({self.closed}) at ' + name or name + ' not reached'
+                break
+            if then:
+                then()
+        return self.finish(status, problem)
+
+    def take_key(self):
+        pending = self.view()['pending']
+        self.button({'type': 'accept', 'id': pending['id']})
+        self.button({'type': 'action', 'id': 'unlock'})
+        self.button({'type': 'action', 'id': 'power-on'})
+
+    def public(self):
+        return self.http.get(self.path, headers=self.watch).json()['public']
+
+    # --- who the player is -------------------------------------------------
+    # Each plan is a list of (name, lines to try in order, reached(view), what west does next).
+    def plan_dictated(self):
+        """A player who knows the whole solution and dictates every east step in the right order.
+        It proves the provider path and the rules; it does not show that the partner can play."""
         signal = lambda name: lambda v: name in v.get('signals', {})
-        plan = [
+        return [
             ('key offered', ['你好，我在西间。请先查看你那边的传物槽，然后把黄铜钥匙递给我。',
                              '请用工具递出钥匙：先 observe，再对传物槽执行 send-key。',
                              '请现在递出黄铜钥匙。'],
@@ -196,23 +223,57 @@ class Player:
                               '请现在走向共同出口。', '请执行 leave。'],
              lambda v: v.get('complete') is True, None),
         ]
-        problem = None
-        for name, lines, reached, then in plan:
-            if self.at() > seconds - STOP_MARGIN:
-                problem = 'out of time before ' + name
-                break
-            if not self.step(name, lines, reached):
-                problem = self.closed and f'session ended ({self.closed}) at ' + name or name + ' not reached'
-                break
-            if then:
-                then()
-        return self.finish(status, problem)
 
-    def take_key(self):
-        pending = self.view()['pending']
-        self.button({'type': 'accept', 'id': pending['id']})
-        self.button({'type': 'action', 'id': 'unlock'})
-        self.button({'type': 'action', 'id': 'power-on'})
+    def plan_proposal_first(self):
+        """The order a person plays in: propose cutting the power first, then ask the partner to get
+        ready. On 2026-11-26 a person's game stopped here: the waiting proposal froze the partner's
+        own controls, so it could not hold the gate before confirming. Stops after that exchange."""
+        def key_then_propose():
+            self.take_key()
+            self.button({'type': 'action', 'id': 'power-off'})
+        held_through = lambda v: v['local']['power'] is False and not v.get('pending') and self.public()['gateOpen'] is True
+        return [
+            ('key offered', ['你好，我在西间。请把你那边的黄铜钥匙递给我。', '请现在递出黄铜钥匙。'],
+             lambda v: (v.get('pending') or {}).get('action') == 'send-key', key_then_propose),
+            ('power cut with the gate still up',
+             ['钥匙我接到了，门锁开了，动力也接通了，你那边的闸门应该升起来了。我已经提了切断动力，你那边准备好了再确认。',
+              '断电后你那边的闸门不能落下来。你先把它固定住，再确认我的提议。',
+              '请先拉住手闸，再确认切断动力。',
+              '现在卡在哪里？你刚才想做什么，为什么没做成？'],
+             held_through, None),
+        ]
+
+    def plan_west_only(self):
+        """A player who knows only what the west room shows. No line names an east object or action:
+        the partner has to know its own room. The checks know the solution; the lines do not."""
+        signal = lambda name: lambda v: name in v.get('signals', {})
+        def key_and_power():
+            pending = self.view()['pending']
+            self.button({'type': 'accept', 'id': pending['id']})
+            self.button({'type': 'action', 'id': 'unlock'})
+            for clue in ('interlock', 'coupling'):
+                self.button({'type': 'share', 'id': clue})
+            self.button({'type': 'action', 'id': 'power-on'})
+        return [
+            ('key offered', ['你好，我在西间。我这边有一块出口铭牌、一个动力台、一扇上了锁的西门和一个传物槽。西门要一把黄铜钥匙才能开，我这边没有。你那边有什么？',
+                             '你那边有钥匙的话，能递给我吗？', '请把钥匙从传物槽递过来。'],
+             lambda v: (v.get('pending') or {}).get('action') == 'send-key', key_and_power),
+            ('gate held', ['钥匙收到了，门锁也开了。我把动力接通了，说明上写着它同时带动你那边的升降闸和风扇。铭牌还说，西门一推开动力就会断，要两个人一起走。你那边现在什么情况？断电的话你那边会怎样，要先做什么准备？',
+                           '如果我这边断电，你那边的闸门会不会落下来？你能先把它固定住吗？',
+                           '你那边有没有办法让闸门在断电后还开着？有的话请先做。'],
+             signal('hold-brake'), lambda: self.button({'type': 'action', 'id': 'power-off'})),
+            ('power-off confirmed', ['我提了切断动力，你那边准备好了就确认。', '切断动力的提议还在等你。你准备好了吗？还差什么？',
+                                     '请确认切断动力。'],
+             lambda v: v['local']['power'] is False and not v.get('pending') and self.public()['gateOpen'] is True, None),
+            ('gate stays up by itself', ['动力断了。你那边还要做什么，才能腾出手和我一起离开？', '你现在能走开吗？还差什么？',
+                                         '你那边有没有东西可以代替你撑住闸门？', '现在情况怎么样？'],
+             lambda v: 'brace' in v.get('signals', {}) and 'release-brake' in v.get('signals', {}),
+             lambda: self.button({'type': 'action', 'id': 'open-door'})),
+            ('door confirmed', ['我提了推开西门，你那边准备好了就确认。', '推开西门的提议还在等你，你准备好了吗？', '请确认推开西门。'],
+             lambda v: v['local']['doorOpen'] is True, None),
+            ('both outside', ['门开了，我们一起走吧。', '你可以出来了吗？', '我们一起出去吧。'],
+             lambda v: v.get('complete') is True, None),
+        ]
 
     def finish(self, status, problem):
         if not self.closed:
@@ -227,7 +288,7 @@ class Player:
         usage = [e['estimatedUsd'] for e in self.events if e['type'] == 'usage']
         audit = next((e.get('audit') for e in self.events if e['type'] == 'closed' and e.get('audit')), None)
         result = {'source': 'offline-fixture rehearsal of this script, no model' if self.fixture else
-                  'real-gemini-live, typed lines, no microphone', 'room': self.room,
+                  'real-gemini-live, typed lines, no microphone', 'scenario': self.scenario, 'room': self.room,
                   'complete': public.get('complete'), 'problem': problem, 'closed': self.closed,
                   'elapsed_s': self.at(), 'turns': self.turns, 'partner_audio_s': round(len(self.pcm) / 48000, 2),
                   'estimated_usd': usage[-1] if usage else None, 'audit': audit,
@@ -255,8 +316,11 @@ if __name__ == '__main__':
     parser.add_argument('--fixture', action='store_true',
                         help="rehearse this script's plumbing against a server started with PARTITION_LIVE_FIXTURE=1: no model, nothing spent")
     parser.add_argument('--turn-timeout', type=float, default=TURN_TIMEOUT)
+    parser.add_argument('--scenario', choices=('dictated', 'proposal-first', 'west-only'), default='dictated',
+                        help='who the player is: one who dictates every step, one who proposes before the partner is ready, '
+                             'or one who knows only the west room')
     arguments = parser.parse_args()
     if not arguments.spend_one_connection and not arguments.fixture:
         raise SystemExit('refused: this makes a real Gemini Live connection. Pass --spend-one-connection '
                          'once the project owner has approved it, or --fixture to rehearse offline.')
-    Player(arguments.origin, arguments.out, arguments.fixture, arguments.turn_timeout).play()
+    Player(arguments.origin, arguments.out, arguments.fixture, arguments.turn_timeout, arguments.scenario).play()

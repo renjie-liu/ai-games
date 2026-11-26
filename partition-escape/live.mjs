@@ -122,7 +122,8 @@ export class LiveHub {
     if(b.type==='text'&&(typeof b.text!=='string'||b.text.length>500))throw Error('Invalid text');
     if(b.type==='start'||b.type==='text'){j.scope=id();j.epoch++;j.tickets.clear();j.updates.rebind();j.speaking=b.type==='start';this.emit(room,{type:'interrupted',epoch:j.epoch});}
     if(b.type==='end')j.speaking=false;
-    this.write(room,{...b,scope:j.scope,epoch:j.epoch});
+    // `playing` is the page saying the partner's voice was audible when the player began: a count for the record, nothing else.
+    this.write(room,{...b,...(b.type==='start'?{playing:b.playing===true}:{}),scope:j.scope,epoch:j.epoch});
   }
   write(room,b){
     const j=this.get(room);if(j.ended)return false;

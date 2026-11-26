@@ -101,6 +101,27 @@ class ReplyAudio(unittest.IsolatedAsyncioTestCase):
         await self.provider(audio(1), message(server_content=content(turn_complete=True)))
         self.assertEqual(self.played(), 1, 'the reply after a typed message was dropped')
 
+    async def test_the_record_counts_each_utterance_and_reply_without_their_words(self):
+        import base64
+        frame = base64.b64encode(bytes(1600)).decode()                      # 50 ms
+        heard = lambda text: message(server_content=content(input_transcription=SimpleNamespace(text=text)))
+        await self.player('start', playing=False)
+        for _ in range(10):                                                 # a pipe holds only so much: write, then let the worker read
+            self.pipe.write((json.dumps({'type': 'audio', 'data': frame}) + '\n').encode())
+            await asyncio.sleep(0)
+        await self.player('end')
+        await self.provider(heard('把钥匙递给我'), audio(1.5))
+        await self.player('start', playing=True)                            # the player cuts in while the partner is audible
+        await self.player('end')
+        await self.provider(message(server_content=content(interrupted=True)), heard('等等'), audio(1), message(server_content=content(turn_complete=True)))
+        rows = lambda kind: [r for r in self.session.public if r['kind'] == kind]
+        first, second = rows('utterance')
+        self.assertEqual((first['seconds'], first['partner_audio_playing'], first['reply_awaited'], first['reply_cut_off']), (0.5, False, False, False))
+        self.assertEqual((second['seconds'], second['partner_audio_playing'], second['reply_awaited'], second['reply_cut_off']), (0.0, True, True, True))
+        done = rows('turn_complete')[-1]
+        self.assertEqual((done['heard_chars'], done['reply_seconds']), (8, 2.5))
+        self.assertNotIn('钥匙', json.dumps(self.session.public, ensure_ascii=False))
+
     async def test_talking_over_the_partner_drops_only_the_interrupted_turn(self):
         await self.utterance()
         await self.provider(audio(1))                    # the partner is answering
