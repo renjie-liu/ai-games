@@ -1,12 +1,13 @@
 // Authoritative, deterministic world. No dialogue, clock, or model can declare a win.
 //
-// A room may come with a puzzle (room-rules.mjs) that adds to these mechanisms:
+// The room comes with a puzzle (room-rules.mjs) that adds to these mechanisms:
 //  - a battery: `cells` to a pack, one taken by each power-on; an empty pack is swapped for a spare;
 //  - a choice of supports: the one brace becomes one action per support. A support that does not
 //    fit never goes in. One that is too weak goes in like any other and gives way the moment
 //    neither the power nor a hand holds the gate, so the partner has to let go before walking out;
 //  - a rating at the end.
-// Without a puzzle every function here does what it did before there were any.
+// Without a puzzle every function here does what it did before there were any: that is what a
+// scripted or a model seat plays (world.mjs, standIn).
 export const actions = ['power-on', 'power-off', 'unlock', 'open-door', 'close-door',
   'send-key', 'hold-brake', 'brace', 'release-brake', 'leave'];
 export const playerActions = new Set(actions.slice(0, 5));
@@ -156,17 +157,11 @@ export function transition(state, action, actor = 'player', puzzle = null) {
   if (!validState(s, puzzle)) throw new Error('World invariant violated');
   return { state: s, ok: true, message };
 }
-// How a finished game went, by the caps of the rule set: null when the set gives no stars or the
+// How a finished game went, by the caps the puzzle carries: null when it gives no stars or the
 // game is not over.
 export function rating(s, puzzle) {
   if (!puzzle?.stars || !won(s)) return null;
   const used = { power_ons: s.powerOns, spare_packs: s.packs };
   const within = tier => !!tier && Object.entries(tier).every(([name, most]) => used[name] <= most);
   return { stars: within(puzzle.stars.three) ? 3 : within(puzzle.stars.two) ? 2 : 1, powerOns: s.powerOns, packs: s.packs };
-}
-// This is the ONLY world projection given to the offline companion. It excludes
-// the west room's plaque, notebook, inventory, door state, UI, hints and victory.
-export function partnerObservation(s) {
-  return Object.freeze({ gateOpen: gateOpen(s), fanSpinning: s.power, holdingBrake: s.brake,
-    braceSeen: s.braceSeen, braced: s.braced, keyHere: !s.keyTransferred, outside: s.partnerOut });
 }

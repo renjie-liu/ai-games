@@ -1,5 +1,5 @@
-// The rules a rule set adds to the engine: a battery, a choice of supports, the load test, a rating.
-// engine.test.mjs keeps pinning the room without them.
+// What a room's puzzle adds to the engine: a battery, a choice of supports, the load test, a rating.
+// engine.test.mjs keeps pinning the mechanisms without them.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialState,transition,won,validState,gateOpen,actionsFor,rating,playerActions,partnerActions} from './engine.mjs';
@@ -19,14 +19,14 @@ function run(sequence,s=initialState(PUZZLE),puzzle=PUZZLE){
 const refused=(s,action,pattern,puzzle=PUZZLE)=>{const r=step(s,action,puzzle);assert.equal(r.ok,false,action);assert.match(r.message,pattern);assert.strictEqual(r.state,s);};
 const READY=['send-key','unlock','power-on','hold-brake','power-off'];   // gate up on the brake, fan stopped
 
-test('a room without a rule set is the room as it was',()=>{
+test('without a puzzle the mechanisms are as they were',()=>{
   assert.deepEqual(Object.keys(initialState()),Object.keys(initialState(null)));
   assert.equal(Object.keys(initialState()).length,10);
   assert.deepEqual(actionsFor(),{player:playerActions,partner:partnerActions});
   assert.equal(rating(initialState(),null),null);
   for(const action of ['swap-pack','brace-1'])assert.equal(transition(initialState(),action,'player').ok,false);
 });
-test('the state of a room with a rule set carries the battery and the support, and is not valid without it',()=>{
+test('the state of a room with a puzzle carries the battery and the support, and is not valid without it',()=>{
   const s=initialState(PUZZLE);
   assert.deepEqual({charge:s.charge,packs:s.packs,powerOns:s.powerOns,support:s.support,sound:s.sound},{charge:2,packs:0,powerOns:0,support:null,sound:null});
   assert.equal(validState(s,PUZZLE),true);assert.equal(validState(s),false);assert.equal(validState(initialState(),PUZZLE),false);
@@ -92,7 +92,7 @@ test('each power-on takes a cell; an empty pack is swapped for a spare, which is
   s=run(['power-on','send-key','unlock','hold-brake','power-off','brace-2','release-brake','open-door','leave'],s);
   assert.deepEqual(rating(s,PUZZLE),{stars:1,powerOns:3,packs:1});
 });
-test('the stars follow the caps of the rule set',()=>{
+test('the stars follow the caps the puzzle carries',()=>{
   const done=run([...READY,'brace-2','release-brake','open-door','leave']);
   assert.equal(rating(done,puzzleWith(2,SUPPORTS,{three:{power_ons:0},two:{power_ons:1}})).stars,2);
   assert.equal(rating(done,puzzleWith(2,SUPPORTS,{two:{power_ons:0}})).stars,1);

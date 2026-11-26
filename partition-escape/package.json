@@ -5,7 +5,6 @@
   "scripts": {
     "start": "node start-local.mjs",
     "start:local": "node start-local.mjs",
-    "start:legacy": "node server.mjs",
     "test": "node --test *.test.mjs",
     "start:live": "node start-live.mjs"
   },
