@@ -7,8 +7,8 @@ import fs from 'node:fs';
 const code=fs.readFileSync(new URL('./live-client.mjs',import.meta.url),'utf8').replace('export function setupLive','function setupLive');
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 const tick=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
-function fixture({gate,fixtureMode=false,segments=false}={}){
-  const elements=new Map(),listeners={},calls=[],contexts=[],tracks=[],timers=new Map(),wait=deferred(),micWaits=[];
+function fixture({gate,fixtureMode=false,segments=false,caps={seconds:60,inputSeconds:30,outputSeconds:20,usageStopUsd:.15}}={}){
+  const elements=new Map(),listeners={},calls=[],contexts=[],tracks=[],timers=new Map(),delays=[],wait=deferred(),micWaits=[];
   const view={role:'west',controllers:{east:'live'},paused:false};let nextTimer=0,micCalls=0,cancelCount=0,sourceCount=0,connectedSources=0,played=0;
   const el=id=>{if(!elements.has(id))elements.set(id,{id,disabled:['live-stop','live-interrupt'].includes(id),textContent:'',dataset:{},append(x){elements.set(x.id,x);}});return elements.get(id);};
   let pendingRead,rows=[];
@@ -23,7 +23,7 @@ function fixture({gate,fixtureMode=false,segments=false}={}){
     const kind=url.split('/').at(-1).replace('live-','');calls.push({kind,body:opts.body?JSON.parse(opts.body):null,signal:opts.signal});
     if(kind==='status'){
       if((gate==='status'&&calls.filter(c=>c.kind==='status').length>1)||(gate==='initial-status'&&calls.filter(c=>c.kind==='status').length===1))await wait.promise;
-      return response({remaining:1,totalUsd:.5,runtimeReady:true,fixture:fixtureMode,...(segments?{generation,sync:sync(0,{phase})}:{})});
+      return response({remaining:1,totalUsd:.5,runtimeReady:true,fixture:fixtureMode,...caps,...(segments?{generation,sync:sync(0,{phase})}:{})});
     }
     if(kind==='renew'){generation++;phase='off';return response({generation});}
     if(kind==='input'&&JSON.parse(opts.body).type==='stop')phase='closed';
@@ -45,10 +45,10 @@ function fixture({gate,fixtureMode=false,segments=false}={}){
     atob:s=>Buffer.from(s,'base64').toString('binary'),btoa:s=>Buffer.from(s,'binary').toString('base64'),
     navigator:{mediaDevices:{getUserMedia:async()=>{micCalls++;if(gate!=='mic')return capture();const d=micWaits.length?deferred():wait;micWaits.push(d);return d.promise;}}},
     setInterval:f=>{timers.set(++nextTimer,f);return nextTimer;},clearInterval:id=>timers.delete(id),
-    setTimeout:f=>{timers.set(++nextTimer,f);return nextTimer;},clearTimeout:id=>timers.delete(id)};
+    setTimeout:(f,ms)=>{timers.set(++nextTimer,f);delays.push(ms);return nextTimer;},clearTimeout:id=>timers.delete(id)};
   vm.createContext(sandbox);vm.runInContext(code,sandbox);
   const client=sandbox.setupLive({room:'offline-lifecycle',key:'fixture-token',getView:()=>view});
-  return {el,calls,contexts,tracks,timers,wait,micWaits,reader,document,view,client,push,capture,
+  return {el,calls,contexts,tracks,timers,delays,wait,micWaits,reader,document,view,client,push,capture,
     start:()=>el(fixtureMode?'live-fixture':'live-start').onclick(),
     cancel:()=>el('live-stop').onclick(),
     background(){document.hidden=true;listeners.visibilitychange();},
@@ -178,4 +178,26 @@ test('switching tabs ends capture; explicit resume starts exactly one new segmen
   assert.equal(f.calls.filter(c=>c.kind==='renew').length,1);
   assert.equal(f.starts(),2);assert.equal(f.stats().micCalls,2);
   f.cancel();
+});
+
+test('session length, playback bound and notice come from the server, not from the page',async()=>{
+  const f=fixture({caps:{seconds:600,inputSeconds:300,outputSeconds:300,usageStopUsd:1}});await tick();
+  assert.match(f.el('live-caps').textContent,/每段语音最多 10 分钟/);assert.match(f.el('live-caps').textContent,/可发言 5 分钟、听回复 5 分钟/);
+  assert.match(f.el('live-caps').textContent,/费用估算到 \$1 会自动结束/);
+  await f.start();assert.ok(f.delays.includes(600000));assert.equal(f.delays.includes(60000),false);
+  f.push({type:'ready'});await tick();
+  // 25 seconds of reply is inside a 300-second allowance: it plays, and the session goes on.
+  f.push({type:'audio',epoch:0,data:Buffer.alloc(25*48000).toString('base64')});await tick();
+  assert.equal(f.stats().played,1);assert.match(f.el('live-state').textContent,/搭档在说/);assert.equal(f.timers.size,2);
+});
+test('a reply longer than the allowance still ends the session',async()=>{
+  const f=fixture({caps:{seconds:60,inputSeconds:30,outputSeconds:20,usageStopUsd:.15}});await tick();await f.start();f.push({type:'ready'});await tick();
+  f.push({type:'audio',epoch:0,data:Buffer.alloc(25*48000).toString('base64')});await tick();
+  assert.equal(f.stats().played,0);assert.match(f.el('live-state').textContent,/超过本段播放上限/);assert.equal(f.timers.size,0);
+});
+test('why a session stopped is said in words; a code the page does not know is shown as it is',async()=>{
+  for(const [reason,shown] of [['live_tools_limit',/机关操作次数已用到上限/],['live_usage_stop',/费用估算已到上限/],['session_deadline',/时长已用到上限/],['some_new_code',/some_new_code/]]){
+    const f=fixture();await tick();await f.start();f.push({type:'ready'});await tick();f.push({type:'closed',reason});await tick();
+    assert.match(f.el('live-state').textContent,shown);assert.match(f.el('live-state').textContent,/机关进度已保留/);
+  }
 });

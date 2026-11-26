@@ -5,7 +5,7 @@ import {LiveHub} from './live.mjs';
 import {Room} from './world.mjs';
 const node=(status,ids=[3,4],extra={})=>({stage:'node',status,room_event_ids:ids,sequence:null,...extra});
 const worker=(status,ids=[3,4],extra={})=>({stage:'worker',status,room_event_ids:ids,sequences:[1],...extra});
-function start(){const s=new SyncStatus();s.start(true);return s;}
+function start(){const s=new SyncStatus({batches:3,events:12});s.start(true);return s;}
 test('pipe and send attempt are never counted as provider delivery',()=>{
   const s=start();s.accept(node('queued'));assert.equal(s.snapshot().queued,2);
   s.accept(node('dispatched',[3,4],{sequence:1}));assert.equal(s.snapshot().sent,0);assert.equal(s.snapshot().forwarded,2);

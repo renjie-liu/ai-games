@@ -1,19 +1,21 @@
+import {UPDATE_LIMITS} from './live-updates.mjs';
 // Player-facing delivery evidence only. No world reads, model calls or action authority.
 // Track bounded public event references, never event text or private observations.
 const NODE={queued:'queued',merged:'queued',rebound:'queued',dispatched:'forwarded',not_delivered:'not_delivered',canceled:'not_delivered',delivery_unknown:'uncertain'};
 const WORKER={queued:'forwarded',merged:'forwarded',rebound:'forwarded',send_attempt:'sending',fixture_sent:'sent',transport_sent:'sent',not_delivered:'not_delivered',canceled:'not_delivered',rejected:'not_delivered',send_failed_or_canceled_no_retry:'uncertain'};
 const LIMIT_REASONS=new Set(['batch_limit','batch_bytes_limit','total_bytes_limit','pending_limit','dedupe_limit','merge_overflow_retained_earlier_facts','text_budget_limit_before_transport']);
 export class SyncStatus {
-  constructor(){this.version=0;this.phase='off';this.fixture=false;this.facts=new Map();this.limited=false;this.untracked=false;}
+  // `batches` and `events` are the update limits in force (live-limits.json); rows beyond them are not believed.
+  constructor({batches=UPDATE_LIMITS.batches,events=UPDATE_LIMITS.events}={}){this.batches=batches;this.events=events;this.version=0;this.phase='off';this.fixture=false;this.facts=new Map();this.limited=false;this.untracked=false;}
   start(fixture){if(this.phase!=='off')return;this.fixture=fixture;this.phase='active';this.version++;}
   accept(row){
     if(this.phase!=='active'||!row||!['node','worker'].includes(row.stage))return false;
     const mapping=row.stage==='node'?NODE:WORKER;
     if(typeof row.status!=='string'||!Object.hasOwn(mapping,row.status))return false;
     const target=mapping[row.status];
-    if(!target||!Array.isArray(row.room_event_ids)||row.room_event_ids.length>12||row.room_event_ids.some(x=>!Number.isSafeInteger(x)||x<1))return false;
+    if(!target||!Array.isArray(row.room_event_ids)||row.room_event_ids.length>this.events||row.room_event_ids.some(x=>!Number.isSafeInteger(x)||x<1))return false;
     const sequences=row.stage==='worker'?row.sequences:[row.sequence];
-    if(row.stage==='worker'&&(!Array.isArray(sequences)||!sequences.length||sequences.length>3||sequences.some(x=>!Number.isSafeInteger(x)||x<1||x>3)))return false;
+    if(row.stage==='worker'&&(!Array.isArray(sequences)||!sequences.length||sequences.length>this.batches||sequences.some(x=>!Number.isSafeInteger(x)||x<1||x>this.batches)))return false;
     let changed=false;
     for(const id of row.room_event_ids){
       let prior=this.facts.get(id);

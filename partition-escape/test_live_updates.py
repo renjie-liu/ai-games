@@ -1,8 +1,15 @@
 import asyncio,json,tempfile,unittest
 from pathlib import Path
 from unittest.mock import patch,AsyncMock
-from live_updates import ContextUpdates,valid_update,encode,MAX_BYTES,MAX_TOTAL_BYTES
-from live_budget import Ledger,LIMITS
+from live_updates import ContextUpdates,valid_update,encode
+from live_budget import Ledger,LIMITS,UPDATES
+# These tests are about the queue's mechanics, so they pin their own small limits instead of
+# following live-limits.json, which sizes a whole game.
+PINNED=dict(debounce_ms=250,interval_ms=2000,batches=3,events=12,batch_bytes=2400,total_bytes=4800)
+MAX_BYTES=PINNED['batch_bytes'];MAX_TOTAL_BYTES=PINNED['total_bytes']
+_pinned=patch.dict(UPDATES,PINNED)
+def setUpModule():_pinned.start()
+def tearDownModule():_pinned.stop()
 from live_trace import page
 
 def packet(seq=1,epoch=0):

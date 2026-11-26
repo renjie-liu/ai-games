@@ -1,9 +1,20 @@
 export function setupLive({room,key,getView}){
   const panel=document.querySelector('#live-panel');if(!panel)return {stop(){},update(){}};
   const view=getView(),other=view.role==='west'?'east':'west';if(view.controllers[other]!=='live')return {stop(){},update(){}};
-  panel.innerHTML='<h2>与 Gemini Live 对话</h2><p class="small" id="live-notice">开启或继续语音，即确认你已满 18 岁、在<a href="https://aistudio.google.com/docs/available-regions" target="_blank" rel="noopener noreferrer">支持地区</a>试玩，并同意 Google 处理你的声音和本局游戏上下文。当前项目的数据设置未经核实；免费服务可能将内容用于产品改进或人工审核。请只谈游戏。<a href="https://aistudio.google.com/docs/terms" target="_blank" rel="noopener noreferrer">Google 数据条款</a></p><p class="small">切换标签页会关闭麦克风并结束本段语音，返回后可在本局续聊。每次连接最多 60 秒，可发言 30 秒、听回复 20 秒，随时点「结束语音」。</p><p id="live-state" role="status" aria-live="polite">麦克风关 · 尚未连接</p><p id="live-budget" class="small"></p><p id="live-sync-state" role="status" aria-live="polite">公开状态更新：尚未开启语音。</p><div class="actions"><button id="live-start" class="primary" aria-describedby="live-notice" disabled>开始语音</button><button id="live-continue" class="primary" aria-describedby="live-notice" hidden>在本局继续语音</button><a id="live-new-room" class="button primary" href="/play?join=live" hidden>开新房与 Gemini 通话</a><button id="live-stop" disabled>结束语音</button><button id="live-interrupt" disabled>打断 / 先等等</button></div><p id="live-you"></p><p id="live-partner"></p><p id="live-result" class="small"></p>';
+  panel.innerHTML='<h2>与 Gemini Live 对话</h2><p class="small" id="live-notice">开启或继续语音，即确认你已满 18 岁、在<a href="https://aistudio.google.com/docs/available-regions" target="_blank" rel="noopener noreferrer">支持地区</a>试玩，并同意 Google 处理你的声音和本局游戏上下文。当前项目的数据设置未经核实；免费服务可能将内容用于产品改进或人工审核。请只谈游戏。<a href="https://aistudio.google.com/docs/terms" target="_blank" rel="noopener noreferrer">Google 数据条款</a></p><p class="small" id="live-caps">切换标签页会关闭麦克风并结束本段语音，返回后可在本局续聊。随时可点「结束语音」。</p><p id="live-state" role="status" aria-live="polite">麦克风关 · 尚未连接</p><p id="live-budget" class="small"></p><p id="live-sync-state" role="status" aria-live="polite">公开状态更新：尚未开启语音。</p><div class="actions"><button id="live-start" class="primary" aria-describedby="live-notice" disabled>开始语音</button><button id="live-continue" class="primary" aria-describedby="live-notice" hidden>在本局继续语音</button><a id="live-new-room" class="button primary" href="/play?join=live" hidden>开新房与 Gemini 通话</a><button id="live-stop" disabled>结束语音</button><button id="live-interrupt" disabled>打断 / 先等等</button></div><p id="live-you"></p><p id="live-partner"></p><p id="live-result" class="small"></p>';
   const el=id=>document.getElementById(id);let current=null,used=false,touched=false,fixtureButton;
   let generation, closing;
+  // What one voice session may use, as the server reports it (live-limits.json). Never a constant here.
+  const caps={};
+  const duration=s=>s>=120&&s%60===0?`${s/60} 分钟`:`${s} 秒`;
+  function showCaps(status){
+    for(const k of ['seconds','inputSeconds','outputSeconds','usageStopUsd'])if(Number.isFinite(status?.[k])&&status[k]>0)caps[k]=status[k];
+    if(!caps.seconds)return;
+    const parts=[`每段语音最多 ${duration(caps.seconds)}`];
+    if(caps.inputSeconds&&caps.outputSeconds)parts.push(`其中可发言 ${duration(caps.inputSeconds)}、听回复 ${duration(caps.outputSeconds)}`);
+    if(caps.usageStopUsd)parts.push(`费用估算到 $${caps.usageStopUsd} 会自动结束`);
+    el('live-caps').textContent=`切换标签页会关闭麦克风并结束本段语音，返回后可在本局续聊。${parts.join('，')}。随时可点「结束语音」。`;
+  }
   let leftTab=false;
   function tabMessage(){
     return '切换标签页已关闭麦克风，本局进度已保留。'+(used?(Number.isInteger(generation)?'点击「在本局继续语音」重新连接 Gemini。':'本房间仍可操作机关。'):'可点击「开始语音」。');
@@ -51,7 +62,16 @@ export function setupLive({room,key,getView}){
     }
   }
   const state=t=>el('live-state').textContent=t;
-  const reasonText=code=>code?.startsWith('live_dependency_')?'本地语音依赖缺失，请运行 uv sync --frozen 后重启服务':code==='live_runtime_check_failed'?'本地语音环境检查失败，请检查 Python 安装':code==='live_project_unverified'?'项目费用和真人音频隐私设置待核实，麦克风关闭':code==='live_authorization_exhausted'?'本轮连接额度已用完，未发起模型连接':code;
+  // Codes the server and worker send, in words. An unknown code is shown as it is.
+  const capped=what=>`本段语音的${what}已用到上限`;
+  const reasons={live_harness_mismatch:'配套的 harness 版本不对，请按 README 准备固定版本后重启服务',live_limits_invalid:'live-limits.json 或 PARTITION_LIVE_LIMITS 指向的文件有误，请修正后重启服务',
+    live_runtime_check_failed:'本地语音环境检查失败，请检查 Python 安装',live_project_unverified:'项目费用和真人音频隐私设置待核实，麦克风关闭',
+    live_authorization_exhausted:'本轮连接额度已用完，未发起模型连接',live_authorization_required:'本机还没有连接授权，见 LIVE.md',gemini_key_unavailable:'服务端没有可用的 GEMINI_API_KEY',
+    session_deadline:capped('时长'),live_input_seconds_limit:capped('发言时长'),live_output_seconds_limit:capped('回复时长'),live_turns_limit:capped('对话轮数'),
+    live_tools_limit:capped('机关操作次数'),live_text_bytes_limit:capped('文字上下文'),live_usage_stop:'本段语音的费用估算已到上限',
+    provider_go_away_no_reconnect:'Gemini 结束了这次连接',user_stop:'已手动结束',tab_hidden:'切换了标签页',game_paused:'游戏已暂停',
+    client_heartbeat_lost:'页面与本机服务失去联系',browser_disconnected:'页面断开了连接',worker_stopped:'语音进程意外退出，见 .runs 下的记录'};
+  const reasonText=code=>code?.startsWith('live_dependency_')?'本地语音依赖缺失，请按 README 安装 requirements-live.txt 后重启服务':reasons[code]||code;
   function sessionHeaders(session){
     return Number.isInteger(session)?{'X-Live-Generation':String(session)}:{};
   }
@@ -101,7 +121,7 @@ export function setupLive({room,key,getView}){
     // buffer by the worker's 20-second output allowance plus scheduling lead.
     const now=s.ctx.currentTime,playAt=Math.max(now+.02,s.schedule);
     const endAt=playAt+bytes.length/48000;
-    if(endAt-now>20.05){stop('回复音频超过本局播放上限',s);return;}
+    if(caps.outputSeconds&&endAt-now>caps.outputSeconds+.05){stop('回复音频超过本段播放上限',s);return;}
     const buffer=s.ctx.createBuffer(1,bytes.length/2,24000),values=buffer.getChannelData(0);for(let i=0;i<values.length;i++)values[i]=v.getInt16(i*2,true)/32768;
     const n=s.ctx.createBufferSource();n.buffer=buffer;n.connect(s.ctx.destination);s.audioNodes.push(n);
     n.onended=()=>{
@@ -134,7 +154,7 @@ export function setupLive({room,key,getView}){
     }
     if(m.type==='tool'){const r=m.receipt;el('live-result').textContent=r?`${r.command} · ${r.outcome} · 房间事件 ${r.roomEventIds.map(x=>'#'+x).join('、')||'无新增'}（以机关回执为准）`:'工具未发出或被 harness 中止';}
     if(m.type==='usage')el('live-budget').textContent=`保守费用估算 $${m.estimatedUsd.toFixed(6)}，非账单；credits未核验`;
-    if(m.type==='closed')stop('语音已停止：'+reasonText(m.reason)+'；未自动重连，可继续用按钮玩',s);
+    if(m.type==='closed')stop('语音已停止：'+reasonText(m.reason)+'。机关进度已保留，不会自动重连。',s);
   }
   async function readStream(s){
     const r=await fetch(`/api/rooms/${room}/live-stream`,{headers:{Authorization:`Bearer ${key}`,...sessionHeaders(s.generation)},signal:s.streamAbort.signal});
@@ -187,6 +207,7 @@ export function setupLive({room,key,getView}){
       if(!mock){
         if(resume&&closing){await closing;if(!valid(s))return;}
         let status=await api('status',undefined,s.abort.signal);if(!valid(s))return;
+        showCaps(status);
         if(!status.runtimeReady)throw Error(status.runtimeCode);if(status.remaining===0)throw Error('live_authorization_exhausted');
         if(status.projectVerified===false)throw Error('live_project_unverified');
         if(resume){
@@ -234,7 +255,9 @@ export function setupLive({room,key,getView}){
         };
       }
       el('live-stop').textContent='结束语音';el('live-interrupt').disabled=false;
-      s.heartbeat=setInterval(()=>send(s,{type:'heartbeat'}),2000);s.timer=setTimeout(()=>stop('本次60秒已结束，未自动续跑',s),60000);
+      s.heartbeat=setInterval(()=>send(s,{type:'heartbeat'}),2000);
+      // The server ends the session at its cap in any case; this only says so in the page's own words.
+      if(caps.seconds)s.timer=setTimeout(()=>stop(`本段语音已到 ${duration(caps.seconds)} 上限，机关进度已保留，不会自动重连。`,s),caps.seconds*1000);
       state(mock?'离线 fixture · 无麦克风、无模型':'正在连接搭档，请稍候');
       if(!mock)listenWhenReady(s);
     }catch(e){
@@ -252,9 +275,10 @@ export function setupLive({room,key,getView}){
     // A late initial availability check must not overwrite a pending/closed run.
     if(touched)return;
     generation=s.generation;
+    showCaps(s);
     syncStatus(s.sync);
     if(s.sync?.phase==='closed'){showNewRoom();state(roomStartMessage('closed'));}
-    el('live-budget').textContent=`本段语音最多 ${s.seconds} 秒 · 剩余 ${s.remaining} 次连接 · 可能实际计费`;
+    el('live-budget').textContent=`剩余 ${s.remaining} 次连接 · 可能实际计费`;
     if(!s.runtimeReady){el('live-continue').disabled=true;el('live-start').disabled=true;state(reasonText(s.runtimeCode));}
     else if(s.remaining===0){el('live-continue').disabled=true;el('live-start').disabled=true;state(reasonText('live_authorization_exhausted'));}
     else if(s.projectVerified===false){el('live-continue').disabled=true;el('live-start').disabled=true;state(reasonText('live_project_unverified'));}

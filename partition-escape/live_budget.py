@@ -7,10 +7,44 @@ from pathlib import Path
 import re
 import time
 
-ROOT=Path(__file__).resolve().parent
+HERE=Path(__file__).resolve().parent
+ROOT=HERE
 MODEL='gemini-3.8-live'
-LIMITS=dict(connections=2,seconds=60,input_seconds=30,output_seconds=20,turns=6,tools=6,
-            text_bytes=8000,max_output_tokens=256,total_usd=.50,reserve_usd=.25)
+LIMITS_FILE='live-limits.json'
+
+def merge_limits(defaults,changes):
+    """The same rules as live-limits.mjs: known names only, positive numbers, whole unless money."""
+    if not isinstance(changes,dict) or set(changes)-set(defaults):raise RuntimeError('live_limits_invalid')
+    merged={}
+    for section,base in defaults.items():
+        given=changes.get(section,{})
+        if not isinstance(given,dict) or set(given)-set(base):raise RuntimeError('live_limits_invalid')
+        merged[section]={**base,**given}
+        for name,value in merged[section].items():
+            if type(value) not in (int,float) or not math.isfinite(value) or value<=0:raise RuntimeError('live_limits_invalid')
+            if not name.endswith('_usd'):
+                if value!=int(value):raise RuntimeError('live_limits_invalid')
+                merged[section][name]=int(value)
+    return merged
+
+def load_limits(override=None,root=HERE):
+    """Per-session and context-update caps. Defaults are in live-limits.json; the JSON file named by
+    PARTITION_LIVE_LIMITS may override any of them. Node reads the same file (live-limits.mjs)."""
+    path=os.environ.get('PARTITION_LIVE_LIMITS') if override is None else override
+    try:
+        defaults=json.loads((Path(root)/LIMITS_FILE).read_text())
+        changes=json.loads(Path(path).read_text()) if path else {}
+    except (OSError,ValueError):raise RuntimeError('live_limits_invalid') from None
+    return merge_limits(defaults,changes)
+
+_loaded=load_limits()
+SESSION=_loaded['session']   # what one connection may use
+UPDATES=_loaded['updates']   # how much public game state may be pushed into a session's context
+# A grant decides how many connections there are. The fixture grant below is the only one this
+# file can mint; a real grant is a count written by the project owner (LIVE.md).
+FIXTURE_GRANT=dict(connections=2,total_usd=.50)
+GRANT_FIELDS=tuple(FIXTURE_GRANT)
+LIMITS={**FIXTURE_GRANT,**SESSION}
 AUTH='partition-live-20261114-v1'
 
 def key():
@@ -35,8 +69,13 @@ def grant_limits(marker):
     return {**LIMITS, 'connections': count, 'total_usd': None}
 
 def validate_ledger(marker, data):
+    """The ledger must belong to the grant and carry the grant's own numbers. What one session may
+    use is not part of a grant: it comes from live-limits.json and is written on each attempt, so a
+    ledger opened under earlier session caps stays valid and keeps its count."""
     limits = grant_limits(marker)
-    if data.get('authorization') != marker['authorization'] or data.get('limits') != limits or not isinstance(data.get('attempts'),list):
+    stored = data.get('limits')
+    if data.get('authorization') != marker['authorization'] or not isinstance(stored,dict) or not isinstance(data.get('attempts'),list) \
+            or any(stored.get(k) != limits[k] for k in GRANT_FIELDS):
         raise RuntimeError('live_ledger_mismatch')
     return limits
 
@@ -90,7 +129,7 @@ class Ledger:
     def reserve(self):
         if len(self.data['attempts'])>=self.limits['connections']:raise RuntimeError('live_authorization_exhausted')
         if not self.grant.get('projectVerified',True):raise RuntimeError('live_project_unverified')
-        self.row={'attempt':len(self.data['attempts'])+1,'reserved_usd':LIMITS['reserve_usd'],
+        self.row={'attempt':len(self.data['attempts'])+1,'reserved_usd':LIMITS['usage_stop_usd'],'limits':{k:LIMITS[k] for k in SESSION},
           'started_at':time.time(),'status':'reserved','source':'offline-fixture' if self.fixture else 'gemini-live',
           'connections':1,'retries':0,'input_seconds':0,'output_seconds':0,'text_bytes':0,'turns':0,'tools':0,'usage':[],
           'estimated_usd':0,'billing':'estimate only; credits and provider invoice unverified'}
@@ -116,7 +155,7 @@ class Ledger:
         thoughts=metadata.get('thoughts_token_count') or 0
         estimate=(prompt*3+(output+thoughts)*12)/1_000_000
         self.row['usage'].append(metadata);self.row['estimated_usd']+=estimate;self.save()
-        if self.row['estimated_usd']>=.15:raise RuntimeError('live_usage_stop')
+        if self.row['estimated_usd']>=LIMITS['usage_stop_usd']:raise RuntimeError('live_usage_stop')
     def finish(self,status):
         if self.row:self.row['status']=status;self.row['ended_at']=time.time();self.save()
     def close(self):self.lock.close()

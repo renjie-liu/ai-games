@@ -112,7 +112,7 @@ function lobby(){
       if(c.modelEnabled)for(const seat of [west,east])seat.add(new Option('真实模型 · 已启用调用','model'));
       if(c.live?.enabled){east.add(new Option('Gemini Live · 语音AI','live'));east.value='live';}
       west.disabled=false;east.disabled=false;
-      $('.scope').textContent=c.live?.enabled?'Gemini Live 由你点击开启麦克风，最多60秒；可能实际计费。':'脚本席位使用固定策略。';
+      $('.scope').textContent=c.live?.enabled?`Gemini Live 由你点击开启麦克风，每段最多 ${c.live.seconds} 秒；可能实际计费。`:'脚本席位使用固定策略。';
     }
     $('#create').disabled=false;
   }

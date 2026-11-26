@@ -1,12 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Room} from './world.mjs';
-import {PublicUpdates,updateTrace,UPDATE_LIMITS as L} from './live-updates.mjs';
+import {PublicUpdates,updateTrace,UPDATE_LIMITS} from './live-updates.mjs';
+// These tests are about the queue's mechanics, so they pin their own small limits instead of
+// following live-limits.json, which sizes a whole game.
+const L=Object.freeze({debounceMs:250,intervalMs:2000,batches:3,events:12,bytes:2400,totalBytes:4800});
 import {LiveHub} from './live.mjs';
 function setup(){
   const room=new Room({west:'human',east:'live'}),job={started:true,ended:false,epoch:0,scope:'scope',speaking:false},sent=[];
   let time=0,next=0;const timers=new Map();
-  const u=new PublicUpdates(room,job,x=>sent.push(x),{now:()=>time,schedule:(fn,delay)=>{timers.set(++next,{fn,at:time+delay});return next;},cancel:id=>timers.delete(id)});
+  const u=new PublicUpdates(room,job,x=>sent.push(x),{limits:L,now:()=>time,schedule:(fn,delay)=>{timers.set(++next,{fn,at:time+delay});return next;},cancel:id=>timers.delete(id)});
   const tick=ms=>{time+=ms;for(const [id,t] of [...timers])if(t.at<=time){timers.delete(id);t.fn();}};
   const command=c=>{const r=room.command('west',c);u.enqueue('west',c,r);return r;};
   return {room,job,sent,u,tick,timers,command};

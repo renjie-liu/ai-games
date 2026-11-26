@@ -1,5 +1,6 @@
 import {SyncStatus} from './live-sync.mjs';
-import {PublicUpdates,updateTrace} from './live-updates.mjs';
+import {PublicUpdates,updateTrace,updateLimits} from './live-updates.mjs';
+import {loadLimits} from './live-limits.mjs';
 import {python,pythonEnv} from './harness-paths.mjs';
 // Local HTTP duplex bridge: authenticated NDJSON downlink + ordered PCM POST uplink.
 // Google WebSocket and credentials exist only in the Python worker.
@@ -10,6 +11,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 const runFile=promisify(execFile);
 const id=()=>randomBytes(16).toString('hex');
+// How long after the worker's own session cap the server ends a session that did not end itself.
+const DEADLINE_GRACE_MS=5000;
 export function runtimeStatus(root,run=spawnSync){
   try{
     const result=run(python,[path.join(root,'live_runtime.py')],{cwd:root,encoding:'utf8',timeout:5000,maxBuffer:4096});
@@ -20,7 +23,12 @@ export function runtimeStatus(root,run=spawnSync){
   return {ready:false,code:'live_runtime_check_failed'};
 }
 export class LiveHub {
-  constructor(root,origin,enabled=false){this.root=root;this.origin=origin;this.enabled=enabled;this.jobs=new Map();this.runtime=enabled?runtimeStatus(root):{ready:false,code:'disabled'};}
+  constructor(root,origin,enabled=false,limits=loadLimits()){
+    this.root=root;this.origin=origin;this.enabled=enabled;this.jobs=new Map();this.runtime=enabled?runtimeStatus(root):{ready:false,code:'disabled'};
+    // One source for every cap (live-limits.json): the worker enforces them, the page shows them.
+    this.session=limits.session;this.updates=updateLimits(limits.updates);
+    this.spawn=spawn; // the one place a worker process is made
+  }
   status(){
     let quota={remaining:0,connectionLimit:0,projectVerified:false,totalUsd:null};
     if(this.enabled){
@@ -28,13 +36,15 @@ export class LiveHub {
       const result=spawnSync(python,[path.join(this.root,'live_budget.py')],{cwd:this.root,encoding:'utf8',timeout:2000,maxBuffer:2048});
       if(result.status===0){try{quota=JSON.parse(result.stdout);}catch{}}
     }
-    return {enabled:this.enabled,runtimeReady:this.runtime.ready,runtimeCode:this.runtime.code,fixture:process.env.PARTITION_LIVE_FIXTURE==='1',model:'gemini-3.8-live',seconds:60,creditsVerified:false,...quota};
+    const s=this.session;
+    return {enabled:this.enabled,runtimeReady:this.runtime.ready,runtimeCode:this.runtime.code,fixture:process.env.PARTITION_LIVE_FIXTURE==='1',model:'gemini-3.8-live',
+      seconds:s.seconds,inputSeconds:s.input_seconds,outputSeconds:s.output_seconds,usageStopUsd:s.usage_stop_usd,creditsVerified:false,...quota};
   }
   get(room){
     if(!this.jobs.has(room.id))this.jobs.set(room.id,{generation:0,scope:id(),epoch:0,tickets:new Map(),started:false,ended:false,speaking:false,stream:null,worker:null,lastSeen:Date.now(),events:[]});
     const j=this.jobs.get(room.id);
-    if(!j.sync)j.sync=new SyncStatus();
-    if(!j.updates)j.updates=new PublicUpdates(room,j,b=>this.write(room,b),{audit:(rows,omitted,row)=>{
+    if(!j.sync)j.sync=new SyncStatus(this.updates);
+    if(!j.updates)j.updates=new PublicUpdates(room,j,b=>this.write(room,b),{limits:this.updates,audit:(rows,omitted,row)=>{
       if(j.sync.accept(row)&&!j.ended)this.emit(room,{type:'sync_status',sync:j.sync.snapshot()});
       if(j.runRoot){try{fs.writeFileSync(path.join(j.runRoot,'live-context-node.json'),JSON.stringify({events:rows,omitted}));}catch{j.auditPersistenceFailed=true;}}
     }});
@@ -82,7 +92,7 @@ export class LiveHub {
       PARTITION_ENDPOINT:`${this.origin}/api/rooms/${room.id}`,PARTITION_SEAT_TOKEN:room.tokens[seat],PARTITION_SEAT:seat,
       PARTITION_RUN_ROOT:j.runRoot,PARTITION_LIVE_SCOPE:j.scope,PARTITION_LIVE_FIXTURE:fixture?'1':'0'};
     delete env.ELEVENLABS_API_KEY;
-    const child=spawn(python,[path.join(this.root,'live_worker.py')],{cwd:this.root,env,stdio:['pipe','pipe','pipe']});j.worker=child;
+    const child=this.spawn(python,[path.join(this.root,'live_worker.py')],{cwd:this.root,env,stdio:['pipe','pipe','pipe']});j.worker=child;
     let pending='';child.stdout.on('data',chunk=>{pending+=chunk;if(pending.length>2000000){this.stop(room,'worker_overflow');return;}
       let at;while((at=pending.indexOf('\n'))>=0){const line=pending.slice(0,at);pending=pending.slice(at+1);try{const e=JSON.parse(line);
         if(e.type==='context_update'){if(j.sync.accept(e))this.emit(room,{type:'sync_status',sync:j.sync.snapshot()});continue;}
@@ -96,7 +106,7 @@ export class LiveHub {
     child.on('exit',()=>this.finish(room,'worker_stopped')); // Do not replace an earlier terminal reason.
     child.once('close',()=>{j.workerClosed=true;});
     j.timer=setInterval(()=>{if(Date.now()-j.lastSeen>6000)this.stop(room,'client_heartbeat_lost');},1000);
-    j.deadline=setTimeout(()=>this.stop(room,'session_deadline'),65000);
+    j.deadline=setTimeout(()=>this.stop(room,'session_deadline'),this.session.seconds*1000+DEADLINE_GRACE_MS);
     room.worker[seat]={status:'running',source:fixture?'offline-fixture':'live'};
   }
   input(room,b){
@@ -130,7 +140,7 @@ export class LiveHub {
     }
     return this.trace(room,html);
   }
-  trace(room,html){const j=this.get(room);return html.replace('</body>',updateTrace(j.updates.rows,j.updates.omitted)+(j.auditPersistenceFailed?'<p>本地同步审计文件写入失败；以下记录仅在当前进程内保留。</p>':'')+'</body>');}
+  trace(room,html){const j=this.get(room);return html.replace('</body>',updateTrace(j.updates.rows,j.updates.omitted,this.updates)+(j.auditPersistenceFailed?'<p>本地同步审计文件写入失败；以下记录仅在当前进程内保留。</p>':'')+'</body>');}
   notify(room,role,command,result){this.get(room).updates.enqueue(role,command,result);}
 
   observe(room,role,scope){

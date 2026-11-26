@@ -35,7 +35,7 @@ class LiveTests(unittest.TestCase):
     def test_conservative_usage_stop_retains_observed_usage(self):
         l=self.ledger();l.reserve();u={'prompt_token_count':1000,'response_token_count':100}
         l.usage(u);self.assertAlmostEqual(l.row['estimated_usd'],.0042)
-        with self.assertRaisesRegex(RuntimeError,'usage_stop'):l.usage({'prompt_token_count':50000})
+        with self.assertRaisesRegex(RuntimeError,'usage_stop'):l.usage({'prompt_token_count':math.ceil(LIMITS['usage_stop_usd']/3e-6)})
         self.assertEqual(len(l.row['usage']),2)
     def test_slim_excludes_other_tokens_events(self):
         v={'role':'east','local':{'own':True},'other_private':'SENTINEL','tokens':'SENTINEL','events':[{'text':'SENTINEL'}],'scene':[{'id':'hatch','name':'传物槽','secret':'SENTINEL'}]}

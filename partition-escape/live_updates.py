@@ -4,24 +4,20 @@ No polling, retries, client creation, private seat reads, or new authorization.
 import asyncio
 import json
 import time
-
-MAX_BATCHES=3
-MAX_BYTES=2400
-MAX_TOTAL_BYTES=4800
-INTERVAL=2.0
+from live_budget import UPDATES  # batches, events, batch_bytes, total_bytes, interval_ms: live-limits.json
 
 def encode(value):return json.dumps(value,ensure_ascii=False,separators=(',',':'))
 def valid_update(u):
     if not isinstance(u,dict) or set(u)!={'rev','events','receipts','public','pending'}:return False
     if type(u['rev']) is not int or u['rev']<1:return False
-    if not isinstance(u['events'],list) or not 1<=len(u['events'])<=12:return False
+    if not isinstance(u['events'],list) or not 1<=len(u['events'])<=UPDATES['events']:return False
     for e in u['events']:
         if not isinstance(e,dict) or set(e)!={'id','seat','type','text'}:return False
         if type(e['id']) is not int or not 1<=e['id']<=u['rev'] or e['seat'] not in ('west','east'):return False
         if e['type'] not in ('clue','action','request','decision') or not isinstance(e['text'],str) or len(e['text'])>500:return False
     if len({e['id'] for e in u['events']})!=len(u['events']):return False
     ids={e['id'] for e in u['events']}
-    if not isinstance(u['receipts'],list) or not 1<=len(u['receipts'])<=12:return False
+    if not isinstance(u['receipts'],list) or not 1<=len(u['receipts'])<=UPDATES['events']:return False
     for r in u['receipts']:
         if not isinstance(r,dict) or set(r)!={'requestId','command','outcome','roomEventIds'}:return False
         if not isinstance(r['requestId'],str) or len(r['requestId'])!=24 or any(x not in '0123456789abcdef' for x in r['requestId']):return False
@@ -34,7 +30,7 @@ def valid_update(u):
         if not isinstance(p,dict) or set(p)!={'id','from','action','label'}:return False
         if not isinstance(p['id'],str) or len(p['id'])!=12 or any(x not in '0123456789abcdef' for x in p['id']):return False
         if p['from'] not in ('west','east') or p['action'] not in ('power-off','open-door','send-key') or not isinstance(p['label'],str) or len(p['label'])>100:return False
-    return len(encode(u).encode())<=MAX_BYTES
+    return len(encode(u).encode())<=UPDATES['batch_bytes']
 
 class ContextUpdates:
     def __init__(self,owner,now=time.monotonic):
@@ -63,8 +59,8 @@ class ContextUpdates:
         if not isinstance(b,dict) or set(b)!={'type','scope','epoch','sequence','update'} or b['type']!='game_update' or type(b['sequence']) is not int or not valid_update(b['update']):
             self.audit('rejected',reason='invalid_packet');return False
         new={**b,'sequences':[b['sequence']]}
-        if not self.sequence<b['sequence']<=MAX_BATCHES:
-            self.audit('not_delivered' if b['sequence']>MAX_BATCHES else 'rejected',new,'batch_limit' if b['sequence']>MAX_BATCHES else 'sequence_replay');return False
+        if not self.sequence<b['sequence']<=UPDATES['batches']:
+            self.audit('not_delivered' if b['sequence']>UPDATES['batches'] else 'rejected',new,'batch_limit' if b['sequence']>UPDATES['batches'] else 'sequence_replay');return False
         if type(b['epoch']) is not int or b['epoch']!=o.epoch or b['scope']!=o.scope or o.closed.is_set():
             self.audit('rejected',new,'closed_or_stale_packet');return False
         self.sequence=b['sequence']
@@ -85,7 +81,7 @@ class ContextUpdates:
             if b and (b['epoch']!=o.epoch or b['scope']!=o.scope):self.rebind();continue
             if not b or o.speaking or o.turn_open or o.tool_busy or not o.tool_queue.empty():
                 await self.changed.wait();continue
-            delay=self.last+INTERVAL-self.now()
+            delay=self.last+UPDATES['interval_ms']/1000-self.now()
             if delay>0:
                 try:await asyncio.wait_for(self.changed.wait(),delay)
                 except TimeoutError:pass
@@ -95,8 +91,8 @@ class ContextUpdates:
             wire=encode({'game_state_update':b['update'],'as_of_rev':b['update']['rev'],'current_state_verified':False,'control_scope':b['scope'],
               'instruction':'Historical public snapshot as_of_rev; may be stale, including pending. No reply/resume request. Preserve waiting. Use observe and a fresh ticket before any action.'})
             size=len(wire.encode())
-            if self.sent>=MAX_BATCHES or self.bytes+size>MAX_TOTAL_BYTES:
-                self.audit('not_delivered',b,'batch_limit' if self.sent>=MAX_BATCHES else 'total_bytes_limit');continue
+            if self.sent>=UPDATES['batches'] or self.bytes+size>UPDATES['total_bytes']:
+                self.audit('not_delivered',b,'batch_limit' if self.sent>=UPDATES['batches'] else 'total_bytes_limit');continue
             self.sent+=1;self.bytes+=size;self.last=self.now()
             self.audit('send_attempt',b)
             try:await o.send_content(wire,False)
