@@ -57,7 +57,8 @@ SYSTEM=('你是隔墙逃脱游戏的东席搭档，用自然简短中文交流�
  '行动要用ticket，每个ticket只能用一次。搭档每说完一句，你会收到observation，里面有当前视图和一个ticket，直接用它行动；每次seat_command的回执也带最新视图和新的ticket，连续操作就用回执里的。手里没有可用ticket时才调用observe。只用允许的type和当前物件/提议id。'
  '工具调用之间不要输出任何文字或解说；全部做完后，只用中文说一两句结果。'
  # What the partner knows about its own room, and how to behave around a shared action.
- 'observe返回的notes是你房间里每个物件的说明，机关变化后会更新。搭档问你那边有什么，就据此回答；每一步都对照notes想清楚它会让你这边发生什么。'
+ '视图里的notes是你房间里每个物件的说明，机关变化后会有新的。搭档问你那边有什么，就据此回答；每一步都对照notes想清楚它会让你这边发生什么。'
+ '同一条notes、shared线索和messages只给你一次：视图里没再出现的，仍然有效。'
  '标了shared的动作和pending里的提议要另一席确认才生效。确认对方的提议前，先想它对你这边的后果：需要准备就先操作自己的机关（提议等待期间你仍然可以操作自己的非shared机关），准备好再accept；现在不能确认就decline并说出还差什么，不要让对方干等。'
  '动作被拒绝时，把回执message里的原因和还缺的条件告诉搭档。'
  '开场先听搭档说话。能直接回答的问题用语音简短回答；需要动手时主动观察并操作自己的物件，再用语音报告结果。'
@@ -85,6 +86,23 @@ class Session:
     # Counts for the public record of a session: how long each utterance was and what was going on
     # when it began, how much the provider transcribed, how long each reply was. Never the words.
     utterance=None;heard_chars=0;reply_bytes=0
+    # What this session has already put in front of the partner. A session keeps its whole context
+    # and every tool round re-reads it, so a fact, clue or message is sent once, not with every view.
+    told=None
+    def fresh(self,view):
+        """The partner's view with what it was already told in this session left out."""
+        if self.told is None:self.told={'notes':set(),'shared':set(),'messages':0}
+        out=slim(view)
+        name=lambda n:(n.get('seat'),n.get('id')) if isinstance(n,dict) else json.dumps(n,ensure_ascii=False)
+        when=lambda m:(m.get('at') or 0) if isinstance(m,dict) else 0
+        notes=[n for n in out.pop('notes',None) or [] if name(n) not in self.told['notes']]
+        shared=[n for n in out.pop('shared',None) or [] if name(n) not in self.told['shared']]
+        messages=[m for m in out.pop('messages',None) or [] if when(m)>self.told['messages']]
+        self.told['notes']|={name(n) for n in notes};self.told['shared']|={name(n) for n in shared}
+        if messages:self.told['messages']=max(when(m) for m in messages)
+        for key,new in (('notes',notes),('shared',shared),('messages',messages)):
+            if new:out[key]=new
+        return out
     def __init__(self,fixture=False):
         self.fixture=fixture;self.api=SeatAPI();self.root=Path(os.environ['PARTITION_RUN_ROOT']);self.root.mkdir(parents=True,exist_ok=True)
         self.seat=os.environ['PARTITION_SEAT'];self.scope=os.environ['PARTITION_LIVE_SCOPE'];self.epoch=0
@@ -112,7 +130,7 @@ class Session:
         if complete:self.turn_open=True
     async def observation(self,scope):
         o=await asyncio.to_thread(self.api.request,'/live-observe',{'scope':scope})
-        if o.get('ok'):o['view']=slim(o['view'])
+        if o.get('ok'):o['view']=self.fresh(o['view'])
         return o
     async def turn_context(self,**said):
         # What the partner is told when the player has finished a turn: the control scope, and a
@@ -161,7 +179,7 @@ class Session:
                 return result,'canceled'
             return {'ok':False,'code':'live_outcome_unknown'},'canceled'
     def tool_result_record(self,a,result):
-        if result.get('view'):result['view']=slim(result['view'])
+        if result.get('view'):result['view']=self.fresh(result['view'])
         self.record('tool_result',call_alias=a,receipt=result.get('receipt'),harness_run=result.get('harness_run'),harness_chunk=result.get('harness_chunk'),reason_status='not_provided')
         emit({'type':'tool','callAlias':a,'receipt':result.get('receipt'),'harnessRun':result.get('harness_run'),'harnessChunk':result.get('harness_chunk')})
     async def tool_loop(self):

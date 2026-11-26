@@ -40,6 +40,29 @@ class LiveTests(unittest.TestCase):
     def test_slim_excludes_other_tokens_events(self):
         v={'role':'east','local':{'own':True},'other_private':'SENTINEL','tokens':'SENTINEL','events':[{'text':'SENTINEL'}],'scene':[{'id':'hatch','name':'传物槽','secret':'SENTINEL'}]}
         self.assertNotIn('SENTINEL',json.dumps(slim(v)))
+    def test_within_a_session_each_fact_clue_and_message_is_sent_once(self):
+        from live_worker import Session
+        s=Session.__new__(Session)
+        note=lambda i:{'id':i,'object':'gate','source':'东席','text':'说明'+i}
+        view={'role':'east','local':{'gateOpen':False},'pending':None,'paused':False,'complete':False,'signals':{},
+              'notes':[note('gate-rule'),note('brake-rule')],'shared':[{'id':'interlock','seat':'west','text':'线索'}],
+              'messages':[{'seat':'west','text':'你好','source':'human','at':10}],
+              'scene':[{'id':'brake','name':'手闸','actions':[{'id':'hold-brake','label':'拉住手闸','shared':False}],'secret':'SENTINEL'}],'tokens':'SENTINEL'}
+        first=s.fresh(view)
+        self.assertEqual([n['id'] for n in first['notes']],['gate-rule','brake-rule']);self.assertEqual(len(first['shared']),1);self.assertEqual(len(first['messages']),1)
+        self.assertNotIn('SENTINEL',json.dumps(first))
+        # Nothing new: the state and what can be done now are all there is to say.
+        again=s.fresh(view)
+        self.assertEqual(set(again),{'role','local','pending','paused','complete','signals','scene'})
+        self.assertEqual(again['scene'][0]['actions'][0]['id'],'hold-brake')
+        # The room changes: only what is new comes with it.
+        later={**view,'local':{'gateOpen':True},'notes':view['notes']+[note('brace-found')],
+               'messages':view['messages']+[{'seat':'west','text':'动力接通了','source':'human','at':20}]}
+        third=s.fresh(later)
+        self.assertEqual([n['id'] for n in third['notes']],['brace-found']);self.assertEqual([m['text'] for m in third['messages']],['动力接通了'])
+        self.assertNotIn('shared',third);self.assertEqual(third['local'],{'gateOpen':True})
+        # A new session starts from nothing told.
+        self.assertEqual(len(Session.__new__(Session).fresh(later)['notes']),3)
     def test_public_index_ignores_private_fields(self):
         from live_trace import page
         data={'events':[{'source':'gemini-live','kind':'tool_result','at_ms':2,'call_alias':'a'*24,'private':'SENTINEL','receipt':{'command':'查看本侧物件','outcome':'recorded','code':'ok','roomEventIds':[2],'private':'SENTINEL'},'harness_chunk':'chunk'}],'audit':{'status':'done','key':'SENTINEL'}}

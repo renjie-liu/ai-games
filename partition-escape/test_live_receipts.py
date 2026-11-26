@@ -54,7 +54,7 @@ class ReceiptTests(unittest.IsolatedAsyncioTestCase):
         return {'id':f'call-{i}','name':'seat_command','args':{'ticket':'t'*32,'type':kind,'id':target}}
     def full_size(self,engine,s):
         r=engine.execute(s.api,'east',s.root,live_worker.alias('call-1'),'t',{'type':'action','id':'send-key'});engine.applied.clear()
-        r['view']=live_worker.slim(r['view']);return len(json.dumps(r,ensure_ascii=False).encode())
+        r['view']=Session.__new__(Session).fresh(r['view']);return len(json.dumps(r,ensure_ascii=False).encode())  # the first view of a session, as the worker sends it
 
     async def test_b1_insufficient_reserve_refuses_before_engine(self):
         e=Engine();s=self.session(e);self.use_text_until(s,RECEIPT_RESERVE_BYTES-1);before=dict(s.ledger.row)
