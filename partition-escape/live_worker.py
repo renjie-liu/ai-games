@@ -81,7 +81,7 @@ class Session:
         self.fixture=fixture;self.api=SeatAPI();self.root=Path(os.environ['PARTITION_RUN_ROOT']);self.root.mkdir(parents=True,exist_ok=True)
         self.seat=os.environ['PARTITION_SEAT'];self.scope=os.environ['PARTITION_LIVE_SCOPE'];self.epoch=0
         self.ledger=Ledger(self.root/'fixture-ledger' if fixture else None,fixture=fixture)
-        self.closed=asyncio.Event();self.session=None;self.reason='closed';self.speaking=False;self.drop_audio=False;self.turn_open=False
+        self.closed=asyncio.Event();self.session=None;self.reason='closed';self.speaking=False;self.drop_audio=False;self.turn_open=False;self.generating=False
         self.calls={};self.canceled=set();self.tool_queue=asyncio.Queue();self.public=[];self.started=time.monotonic()
         self.tool_busy=False;self.updates=ContextUpdates(self)
     def record(self,kind,**fields):
@@ -184,6 +184,12 @@ class Session:
                 await self.respond(call,result,a,tool,execution,held)
             finally:
                 self.tool_busy=False;self.tool_queue.task_done();self.updates.wake()
+    def interrupt_reply(self):
+        # The player cut in. Only a reply that is being spoken right now has audio still on its way,
+        # and the provider ends that reply with `interrupted` or `turn_complete`. A turn that is
+        # merely awaited (the player paused and went on, or typed) has nothing to drop: muting on
+        # that would silence the very reply the player is waiting for.
+        self.drop_audio=self.generating
     async def input_loop(self):
         reader=asyncio.StreamReader(limit=30000);protocol=asyncio.StreamReaderProtocol(reader)
         await asyncio.get_running_loop().connect_read_pipe(lambda:protocol,sys.stdin)
@@ -194,7 +200,7 @@ class Session:
             if kind=='stop':self.stop(node_stop_reason(b.get('reason')));return
             if kind=='game_update':self.updates.offer(b);continue
             if kind=='start':
-                self.speaking=True;self.scope=b['scope'];self.epoch=b['epoch'];self.drop_audio=self.turn_open
+                self.speaking=True;self.scope=b['scope'];self.epoch=b['epoch'];self.interrupt_reply()
                 self.updates.rebind()
                 self.record('interrupted',trigger='local_voice');emit({'type':'interrupted','epoch':self.epoch})
                 if not self.fixture:await self.session.send_realtime_input(activity_start={})
@@ -211,7 +217,7 @@ class Session:
                     from google.genai import types
                     await self.session.send_realtime_input(audio=types.Blob(data=audio,mime_type='audio/pcm;rate=16000'))
             elif kind=='text':
-                self.scope=b['scope'];self.epoch=b['epoch'];self.drop_audio=self.turn_open;self.turn_open=True
+                self.scope=b['scope'];self.epoch=b['epoch'];self.interrupt_reply();self.turn_open=True
                 self.updates.rebind()
                 await self.send_content(json.dumps({'player_message':b['text'],'control_scope':self.scope},ensure_ascii=False),True)
     async def receive_loop(self):
@@ -224,26 +230,26 @@ class Session:
                 if response.tool_call_cancellation:
                     self.canceled.update(response.tool_call_cancellation.ids or [])
                 if response.tool_call:
-                    self.turn_open=True
+                    self.turn_open=True;self.generating=False # waiting for the tool: no audio is on its way
                     for c in response.tool_call.function_calls or []:
                         await self.tool_queue.put({'id':c.id,'name':c.name,'args':c.args or {},'epoch':self.epoch})
                 content=response.server_content
                 if not content:continue
                 if content.interrupted:
-                    self.drop_audio=False;self.record('provider_interrupted');emit({'type':'interrupted','epoch':self.epoch})
+                    self.drop_audio=False;self.generating=False;self.record('provider_interrupted');emit({'type':'interrupted','epoch':self.epoch})
                 for item in (content.model_turn.parts if content.model_turn else []) or []:
                     if getattr(item,'thought',False):continue
                     if item.inline_data and item.inline_data.mime_type.startswith('audio/pcm'):
-                        pcm=item.inline_data.data;self.ledger.debit('output_seconds',len(pcm)/48000);self.turn_open=True
+                        pcm=item.inline_data.data;self.ledger.debit('output_seconds',len(pcm)/48000);self.turn_open=True;self.generating=True
                         if not self.drop_audio and not self.speaking:emit({'type':'audio','data':base64.b64encode(pcm).decode(),'rate':24000,'epoch':self.epoch})
                 for attr,who in [('input_transcription','you'),('output_transcription','partner')]:
                     t=getattr(content,attr,None)
                     if t and t.text:emit({'type':'transcript','speaker':who,'text':t.text[:1000],'epoch':self.epoch})
                 if content.turn_complete:
-                    self.ledger.debit('turns',1);self.turn_open=False;self.drop_audio=False
+                    self.ledger.debit('turns',1);self.turn_open=False;self.drop_audio=False;self.generating=False
                     self.record('turn_complete');emit({'type':'turn_complete'});self.updates.wake()
     async def fixture_loop(self,initial):
-        emit({'type':'ready','source':'offline-fixture','model':'offline-fixture','seconds':60})
+        emit({'type':'ready','source':'offline-fixture','model':'offline-fixture','seconds':LIMITS['seconds']})
         # Artificial PCM tone, never a synthesized voice or environmental recording.
         import math,struct
         pcm=b''.join(struct.pack('<h',int(1500*math.sin(i*2*math.pi*440/24000))) for i in range(4800))
