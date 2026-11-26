@@ -25,6 +25,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {createRequire} from 'node:module';
+import {chartOf,tagHeard,strongEnough} from './west-player.mjs';
 
 // --dry-run does everything before the session (page, room, buttons, voice detection) and spends nothing.
 const dryRun=process.argv.includes('--dry-run'),openingOnly=process.argv.includes('--opening-only');
@@ -39,17 +40,15 @@ const chromePath=env('E2E_CHROME','/Applications/Google Chrome.app/Contents/MacO
 const voice=env('E2E_VOICE','Tingting');                 // any installed voice that speaks the lines' language
 const TURN_MS=Number(env('E2E_TURN_MS','60000'));        // how long to wait for one request to take effect
 const GAP_MS=Number(env('E2E_GAP_MS','800'));            // silence between the two opening sentences: the voice detection ends an utterance after 700 ms
-const runs=path.resolve(env('E2E_RUNS','.runs'));
-// Who the player is. `dictated` knows the whole solution and tells the partner every step in order.
-// `west-only` knows only what the west room shows, names no east object or action, and proposes
-// cutting the power before the partner has done anything about the gate, as a person does.
-const scenario=env('E2E_SCENARIO','dictated');
-// The rule set of the room (room-rules.json). Both players here are written for the room without
-// a choice of supports; a voice room made without naming one would get the server's choice.
-const rules=env('E2E_RULES','classic');        // where the server keeps its run records, to read the worker's own log
+const runs=path.resolve(env('E2E_RUNS','.runs'));         // where the server keeps its run records, to read the worker's own log
+// Who the player is: someone who knows only what the west room shows and proposes cutting the power
+// before the partner has done anything about the gate, as a person does. It has the load chart and
+// the gate's weight; which column of the chart counts it has to hear from the partner, and it
+// decides each support the partner offers by its own sum (west-player.mjs). It never reads the
+// answer from the server.
 const {chromium}=createRequire(import.meta.url)(env('E2E_PLAYWRIGHT','playwright'));
 fs.mkdirSync(out,{recursive:true});
-const OPENING=['你好，我在西间。','请把你那边的黄铜钥匙从传物槽递给我。'];
+const OPENING=['你好，我在西间。我这边有出口铭牌、动力台、上了锁的西门、传物槽，还有一张承重表。','西门要一把黄铜钥匙才能开，你那边有的话请递给我。'];
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const started=Date.now(),at=()=>Math.round((Date.now()-started)/100)/10;
 const log=(...x)=>console.log(String(at()).padStart(6)+'s ',...x);
@@ -159,14 +158,16 @@ try{
 
   // Lobby -> room, through the page's own controls. One tab only: a hidden tab ends voice.
   await page.goto(origin+'/');
-  await page.locator('#rules:enabled').selectOption(rules);
   await page.locator('#create:enabled').click();
   const westLink=await page.locator('#invite a.primary').first().getAttribute('href');
+  const watchKey=new URLSearchParams((await page.locator('#invite a[href^="/watch"]').getAttribute('href')).split('#')[1]).get('key');
   await page.goto(origin+westLink);
   const hash=new URLSearchParams(westLink.split('#')[1]),room=hash.get('room'),key=hash.get('key');
   result.room=room;
-  const api=suffix=>fetch(`${origin}/api/rooms/${room}${suffix}`,{headers:{Authorization:'Bearer '+key}}).then(r=>r.json());
+  const api=(suffix,as=key)=>fetch(`${origin}/api/rooms/${room}${suffix}`,{headers:{Authorization:'Bearer '+as}}).then(r=>r.json());
   const view=()=>api('');
+  // What anyone may know: whether the gate is up. West cannot see it; the checks may.
+  const gateUp=async()=>(await api('',watchKey)).public.gateOpen===true;
   const ui=()=>page.evaluate(()=>{
     const text=s=>document.querySelector(s)?.textContent||'';
     return {state:text('#live-state'),heard:text('#live-you'),partner:text('#live-partner'),receipt:text('#live-result'),
@@ -180,7 +181,8 @@ try{
   }
   const shot=name=>page.screenshot({path:path.join(out,name+'.png')});
   await page.locator('#live-start').waitFor();
-  for(const thing of ['plaque','power','door','hatch']){await page.locator(`[data-object="${thing}"]`).click();await delay(400);}
+  // Look at everything in the west room first, as a player does.
+  for(const thing of (await view()).scene.map(o=>o.id)){await page.locator(`[data-object="${thing}"]`).click();await delay(400);}
 
   const before=await api('/live-status');
   result.limits={seconds:before.seconds,usageStopUsd:before.usageStopUsd};result.connections_before=before.remaining;
@@ -203,9 +205,12 @@ try{
   const sessionStart=Date.now();log('listening:',listening.state,'| microphone requests:',listening.mic);
   await shot('01-listening');
 
+  // Says the lines in order until `reached(view)` is true. `reached` may answer 'next': stop waiting
+  // for this line to work and say the next one (a support the player has just turned down).
   async function turn(name,lines,reached,{gapMs}={}){
     const record={step:name,tries:[]};result.steps.push(record);
-    for(const line of lines.slice(0,3)){
+    // A step's lines may depend on what an earlier step learned.
+    for(const line of (typeof lines==='function'?await lines():lines).slice(0,3)){
       if(/语音已停止|已结束|麦克风关/.test((await ui()).state)){record.ended=(await ui()).state;break;}
       await until(async()=>(await ui()).quiet,30000);   // never talk over the partner by accident
       const start=await ui(),parts=Array.isArray(line)?line:[line];
@@ -214,7 +219,7 @@ try{
       const done=await until(async()=>{
         const u=await ui();if(firstReply===null&&u.played>start.played)firstReply=(Date.now()-spokenAt)/1000;
         return reached(await view());
-      },TURN_MS);
+      },TURN_MS)===true;
       const reachedAt=(Date.now()-spokenAt)/1000;
       await until(async()=>{const u=await ui();return u.played>start.played&&u.quiet;},25000);   // let the reply play out
       const end=await ui();
@@ -241,29 +246,24 @@ try{
     }catch{record.worker_log='not readable from here (set E2E_RUNS to the server\'s .runs folder)';}
     return record;
   }
-  const signal=name=>v=>name in (v.signals||{});
   const press=async selector=>{await page.locator(selector).click();await delay(500);};
-  const dictated=[
-    ['key offered',[OPENING,'请现在把黄铜钥匙递给我。','请递出钥匙。'],
-      v=>v.pending?.action==='send-key',async()=>{
-        await shot('02-key-offered');await press('#accept');await press('#use-key');
-        await press('[data-object="power"]');await press('#inspect [data-action="power-on"]');
-      },{gapMs:GAP_MS,replyRequired:true}],
-    ['brake held',['钥匙我接到了，门锁开了，动力也接通了。请拉住手闸。','请现在拉住手闸。','请拉住手闸，把闸门固定住。'],
-      signal('hold-brake'),()=>press('#inspect [data-action="power-off"]')],
-    ['power-off confirmed',['我提了一个共同动作，切断动力。你拉着手闸，闸门不会落下。请确认这个提议。','请接受切断动力的提议。','请确认切断动力。'],
-      v=>v.local.power===false&&!v.pending,null],
-    ['brace fitted',['动力断了，风扇应该停了。请查看检修风扇，把后面的木撑取出来装好。','请现在取出并安装木撑。','请安装木撑。'],
-      signal('brace'),null],
-    ['brake released',['很好。请松开手闸，看看木撑能不能撑住闸门。','请现在松开手闸。','请松开手闸。'],
-      signal('release-brake'),async()=>{await press('[data-object="door"]');await press('#inspect [data-action="open-door"]');}],
-    ['door confirmed',['我提了一个共同动作，推开西门。请确认这个提议。','请接受推开西门的提议。','请确认推开西门。'],
-      v=>v.local.doorOpen===true,null],
-    ['both outside',['西门开了。请走向共同出口，我们一起出去。','请现在走向共同出口。','请走向共同出口。'],
-      v=>v.complete===true,null],
-  ];
-  const westOnly=[
-    ['key offered',[['你好，我在西间。我这边有出口铭牌、动力台、上了锁的西门和传物槽。','西门要一把黄铜钥匙才能开，你那边有的话请递给我。'],'你那边有钥匙吗？能递给我吗？','请把钥匙从传物槽递过来。'],
+  const known={};
+  const offered=v=>!!v.pending&&v.pending.from==='east'&&v.pending.action.startsWith('brace-');
+  const which=async()=>{
+    const enough=strongEnough(chartOf(await view()),known.tag);
+    return [`你说是${known.tag}牌。按我这张表${known.tag}牌那一列，承重够得上闸重的只有刻着${enough.join('、')}的支撑，别的都不够。其中放得进槽的那一根，请你提议装上，我来确认。`,
+      '我没同意刚才那根，按表它承不住。请换一根放得进槽、承重也够的。','请提议装上那根放得进槽、承重也够的支撑。'];
+  };
+  // The player decides a support the partner offers by its own sum, on the page's own buttons.
+  const decide=async v=>{
+    if(!offered(v))return Object.keys(v.signals||{}).some(name=>name.startsWith('brace-'));
+    const mark=v.pending.label.match(/^装上刻着(.+)的支撑$/)[1],yes=strongEnough(chartOf(v),known.tag).includes(mark);
+    result.offers.push({mark,accepted:yes});await press(yes?'#accept':'#decline');
+    return yes?Object.keys((await view()).signals||{}).some(name=>name.startsWith('brace-')):'next';
+  };
+  result.offers=[];
+  const plan=[
+    ['key offered',[OPENING,'你那边有钥匙吗？能递给我吗？','请把钥匙从传物槽递过来。'],
       v=>v.pending?.action==='send-key',async()=>{
         await shot('02-key-offered');await press('#accept');await press('#use-key');
         await press('[data-object="power"]');await press('#inspect [data-action="power-on"]');
@@ -272,19 +272,23 @@ try{
         result.while_proposal_waits=await page.evaluate(()=>({pending:document.querySelector('#pending')?.innerText.replace(/\n+/g,' | '),
           buttons:[...document.querySelectorAll('#inspect [data-action]')].map(b=>b.dataset.action+(b.disabled?' (disabled)':''))}));
       },{gapMs:GAP_MS,replyRequired:true}],
-    ['power cut with the gate still up',['钥匙收到了，门锁开了，我也接通了动力。我已经提了切断动力，你那边准备好了再确认。',
+    // A partner that is quick offers a support in the same turn in which it confirms the power cut.
+    ['power cut with the gate still up',['钥匙收到了，门锁开了，我也接通了动力。备用电池只有两格，所以我已经提了切断动力，你那边准备好了再确认。',
       '断电后你那边的闸门不能落下来。你先把它固定住，再确认我的提议。','切断动力的提议还在等你，你准备好了吗？还差什么？'],
-      v=>v.local.power===false&&!v.pending&&'hold-brake' in (v.signals||{}),null],
-    ['gate stays up by itself',['动力断了。你那边还要做什么，才能腾出手和我一起离开？','你现在能走开吗？还差什么？','你那边有没有东西可以代替你撑住闸门？'],
-      signal('brace'),async()=>{await press('[data-object="door"]');await press('#inspect [data-action="open-door"]');}],
+      async v=>v.local.power===false&&(!v.pending||offered(v))&&await gateUp(),null],
+    // Once heard, the tag is kept: the partner naming another colour later in passing must not unlearn it.
+    ['tag learned',['动力断了。我这边墙上有一张承重表，按支撑上刻的记号查承重，分几列，读哪一列要看你那边闸轨上检修牌的颜色。那块牌子是什么颜色？',
+      '你那边闸轨上的检修牌是什么颜色？','请只告诉我检修牌的颜色。'],
+      async v=>{known.tag??=tagHeard((await ui()).partner,chartOf(v).tags);return known.tag!=null;},null],
+    ['support in the slot',which,decide,()=>shot('03-support-in')],
+    ['support holds',['支撑装上了。请松手试一试，看它承不承得住。','你松手了吗？支撑承住了吗？','现在闸门还开着吗？'],
+      async v=>'release-brake' in (v.signals||{})&&await gateUp(),
+      async()=>{await press('[data-object="door"]');await press('#inspect [data-action="open-door"]');}],
     ['door confirmed',['我提了推开西门，你那边准备好了就确认。','推开西门的提议还在等你，你准备好了吗？','请确认推开西门。'],
       v=>v.local.doorOpen===true,null],
     ['both outside',['门开了，我们一起走吧。','你可以出来了吗？','我们一起出去吧。'],
       v=>v.complete===true,null],
   ];
-  const plan={dictated,'west-only':westOnly}[scenario];
-  if(!plan)throw Error('unknown E2E_SCENARIO: '+scenario);
-  result.scenario=scenario;
   for(const [name,lines,reached,then,options={}] of plan){
     if(!await turn(name,lines,reached,options)){result.problem=name+' not reached';break;}
     const last=result.steps.at(-1).tries.at(-1);
@@ -295,8 +299,8 @@ try{
     }
     if(then)await then();
   }
-  await shot('03-end');
-  const final=await view();result.complete=final.complete===true;
+  await shot('04-end');
+  const final=await view();result.complete=final.complete===true;result.rating=final.rating??null;
   if(result.complete){
     // Winning must close the microphone by itself: the winning screen covers the stop button.
     const closed=await until(async()=>{const u=await ui();return /已通关/.test(u.state)?u:null;},30000);
@@ -306,7 +310,7 @@ try{
   if(!/已通关|语音已停止|麦克风关/.test((await ui()).state)){
     await page.evaluate(()=>{const b=document.querySelector('#live-stop');if(b&&!b.disabled)b.click();});await delay(1500);
   }
-  await shot('04-after');
+  await shot('05-after');
   const after=await api('/live-status'),end=await ui();
   Object.assign(result,{session_s:+((Date.now()-sessionStart)/1000).toFixed(1),final_state:end.state,reply_audio_s:+end.played.toFixed(2),
     reply_buffers:end.scheduled,microphone_requests:end.mic,connections_after:after.remaining,sync:after.sync,
@@ -317,7 +321,7 @@ try{
   fs.writeFileSync(path.join(out,'result.json'),JSON.stringify(result,null,2));
   await cleanup();
 }
-console.log(JSON.stringify({room:result.room,complete:result.complete,problem:result.problem,session_s:result.session_s,
+console.log(JSON.stringify({room:result.room,complete:result.complete,rating:result.rating,problem:result.problem,session_s:result.session_s,
   reply_audio_s:result.reply_audio_s,closed_after_win:result.closed_after_win,connections:[result.connections_before,result.connections_after],
   console_errors:result.console_errors?.length}));
 process.exit(result.problem?1:0);
