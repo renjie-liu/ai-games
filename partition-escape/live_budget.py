@@ -40,6 +40,7 @@ def load_limits(override=None,root=HERE):
 _loaded=load_limits()
 SESSION=_loaded['session']   # what one connection may use
 UPDATES=_loaded['updates']   # how much public game state may be pushed into a session's context
+SERVER=_loaded['server']     # what the server as a whole allows: how many sessions run side by side
 # A grant decides how many connections there are. The fixture grant below is the only one this
 # file can mint; a real grant is a count written by the project owner (LIVE.md).
 FIXTURE_GRANT=dict(connections=2,total_usd=.50)
@@ -85,19 +86,48 @@ def quota_status(directory):
     limits = validate_ledger(marker, data)
     count = limits['connections']
     return {'connectionLimit': count, 'remaining': max(0, count-len(data['attempts'])),
-            'projectVerified': marker.get('projectVerified', True), 'totalUsd': limits['total_usd']}
+            'projectVerified': marker.get('projectVerified', True), 'totalUsd': limits['total_usd'],
+            'invites': invite_counts(data['attempts'])}
+
+def invite_from_env(environment=None):
+    """The invitation the server started this session under (hosting.mjs), or None on this machine."""
+    environment = os.environ if environment is None else environment
+    name = environment.get('PARTITION_INVITE_NAME')
+    if not name:
+        return None
+    try:
+        return {'name': name, 'connections': int(environment.get('PARTITION_INVITE_CONNECTIONS', ''))}
+    except ValueError:
+        raise RuntimeError('live_invite_invalid') from None
+
+def invite_counts(attempts):
+    """How many connections each invitation has started. An attempt made without one has no name."""
+    counts = {}
+    for row in attempts:
+        if isinstance(row, dict) and isinstance(row.get('invite'), str):
+            counts[row['invite']] = counts.get(row['invite'], 0) + 1
+    return counts
 
 
 class Ledger:
-    def __init__(self,directory=None,fixture=False):
+    """One session's hold on the ledger. Several sessions may run side by side, each a process of
+    its own with a Ledger of its own on the one file:
+     - a session holds one of SERVER['concurrent_sessions'] places for as long as it lives. The
+       place is a lock on a file, so a session that dies gives its place back with it;
+     - every write takes a second, short lock, reads the file as the other sessions left it,
+       changes this session's own row and nothing else, and writes it back.
+    `invite` is the invitation the session was started under on a hosted server: a name and the
+    number of connections that invitation may start. Its count is kept in the same rows."""
+    def __init__(self,directory=None,fixture=False,invite=None):
         if directory is not None and not fixture:raise RuntimeError('alternate_ledger_refused')
+        if invite is not None and not (isinstance(invite,dict) and set(invite)=={'name','connections'} and isinstance(invite['name'],str) and invite['name']
+                and type(invite['connections']) is int and invite['connections']>0):raise RuntimeError('live_invite_invalid')
+        self.invite=invite
         self.directory=Path(directory) if fixture else ROOT/'.live'
         if not fixture and not all((self.directory/n).is_file() for n in ('authorization.json','ledger.json')):
             raise RuntimeError('live_authorization_required')
         self.directory.mkdir(mode=0o700,parents=True,exist_ok=True)
-        self.lock=open(self.directory/'lock','a')
-        try:fcntl.flock(self.lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-        except BlockingIOError:self.lock.close();raise RuntimeError('live_session_already_running') from None
+        self.lock=self.place()
         self.path=self.directory/'ledger.json';self.fixture=fixture
         marker=self.directory/'authorization.json'
         if marker.exists() and not self.path.exists():
@@ -119,21 +149,52 @@ class Ledger:
             raise
         self.row=None;self.held=0 # In-memory text held for receipts of tools already dispatched; never persisted.
         if first:
-            self.save()
+            self.write()
             fd=os.open(marker,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
             with os.fdopen(fd,'w') as f:json.dump({'authorization':AUTH},f)
-    def save(self):
-        temp=self.path.with_suffix('.tmp');fd=os.open(temp,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)
+    def place(self):
+        """One of the server's places for a running session, held until this process ends."""
+        for n in range(SERVER['concurrent_sessions']):
+            lock=open(self.directory/('lock' if n==0 else f'lock.{n}'),'a')
+            try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB);return lock
+            except BlockingIOError:lock.close()
+        raise RuntimeError('live_session_already_running')
+    def write(self):
+        temp=self.path.with_suffix(f'.{os.getpid()}.tmp');fd=os.open(temp,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)
         with os.fdopen(fd,'w') as f:json.dump(self.data,f);f.flush();os.fsync(f.fileno())
         temp.replace(self.path)
+    def change(self,edit):
+        """Reads the ledger as it is now, lets `edit` change it, and writes it, all under the short
+        lock. If `edit` raises, nothing is written."""
+        with open(self.directory/'ledger.lock','a') as guard:
+            fcntl.flock(guard,fcntl.LOCK_EX)
+            self.data=json.loads(self.path.read_text())
+            self.limits=validate_ledger(self.grant,self.data)
+            result=edit(self.data['attempts'])
+            self.write()
+            return result
+    def save(self):
+        """Puts this session's own row into the ledger as the other sessions left it."""
+        def own(attempts):
+            if not self.row:return
+            at=next((i for i,row in enumerate(attempts) if isinstance(row,dict) and row.get('attempt')==self.row['attempt']),None)
+            if at is None:raise RuntimeError('live_ledger_mismatch')
+            attempts[at]=self.row
+        self.change(own)
     def reserve(self):
-        if len(self.data['attempts'])>=self.limits['connections']:raise RuntimeError('live_authorization_exhausted')
-        if not self.grant.get('projectVerified',True):raise RuntimeError('live_project_unverified')
-        self.row={'attempt':len(self.data['attempts'])+1,'reserved_usd':LIMITS['usage_stop_usd'],'limits':{k:LIMITS[k] for k in SESSION},
-          'started_at':time.time(),'status':'reserved','source':'offline-fixture' if self.fixture else 'gemini-live',
-          'connections':1,'retries':0,'input_seconds':0,'output_seconds':0,'text_bytes':0,'turns':0,'tools':0,'usage':[],
-          'estimated_usd':0,'billing':'estimate only; credits and provider invoice unverified'}
-        self.data['attempts'].append(self.row);self.save();return self.row
+        def take(attempts):
+            # Counted on the file as it is at this moment: another session may have taken the last one.
+            if len(attempts)>=self.limits['connections']:raise RuntimeError('live_authorization_exhausted')
+            if not self.grant.get('projectVerified',True):raise RuntimeError('live_project_unverified')
+            if self.invite and invite_counts(attempts).get(self.invite['name'],0)>=self.invite['connections']:
+                raise RuntimeError('live_invite_exhausted')
+            self.row={'attempt':len(attempts)+1,'reserved_usd':LIMITS['usage_stop_usd'],'limits':{k:LIMITS[k] for k in SESSION},
+              'started_at':time.time(),'status':'reserved','source':'offline-fixture' if self.fixture else 'gemini-live',
+              'connections':1,'retries':0,'input_seconds':0,'output_seconds':0,'text_bytes':0,'turns':0,'tools':0,'usage':[],
+              'estimated_usd':0,'billing':'estimate only; credits and provider invoice unverified',
+              **({'invite':self.invite['name']} if self.invite else {})}
+            attempts.append(self.row);return self.row
+        return self.change(take)
     def available(self,field):
         return LIMITS[field]-self.row[field]-(self.held if field=='text_bytes' else 0)
     def debit(self,field,amount):

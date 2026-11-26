@@ -16,5 +16,11 @@
     "events": 12,
     "batch_bytes": 2400,
     "total_bytes": 96000
+  },
+  "server": {
+    "concurrent_sessions": 1,
+    "heartbeat_lost_ms": 6000,
+    "stream_keepalive_ms": 15000,
+    "quota_refresh_ms": 2000
   }
 }

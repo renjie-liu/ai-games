@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import sys
 import time
-from live_budget import Ledger,LIMITS,MODEL,key
+from live_budget import Ledger,LIMITS,MODEL,invite_from_env,key
 from live_harness import execute
 from live_trace import write as write_public_index
 from live_updates import ContextUpdates
@@ -116,7 +116,7 @@ class Session:
     def __init__(self,fixture=False):
         self.fixture=fixture;self.api=SeatAPI();self.root=Path(os.environ['PARTITION_RUN_ROOT']);self.root.mkdir(parents=True,exist_ok=True)
         self.seat=os.environ['PARTITION_SEAT'];self.scope=os.environ['PARTITION_LIVE_SCOPE'];self.epoch=0
-        self.ledger=Ledger(self.root/'fixture-ledger' if fixture else None,fixture=fixture)
+        self.ledger=Ledger(self.root/'fixture-ledger' if fixture else None,fixture=fixture,invite=invite_from_env())
         self.closed=asyncio.Event();self.session=None;self.reason='closed';self.speaking=False;self.drop_audio=False;self.turn_open=False;self.generating=False
         self.calls={};self.canceled=set();self.tool_queue=asyncio.Queue();self.public=[];self.started=time.monotonic()
         self.tool_busy=False;self.updates=ContextUpdates(self)
