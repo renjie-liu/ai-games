@@ -43,7 +43,10 @@ const runs=path.resolve(env('E2E_RUNS','.runs'));
 // Who the player is. `dictated` knows the whole solution and tells the partner every step in order.
 // `west-only` knows only what the west room shows, names no east object or action, and proposes
 // cutting the power before the partner has done anything about the gate, as a person does.
-const scenario=env('E2E_SCENARIO','dictated');        // where the server keeps its run records, to read the worker's own log
+const scenario=env('E2E_SCENARIO','dictated');
+// The rule set of the room (room-rules.json). Both players here are written for the room without
+// a choice of supports; a voice room made without naming one would get the server's choice.
+const rules=env('E2E_RULES','classic');        // where the server keeps its run records, to read the worker's own log
 const {chromium}=createRequire(import.meta.url)(env('E2E_PLAYWRIGHT','playwright'));
 fs.mkdirSync(out,{recursive:true});
 const OPENING=['你好，我在西间。','请把你那边的黄铜钥匙从传物槽递给我。'];
@@ -156,6 +159,7 @@ try{
 
   // Lobby -> room, through the page's own controls. One tab only: a hidden tab ends voice.
   await page.goto(origin+'/');
+  await page.locator('#rules:enabled').selectOption(rules);
   await page.locator('#create:enabled').click();
   const westLink=await page.locator('#invite a.primary').first().getAttribute('href');
   await page.goto(origin+westLink);

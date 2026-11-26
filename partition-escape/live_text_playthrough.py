@@ -19,6 +19,7 @@ import argparse
 import base64
 import json
 import queue
+import re
 import threading
 import time
 import wave
@@ -28,19 +29,41 @@ import httpx
 
 TURN_TIMEOUT = 60      # seconds to wait for the partner to finish a turn
 STOP_MARGIN = 20       # stop this long before the session's own cap
+# The rule set (room-rules.json) each player is written for. A voice room made without naming one
+# gets the server's choice, which these players' lines and checks would not fit.
+RULES_FOR = {'dictated': 'classic', 'proposal-first': 'classic', 'west-only': 'classic', 'supports': 'standard'}
+
+
+def chart_of(view):
+    """What the west room says about supports: the gate's weight, the tags the table has a column
+    for, and each mark's rating under each tag. Read from the player's own notes, nothing else."""
+    notes = {n['object']: n for n in view['notes']}
+    weight = int(re.search(r'自重 (\d+) 公斤', notes['plaque']['text']).group(1))
+    table = notes['chart']['table']
+    tags = [column.removesuffix('牌') for column in table['columns'][1:]]
+    return weight, tags, {row[0]: dict(zip(tags, row[1:])) for row in table['rows']}
+
+
+def tag_heard(said, tags):
+    """The one tag colour the partner named, or None when it named none or more than one.
+    The colour has to come as a colour ("黄色", "黄牌"): the brass key is "黄铜" and is not a tag."""
+    named = [tag for tag in tags if tag + '色' in said or tag + '牌' in said]
+    return named[0] if len(named) == 1 else None
 
 
 class Player:
-    def __init__(self, origin, out, fixture=False, turn_timeout=TURN_TIMEOUT, scenario='dictated'):
+    def __init__(self, origin, out, fixture=False, turn_timeout=TURN_TIMEOUT, scenario='dictated', rules=None):
         self.scenario = scenario
+        self.rules = rules or RULES_FOR[scenario]
         self.fixture = fixture
         self.turn_timeout = turn_timeout
         self.out = Path(out)
         self.out.mkdir(parents=True, exist_ok=True)
         self.origin = origin
         self.http = httpx.Client(base_url=origin, timeout=15, trust_env=False, headers={'Origin': origin})
-        room = self.http.post('/api/rooms', json={'controllers': {'west': 'human', 'east': 'live'}})
-        room.raise_for_status()
+        room = self.http.post('/api/rooms', json={'controllers': {'west': 'human', 'east': 'live'}, 'rules': self.rules})
+        if room.status_code != 201:
+            raise SystemExit(f'not started, no connection spent: the room was refused ({room.text.strip()})')
         room = room.json()
         self.room = room['id']
         self.path = '/api/rooms/' + self.room
@@ -139,7 +162,8 @@ class Player:
         """Say the lines in order until `reached(view)` holds. Returns whether it did."""
         record = {'step': name, 'tries': []}
         self.steps.append(record)
-        for line in lines:
+        # A step's lines may depend on what an earlier step learned.
+        for line in (lines() if callable(lines) else lines):
             if self.closed:
                 break
             record['tries'].append(self.tell(line))
@@ -162,8 +186,9 @@ class Player:
         threading.Thread(target=self.read, args=(ready, seconds), daemon=True).start()
         if not ready.wait(10):
             raise SystemExit('not started, no connection spent: the local stream did not open')
-        for thing in ('plaque', 'power', 'door', 'hatch'):
-            self.button({'type': 'inspect', 'id': thing})
+        # Look at everything in the west room first, as a player does; which things there are depends on the rules.
+        for thing in self.view()['scene']:
+            self.button({'type': 'inspect', 'id': thing['id']})
         self.live('start', {'fixture': self.fixture})
         self.started = time.monotonic()
         threading.Thread(target=self.beat, daemon=True).start()
@@ -275,6 +300,59 @@ class Player:
              lambda v: v.get('complete') is True, None),
         ]
 
+    def plan_supports(self):
+        """The room with a battery and a choice of supports, played by someone who knows only the
+        west room and proposes the power cut first. The player has the table and the gate's weight;
+        which column counts and which supports fit it has to hear from the partner. It decides each
+        support the partner offers by its own sum, and never reads the answer from the server."""
+        signal = lambda name: lambda v: name in v.get('signals', {})
+        def key_power_propose():
+            pending = self.view()['pending']
+            self.button({'type': 'accept', 'id': pending['id']})
+            self.button({'type': 'action', 'id': 'unlock'})
+            self.button({'type': 'action', 'id': 'power-on'})
+            self.button({'type': 'action', 'id': 'power-off'})
+        def tag():
+            _, tags, _ = chart_of(self.view())
+            asked = [s for s in self.steps if s['step'] in ('tag learned', 'support in the slot')]
+            return tag_heard(''.join(t['partner_said'] for s in asked for t in s['tries']), tags)
+        def strong_enough(mark):
+            weight, _, table = chart_of(self.view())
+            return table[mark][tag()] >= weight
+        def which():
+            weight, _, table = chart_of(self.view())
+            enough = [mark for mark, by_tag in table.items() if by_tag[tag()] >= weight]
+            return [f'你说是{tag()}牌。按我这张表{tag()}牌那一列，承重够得上闸重的只有刻着{"、".join(enough)}的支撑，别的都不够。'
+                    '其中放得进槽的那一根，请你提议装上，我来确认。',
+                    '我没同意刚才那根：按表它承不住。请换一根放得进槽、承重也够的。',
+                    '装支撑的提议我还没有看到。你那边还差什么？', '请提议装上那根放得进槽、承重也够的支撑。']
+        def decided(view):
+            pending = view.get('pending')
+            if pending and pending['from'] == 'east' and pending['action'].startswith('brace-'):
+                mark = re.fullmatch(r'装上刻着(.+)的支撑', pending['label']).group(1)
+                self.button({'type': 'accept' if strong_enough(mark) else 'decline', 'id': pending['id']})
+                view = self.view()
+            return any(name.startswith('brace-') for name in view.get('signals', {}))
+        return [
+            ('key offered', ['你好，我在西间。我这边有出口铭牌、动力台、上了锁的西门、传物槽，还有一张承重表。西门要一把黄铜钥匙才能开，你那边有的话请递给我。',
+                             '你那边有钥匙吗？能递给我吗？', '请把钥匙从传物槽递过来。'],
+             lambda v: (v.get('pending') or {}).get('action') == 'send-key', key_power_propose),
+            ('power cut with the gate still up', ['钥匙收到了，门锁开了，我也接通了动力。备用电池只有两格，所以我已经提了切断动力，你那边准备好了再确认。',
+                                                  '断电后你那边的闸门不能落下来。你先把它固定住，再确认我的提议。', '切断动力的提议还在等你，你准备好了吗？还差什么？'],
+             lambda v: v['local']['power'] is False and not v.get('pending') and self.public()['gateOpen'] is True, None),
+            ('tag learned', ['动力断了。我这边墙上有一张承重表，按支撑上刻的记号查承重，分几列，读哪一列要看你那边闸轨上检修牌的颜色。那块牌子是什么颜色？',
+                             '你那边闸轨上的检修牌是什么颜色？', '请只告诉我检修牌的颜色。'],
+             lambda v: tag() is not None, None),
+            ('support in the slot', which, decided, None),
+            ('support holds', ['支撑装上了。请松手试一试，看它承不承得住。', '你松手了吗？支撑承住了吗？', '现在闸门还开着吗？'],
+             lambda v: 'release-brake' in v.get('signals', {}) and self.public()['gateOpen'] is True,
+             lambda: self.button({'type': 'action', 'id': 'open-door'})),
+            ('door confirmed', ['我提了推开西门，你那边准备好了就确认。', '推开西门的提议还在等你，你准备好了吗？', '请确认推开西门。'],
+             lambda v: v['local']['doorOpen'] is True, None),
+            ('both outside', ['门开了，我们一起走吧。', '你可以出来了吗？', '我们一起出去吧。'],
+             lambda v: v.get('complete') is True, None),
+        ]
+
     def finish(self, status, problem):
         if not self.closed:
             try:
@@ -288,8 +366,8 @@ class Player:
         usage = [e['estimatedUsd'] for e in self.events if e['type'] == 'usage']
         audit = next((e.get('audit') for e in self.events if e['type'] == 'closed' and e.get('audit')), None)
         result = {'source': 'offline-fixture rehearsal of this script, no model' if self.fixture else
-                  'real-gemini-live, typed lines, no microphone', 'scenario': self.scenario, 'room': self.room,
-                  'complete': public.get('complete'), 'problem': problem, 'closed': self.closed,
+                  'real-gemini-live, typed lines, no microphone', 'scenario': self.scenario, 'rules': self.rules, 'room': self.room,
+                  'complete': public.get('complete'), 'rating': public.get('rating'), 'problem': problem, 'closed': self.closed,
                   'elapsed_s': self.at(), 'turns': self.turns, 'partner_audio_s': round(len(self.pcm) / 48000, 2),
                   'estimated_usd': usage[-1] if usage else None, 'audit': audit,
                   'limits': {k: status.get(k) for k in ('seconds', 'inputSeconds', 'outputSeconds', 'usageStopUsd')},
@@ -301,7 +379,7 @@ class Player:
             w.setsampwidth(2)
             w.setframerate(24000)
             w.writeframes(bytes(self.pcm))
-        print(json.dumps({k: result[k] for k in ('room', 'complete', 'problem', 'closed', 'elapsed_s', 'turns',
+        print(json.dumps({k: result[k] for k in ('room', 'rules', 'complete', 'rating', 'problem', 'closed', 'elapsed_s', 'turns',
                                                  'partner_audio_s', 'estimated_usd', 'connections_before',
                                                  'connections_after')}, ensure_ascii=False), flush=True)
         return result
@@ -316,11 +394,12 @@ if __name__ == '__main__':
     parser.add_argument('--fixture', action='store_true',
                         help="rehearse this script's plumbing against a server started with PARTITION_LIVE_FIXTURE=1: no model, nothing spent")
     parser.add_argument('--turn-timeout', type=float, default=TURN_TIMEOUT)
-    parser.add_argument('--scenario', choices=('dictated', 'proposal-first', 'west-only'), default='dictated',
+    parser.add_argument('--scenario', choices=tuple(RULES_FOR), default='dictated',
                         help='who the player is: one who dictates every step, one who proposes before the partner is ready, '
-                             'or one who knows only the west room')
+                             'one who knows only the west room, or that last one in a room with a battery and a choice of supports')
+    parser.add_argument('--rules', help='the rule set of the room (room-rules.json); default: the one the scenario is written for')
     arguments = parser.parse_args()
     if not arguments.spend_one_connection and not arguments.fixture:
         raise SystemExit('refused: this makes a real Gemini Live connection. Pass --spend-one-connection '
                          'once the project owner has approved it, or --fixture to rehearse offline.')
-    Player(arguments.origin, arguments.out, arguments.fixture, arguments.turn_timeout, arguments.scenario).play()
+    Player(arguments.origin, arguments.out, arguments.fixture, arguments.turn_timeout, arguments.scenario, arguments.rules).play()
