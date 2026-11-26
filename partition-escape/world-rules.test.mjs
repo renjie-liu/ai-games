@@ -144,4 +144,18 @@ test('the table cannot be handed across whole; the other clues still can',()=>{
   ok(r,'west',{type:'share',id:'interlock'});ok(r,'east',{type:'share',id:'gate-rule'});
   assert.deepEqual(r.shared.map(n=>n.id),['interlock','gate-rule']);
 });
+// West cannot see the gate. What it hears through the wall has to say whether the support held.
+test('what the other seat hears says when the gate came down or went up',()=>{
+  const r=play(make(),[['west','power-on']]);
+  const heard=()=>r.view('west').events.filter(e=>e.type==='action').at(-1).text;
+  assert.match(heard(),/闸门升起/);
+  play(r,[['east','hold-brake']]);assert.match(heard(),/机关动作/);
+  play(r,[['east','send-key'],['west','unlock'],['west','power-off'],['east',weak(r)],['east','release-brake']]);
+  assert.match(heard(),/^东席 · 松开手闸。.*闸门落下/);
+  play(r,[['west','power-on'],['east','hold-brake'],['west','power-off'],['east',right(r)],['east','release-brake']]);
+  assert.match(heard(),/^东席 · 松开手闸。墙内传来机关动作的声音。$/);
+  // The same in a room without a rule set.
+  const plain=play(new Room(HUMANS),[['west','power-on'],['west','power-off']]);
+  assert.match(plain.view('east').events.filter(e=>e.type==='action').at(-1).text,/闸门落下/);
+});
 

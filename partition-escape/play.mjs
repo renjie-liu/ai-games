@@ -60,8 +60,10 @@ function renderPending(){
   const p=view.pending,area=$('#pending'),hadFocus=area.contains(document.activeElement);
   const receivingKey=p?.action==='send-key'&&view.role==='west'&&p.from==='east';
   const useKey=!p&&view.role==='west'&&view.local.keyHere&&!view.local.unlocked&&!view.complete;
-  const acceptLabel=receivingKey?'接过黄铜钥匙':'我准备好了';
-  const html=p?`<section class="pending" role="region" aria-labelledby="pending-title" data-id="${p.id}"><div><h2 id="pending-title">${receivingKey?'东席正从传物槽递来钥匙':p.from===view.role?'共同动作 · 等待搭档':'搭档需要你确认'}</h2><p>${esc(p.label)} · ${p.from===view.role?'你可以撤回，继续探索。':'准备好再同意，也可以先等等。'}</p></div><div class="pending-actions">${p.from!==view.role?`<button id="accept" class="primary">${acceptLabel}</button><button id="decline">先等等</button>`:'<button id="cancel-proposal">撤回提议</button>'}</div></section>`:useKey?'<section class="pending"><h2>黄铜钥匙已在你手中</h2><button id="use-key" class="primary">用钥匙打开西门门锁</button></section>':'';
+  // Which support goes in is this seat's call: it holds the table.
+  const choosing=!!p&&p.from!==view.role&&/^brace-\d+$/.test(p.action);
+  const acceptLabel=receivingKey?'接过黄铜钥匙':choosing?'同意装这根':'我准备好了';
+  const html=p?`<section class="pending" role="region" aria-labelledby="pending-title" data-id="${p.id}"><div><h2 id="pending-title">${receivingKey?'东席正从传物槽递来钥匙':p.from===view.role?'共同动作 · 等待搭档':'搭档需要你确认'}</h2><p>${esc(p.label)} · ${p.from===view.role?'你可以撤回，继续探索。':choosing?'对照承重表和闸重再决定；不对就先等等。':'准备好再同意，也可以先等等。'}</p></div><div class="pending-actions">${p.from!==view.role?`<button id="accept" class="primary">${acceptLabel}</button><button id="decline">先等等</button>`:'<button id="cancel-proposal">撤回提议</button>'}</div></section>`:useKey?'<section class="pending"><h2>黄铜钥匙已在你手中</h2><button id="use-key" class="primary">用钥匙打开西门门锁</button></section>':'';
   if(area.innerHTML===html)return;
   const isNew=p&&area.firstElementChild?.dataset.id!==p.id;
   if(isNew)pendingFocus=document.activeElement;
@@ -84,14 +86,15 @@ function command(c){
   };
   commandTail=commandTail.then(perform,perform);return commandTail;
 }
-async function createRoom(controllers){
-  const response=await fetch('/api/rooms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({controllers})});
+async function createRoom(controllers,rules){
+  // Without `rules` the server picks the rule set by the kind of room.
+  const response=await fetch('/api/rooms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rules?{controllers,rules}:{controllers})});
   const result=await response.json();
   if(!response.ok)throw Error(result.error||'创建房间失败');
   return result;
 }
 function lobby(){
-  app.innerHTML=`<header class="topbar">${brand}<span class="badge">LOCAL PROTOTYPE / 01</span></header><main class="lobby"><div class="lobby-grid"><section><div class="eyebrow">一堵墙 · 两个房间 · 同一个出口</div><h1>你看不到的，<br><em>另一侧看得见。</em></h1><p class="intro">先别急着开你的门。查看自己的机关，把发现告诉墙后的人，一起找到离开的办法。</p><div class="setup"><div class="eyebrow">选择这次合作</div><div class="seats"><label class="seat-choice"><span>01 / 西席 · 动力与出口</span><select id="west" disabled></select></label><label class="seat-choice"><span>02 / 东席 · 检修与闸门</span><select id="east" disabled></select></label></div><button class="primary" id="create" disabled>创建这次合作 ↗</button><p class="scope">正在读取本机可用席位…</p><div id="invite" aria-live="polite"></div></div></section><div class="preview" id="preview"><div class="preview-label"><span>WEST / 暖光</span><span>两侧线索各自私有</span><span>EAST / 冷光</span></div></div></div><div class="feature-row"><span>◈ 固定规则，真实机关</span><span>↔ 交换发现，商量行动</span><span>↶ 错了可以调整，没有突然失败</span></div></main>`;
+  app.innerHTML=`<header class="topbar">${brand}<span class="badge">LOCAL PROTOTYPE / 01</span></header><main class="lobby"><div class="lobby-grid"><section><div class="eyebrow">一堵墙 · 两个房间 · 同一个出口</div><h1>你看不到的，<br><em>另一侧看得见。</em></h1><p class="intro">先别急着开你的门。查看自己的机关，把发现告诉墙后的人，一起找到离开的办法。</p><div class="setup"><div class="eyebrow">选择这次合作</div><div class="seats"><label class="seat-choice"><span>01 / 西席 · 动力与出口</span><select id="west" disabled></select></label><label class="seat-choice"><span>02 / 东席 · 检修与闸门</span><select id="east" disabled></select></label><label class="seat-choice rules-choice"><span>03 / 规则</span><select id="rules" disabled></select></label></div><button class="primary" id="create" disabled>创建这次合作 ↗</button><p class="scope">正在读取本机可用席位…</p><div id="invite" aria-live="polite"></div></div></section><div class="preview" id="preview"><div class="preview-label"><span>WEST / 暖光</span><span>两侧线索各自私有</span><span>EAST / 冷光</span></div></div></div><div class="feature-row"><span>◈ 固定规则，真实机关</span><span>↔ 交换发现，商量行动</span><span>↶ 错了可以调整，没有突然失败</span></div></main>`;
   async function loadSeats(){
     const response=await fetch('/api/capabilities');
     if(!response.ok)throw Error('capabilities unavailable');
@@ -114,6 +117,16 @@ function lobby(){
       west.disabled=false;east.disabled=false;
       $('.scope').textContent=c.live?.enabled?`Gemini Live 由你点击开启麦克风，每段最多 ${c.live.seconds} 秒；可能实际计费。`:'脚本席位使用固定策略。';
     }
+    // Which rules: the server's choice for this kind of room unless the organiser picks another.
+    const rules=$('#rules');let picked=false;
+    for(const set of c.rules.sets)rules.add(new Option([set.title,set.cells?`备用电池每组 ${set.cells} 格`:'',set.choice?'支撑要挑':'一根木撑'].filter(Boolean).join(' · '),set.name));
+    const fit=()=>{
+      const seats=[west.value,east.value],scripted=seats.some(v=>v==='script'||v==='model');
+      // A scripted or model seat knows one brace only.
+      for(const option of rules.options)option.disabled=scripted&&c.rules.sets.find(set=>set.name===option.value).choice;
+      if(!picked||rules.selectedOptions[0]?.disabled)rules.value=c.rules.rooms[seats.includes('live')?'live':'other'];
+    };
+    west.onchange=east.onchange=fit;rules.onchange=()=>{picked=true;};fit();rules.disabled=false;
     $('#create').disabled=false;
   }
   loadSeats().catch(()=>{$('.scope').textContent='无法读取席位配置，请刷新页面。';});
@@ -121,7 +134,7 @@ function lobby(){
   $('#create').onclick=async()=>{
     const b=$('#create');b.disabled=true;b.textContent='正在接通两侧…';
     try{
-      const d=await createRoom({west:$('#west').value,east:$('#east').value});
+      const d=await createRoom({west:$('#west').value,east:$('#east').value},$('#rules').value);
       $('#invite').innerHTML=`<div class="invite"><strong>房间已准备好</strong><p class="small">这是组织者入口。把各席链接交给对应玩家；玩家页面只能看到自己的房间。观众只看公开事件与建筑机位。</p>${Object.entries(d.links).filter(([,u])=>u).map(([s,u])=>`<a class="button ${s==='watch'?'':'primary'}" href="${esc(u)}" target="_blank" rel="noopener">${s==='watch'?'打开只读观众':'进入'+seatName[s]} ↗</a>`).join('')}<p class="small">邀请第二位真人：右键对应入口复制链接。服务限本机；同机两个独立标签页可玩。远程联网尚未实现。</p></div>`;
     }catch(e){$('#invite').textContent=e.message;}finally{b.disabled=false;b.textContent='再开一个房间';}
   };
@@ -153,6 +166,7 @@ function layout(){
 async function selectObject(id){
   selected=id;detailMessage='正在查看这个物件…';tab='objects';scene.highlight(id);renderPanel();const r=await command({type:'inspect',id});if(r&&selected===id){detailMessage=r.message;previousRender='';renderPanel();if(matchMedia('(max-width: 680px)').matches)$('#inspect').scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});}
 }
+const factBody=f=>f.table?`<p>${esc(f.table.caption)}</p><table class="fact-table"><thead><tr>${f.table.columns.map(c=>`<th scope="col">${esc(c)}</th>`).join('')}</tr></thead><tbody>${f.table.rows.map(r=>`<tr>${r.map((c,i)=>i?`<td>${esc(c)}</td>`:`<th scope="row">${esc(c)}</th>`).join('')}</tr>`).join('')}</tbody></table>`:`<p>${esc(f.text)}</p>`;
 function renderPanel(){
   if(view.role==='watch')return;
   document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
@@ -164,11 +178,11 @@ function renderPanel(){
     if(!o)html='<div class="eyebrow">从一个小发现开始</div><h2>墙挡住了视线，<br>挡不住合作。</h2><p>查看一个物件，看看它能做什么。你不需要先读完教程。</p><p class="small">你无法操作对面的机关。把自己的发现发过去，让对面也参与下一步。</p>';
     else{
       const notes=view.notes.filter(n=>n.object===o.id),f=notes.at(-1);
-      html=`<div class="eyebrow">我看到 / ${seatName[view.role]}</div><h2>${esc(o.name)}</h2><p>${esc(f?.text||detailMessage)}</p>${f?`<button data-share="${esc(f.id)}" class="ghost">↗ 把这条发现告诉搭档</button>`:''}<div class="actions">${o.actions.map(a=>`<button data-action="${a.id}" ${view.paused||view.complete||(view.pending&&a.shared)?'disabled':''}>${esc(a.label)} <span aria-hidden="true">→</span></button>`).join('')}</div>`;
+      html=`<div class="eyebrow">我看到 / ${seatName[view.role]}</div><h2>${esc(o.name)}</h2>${f?factBody(f):`<p>${esc(detailMessage)}</p>`}${f&&!f.table?`<button data-share="${esc(f.id)}" class="ghost">↗ 把这条发现告诉搭档</button>`:f?'<p class="small">这张表只能自己看。需要的数字，说给搭档听。</p>':''}<div class="actions">${o.actions.map(a=>`<button data-action="${a.id}" ${view.paused||view.complete||(view.pending&&a.shared)?'disabled':''}>${esc(a.label)} <span aria-hidden="true">→</span></button>`).join('')}</div>`;
     }
   }else if(tab==='notes'){
     const cards=[...view.notes.map(n=>({...n,mine:true})),...view.shared.filter(n=>n.seat!==view.role)];
-    html='<div class="eyebrow">只记录真实发现</div><h2>线索本</h2>'+(cards.length?cards.map(n=>`<article class="clue-card"><span class="source">${n.mine?'我看到':'搭档分享 / '+esc(n.source)}</span><p>${esc(n.text)}</p>${n.mine?`<button data-share="${esc(n.id)}">分享这条线索 ↗</button>`:''}</article>`).join(''):'<p>查看物件后，重要发现会留在这里。</p>');
+    html='<div class="eyebrow">只记录真实发现</div><h2>线索本</h2>'+(cards.length?cards.map(n=>`<article class="clue-card"><span class="source">${n.mine?'我看到':'搭档分享 / '+esc(n.source)}</span>${factBody(n)}${n.mine&&!n.table?`<button data-share="${esc(n.id)}">分享这条线索 ↗</button>`:''}</article>`).join(''):'<p>查看物件后，重要发现会留在这里。</p>');
   }else html='<div class="eyebrow">可以随时回看</div><h2>对讲记录</h2>'+view.messages.map(m=>`<article class="clue-card"><span class="source">${seatName[m.seat]} · ${kindName[m.source]}</span><p>${esc(m.text)}</p></article>`).join('')+'<h2>机关动静</h2>'+view.events.filter(e=>['action','request','decision'].includes(e.type)).map(e=>`<article class="clue-card"><span class="source">#${e.id} · ${seatName[e.seat]} · ${kindName[e.source]}</span><p>${esc(e.text)}</p></article>`).join('');
   if(html!==previousRender){$('#inspect').innerHTML=html;previousRender=html;document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>command({type:'action',id:b.dataset.action}));document.querySelectorAll('[data-share]').forEach(b=>b.onclick=()=>command({type:'share',id:b.dataset.share}));if(focused)(document.querySelector(`[data-action="${focused}"]`)||document.querySelector('.actions button')||document.querySelector(`[data-object="${selected}"]`))?.focus({preventScroll:true});}
 }
@@ -176,7 +190,7 @@ function render(){
   ttsClient?.update();
   liveClient?.update();
   scene.update(view);
-  const l=view.local;$('#scene-state').textContent=view.role==='watch'?`公开机关 · 动力：${view.public.power?'开启':'关闭'} · 西门：${view.public.doorOpen?'开启':'关闭'} · 东闸：${view.public.gateOpen?'升起':'落下'}`:view.role==='west'?`动力：${l.power?'开启':'关闭'} · 钥匙：${l.unlocked?'已插入门锁':l.keyHere?'已收到':view.pending?.action==='send-key'?'等待你接过':'未收到'} · 西门：${l.doorOpen?'已推开':l.unlocked?'已解锁，尚未推开':'已上锁'}`:`风扇：${l.fanSpinning?'转动':'停转'} · 手闸：${l.holdingBrake?'握住':'松开'} · 闸门：${l.gateOpen?'升起':'落下'}`;
+  const l=view.local;$('#scene-state').textContent=view.role==='watch'?`公开机关 · 动力：${view.public.power?'开启':'关闭'} · 西门：${view.public.doorOpen?'开启':'关闭'} · 东闸：${view.public.gateOpen?'升起':'落下'}`:view.role==='west'?`动力：${l.power?'开启':'关闭'} · 钥匙：${l.unlocked?'已插入门锁':l.keyHere?'已收到':view.pending?.action==='send-key'?'等待你接过':'未收到'} · 西门：${l.doorOpen?'已推开':l.unlocked?'已解锁，尚未推开':'已上锁'}${l.cells?` · 备用电池：${'■'.repeat(l.charge)}${'□'.repeat(l.cells-l.charge)}${l.packs?`（已换 ${l.packs} 组）`:''}`:''}`:`风扇：${l.fanSpinning?'转动':'停转'} · 手闸：${l.holdingBrake?'握住':'松开'} · 闸门：${l.gateOpen?'升起':'落下'}${'support' in l?` · 支撑槽：${l.support?`刻着${l.support}的支撑`:'空'}`:''}`;
   document.querySelectorAll('.steps span').forEach((s,i)=>s.classList.toggle('current',i===(view.complete?3:view.events.some(e=>e.type==='action')?2:view.shared.length?1:0)));
   if(view.paused)globalThis.speechSynthesis?.cancel();
   if(view.role==='watch'){
@@ -197,7 +211,7 @@ function render(){
     renderPending();
   }
   let overlay='';
-  if(view.complete&&!overlayClosed)overlay=`<div class="paused-overlay victory" role="dialog" aria-modal="true" aria-label="共同通关"><div class="eyebrow">CHAPTER 01 / TOGETHER</div><h2>这次，没有谁被留下。</h2><p>动力熄了，支撑还在。你们用各自的发现，让同一个出口终于对两个人敞开。</p><button id="review" class="primary">回看我们的合作</button><p class="small">这是一关原型。${Object.values(view.controllers).includes('script')?'脚本 stub 通关不代表真实模型已验证。':''}</p></div>`;
+  if(view.complete&&!overlayClosed)overlay=`<div class="paused-overlay victory" role="dialog" aria-modal="true" aria-label="共同通关"><div class="eyebrow">CHAPTER 01 / TOGETHER</div><h2>这次，没有谁被留下。</h2>${view.rating?`<p class="rating"><span role="img" aria-label="${view.rating.stars} 星，满分 3 星">${'★'.repeat(view.rating.stars)}${'☆'.repeat(3-view.rating.stars)}</span> 接通动力 ${view.rating.powerOns} 次 · ${view.rating.packs?`换了 ${view.rating.packs} 组电池`:'没有换电池'}</p>`:''}<p>动力熄了，支撑还在。你们用各自的发现，让同一个出口终于对两个人敞开。</p><button id="review" class="primary">回看我们的合作</button><p class="small">这是一关原型。${Object.values(view.controllers).includes('script')?'脚本 stub 通关不代表真实模型已验证。':''}</p></div>`;
   else if(view.paused)overlay=`<div class="paused-overlay" role="dialog" aria-modal="true" aria-label="已暂停"><div class="eyebrow">PAUSED</div><h2>墙的两侧，都在等。</h2><p>机关与双方行动已暂停，不会消耗时间或资源。</p>${view.role!=='watch'?'<button id="resume" class="primary">继续合作</button>':'<p>等待玩家恢复。</p>'}</div>`;
   if($('#overlay').innerHTML!==overlay){$('#overlay').innerHTML=overlay;document.querySelectorAll('.game > :not(#overlay)').forEach(e=>e.inert=!!overlay);if(overlay)$('#overlay button')?.focus();else $('#pause')?.focus({preventScroll:true});if($('#resume'))$('#resume').onclick=()=>command({type:'pause'});if($('#review'))$('#review').onclick=()=>{overlayClosed=true;tab='messages';render();};}
   receivePeerEvents();

@@ -41,3 +41,14 @@
 #live-sync-state{font-size:13px;color:var(--muted);line-height:1.6;margin:8px 0 0}
 #live-sync-state[data-state=warning]{color:#ffcfba}
 #live-fixture{margin-top:10px;width:100%}
+/* A fact that is a table (the load chart), in the inspect panel and the clue book. */
+.fact-table{width:100%;border-collapse:collapse;margin:12px 0 4px;font-size:16px;font-variant-numeric:tabular-nums}
+.fact-table th,.fact-table td{border:1px solid var(--line);padding:8px 10px;text-align:right}
+.fact-table thead th{color:var(--muted);font-weight:500;font-size:13px;letter-spacing:.04em}
+.fact-table th[scope=row],.fact-table thead th:first-child{text-align:left}
+.fact-table th[scope=row]{color:var(--ink);font-weight:500}
+.inspect .small{color:var(--muted);font-size:13px;margin-top:10px}
+/* How the game went, on the closing card. */
+.victory .rating{color:var(--ink);font-size:17px}.victory .rating span{color:var(--warm);font-size:26px;letter-spacing:.12em;margin-right:10px;vertical-align:-2px}
+/* The rules choice sits under the two seats on the opening page. */
+.rules-choice{grid-column:1/-1}

@@ -22,6 +22,7 @@ const props = {
 };
 // Only in a room with a choice of supports: what each mark bears, on the west wall.
 const CHART = {id:'chart',name:'承重表',kind:'plaque',position:[2.2,1.6,-2.5]};
+const CHART_LEAD = '机械支撑按刻着的记号查额定承重（公斤），额定承重不能低于闸重。读哪一列，要看东侧闸轨上检修牌的颜色。';
 export class Room {
   // `rules` names a rule set of room-rules.json; `seed` makes its puzzle again. Without `rules` the
   // room is the one with a single brace and no battery.
@@ -66,9 +67,9 @@ export class Room {
       power:['coupling','这个开关同时驱动隔壁的升降闸和检修风扇，不能分别供电。'+(p?.cells?`备用电池每组 ${p.cells} 格，每次接通动力耗一格；一组用完，可以在这里换上备用组。`:'')],
       door:['west-exit','西门需要黄铜钥匙；开锁和推门是两个独立动作。'],
       hatch:['west-hatch','传物槽能从东侧送来小物件。西间原先没有钥匙。'],
-      ...(choice?{chart:['load-chart','机械支撑按刻着的记号查额定承重，额定承重不能低于闸重。读哪一列，要看东侧闸轨上检修牌的颜色。'+
+      ...(choice?{chart:['load-chart',CHART_LEAD+
           p.tags.map(t=>`${t}牌一列：`+choice.map(x=>`${x.mark} ${x.ratings[t]} 公斤`).join('，')+'。').join(''),
-        {columns:['记号',...p.tags.map(t=>t+'牌')],rows:choice.map(x=>[x.mark,...p.tags.map(t=>x.ratings[t])])}]}:{})
+        {caption:CHART_LEAD,columns:['记号',...p.tags.map(t=>t+'牌')],rows:choice.map(x=>[x.mark,...p.tags.map(t=>x.ratings[t])])}]}:{})
     } : {
       gate:['gate-rule','闸门靠动力抬升，断电会落下。轨道上有机械支撑槽。'+(choice?`支撑槽只放得进 ${p.slot[0]} 到 ${p.slot[1]} 厘米长的支撑。闸轨上挂着一块${p.tag}色检修牌。`:'')],
       brake:['brake-rule','手闸只能固定已经升起的闸门；我拉着它时不能离开，但还能用另一只手取物。'+(choice?'支撑承不承得住，要松开手闸才知道；承住了我才能走开。':'')],
@@ -219,8 +220,14 @@ export class Room {
     return message;
   }
   execute(role,action){
-    const r=transition(this.state,action,this.actor(role),this.puzzle);
-    if(r.ok){this.state=r.state;this.changes++;this.event(role,'action',`${names[role]} · ${this.labels[action]}。${won(this.state)?'两个人一起走到了墙外。':'墙内传来机关动作的声音。'}`);this.signals[action]=this.rev;}
+    const up=gateOpen(this.state),r=transition(this.state,action,this.actor(role),this.puzzle);
+    if(r.ok){
+      this.state=r.state;this.changes++;
+      // Whether the gate is up is public, and the wall does not hide the sound of it moving: the
+      // seat that cannot see the gate hears whether a support held.
+      const heard=won(this.state)?'两个人一起走到了墙外。':up&&!gateOpen(this.state)?'墙后传来闸门落下的声音。':!up&&gateOpen(this.state)?'墙后传来闸门升起的声音。':'墙内传来机关动作的声音。';
+      this.event(role,'action',`${names[role]} · ${this.labels[action]}。${heard}`);this.signals[action]=this.rev;
+    }
     return {ok:r.ok,message:this.told(role,action,r.ok,r.message)};
   }
 }
