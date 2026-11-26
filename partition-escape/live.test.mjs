@@ -84,3 +84,34 @@ test('an observation is a look around the partner\'s own room: its facts come wi
   assert.deepEqual(second.scene.find(o=>o.id==='brake').actions,[{id:'hold-brake',label:'拉住手闸',shared:false}]);
   assert.deepEqual(second.scene.find(o=>o.id==='hatch').actions,[{id:'send-key',label:'递出钥匙',shared:true}]);
 });
+
+// In every real session of 2026-11-26 the partner tried its used ticket for the next action, was
+// refused, looked again and retried: three of eleven tool calls in one turn bought nothing.
+test('every answer to the partner carries the next ticket; one ticket is still one command',()=>{
+  const {h,r,j}=setup();
+  const looked=h.observe(r,'east',j.scope);
+  const first=h.command(r,'east',{ticket:looked.ticket,command:{type:'inspect',id:'hatch'}});
+  assert.equal(first.ok,true);assert.ok(first.ticket&&first.ticket!==looked.ticket);assert.ok(first.view.scene.length);
+  // The ticket in the result is good for the next action, without another look.
+  const second=h.command(r,'east',{ticket:first.ticket,command:{type:'action',id:'send-key'}});
+  assert.equal(second.receipt.outcome,'proposed');
+  // A used ticket does nothing, and the refusal itself hands over a good one with the room as it is.
+  const rev=r.rev,reused=h.command(r,'east',{ticket:first.ticket,command:{type:'inspect',id:'gate'}});
+  assert.equal(reused.code,'live_superseded');assert.equal(r.rev,rev);assert.equal(reused.receipt.command,'已作废的操作');
+  assert.equal(h.command(r,'east',{ticket:reused.ticket,command:{type:'inspect',id:'gate'}}).ok,true);
+  // A rule refusal also leaves the partner able to act on what it now sees.
+  const refused=h.command(r,'east',{ticket:h.observe(r,'east',j.scope).ticket,command:{type:'action',id:'brace'}});
+  assert.equal(refused.receipt.code,'rule_rejected');assert.ok(refused.ticket);
+});
+test('no ticket is handed out while the player speaks, and speech voids the one in hand',()=>{
+  const {h,r,j}=setup();
+  const first=h.command(r,'east',{ticket:h.observe(r,'east',j.scope).ticket,command:{type:'inspect',id:'hatch'}});
+  h.input(r,{type:'start'});
+  const during=h.command(r,'east',{ticket:first.ticket,command:{type:'action',id:'send-key'}});
+  assert.equal(during.code,'live_superseded');assert.equal(during.ticket,undefined);assert.equal(r.pending,null);
+  h.input(r,{type:'end'});
+  // What was in hand before the player spoke stays void afterwards.
+  const after=h.command(r,'east',{ticket:first.ticket,command:{type:'action',id:'send-key'}});
+  assert.equal(after.code,'live_superseded');assert.equal(r.pending,null);
+  assert.equal(h.command(r,'east',{ticket:after.ticket,command:{type:'action',id:'send-key'}}).receipt.outcome,'proposed');
+});

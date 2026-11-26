@@ -13,6 +13,9 @@ const runFile=promisify(execFile);
 const id=()=>randomBytes(16).toString('hex');
 // How long after the worker's own session cap the server ends a session that did not end itself.
 const DEADLINE_GRACE_MS=5000;
+// How long a ticket stays good: long enough for the partner to answer a turn, short enough that it
+// cannot act on a look it took long ago.
+const TICKET_MS=15000;
 // The only reasons live_runtime.py may give; nothing else it prints reaches the page.
 const RUNTIME_CODES=['live_dependency_sdk','live_dependency_socks','live_dependency_http_proxy','live_dependency_websocket',
   'live_harness_mismatch','live_limits_invalid','live_runtime_check_failed'];
@@ -147,24 +150,38 @@ export class LiveHub {
   trace(room,html){const j=this.get(room);return html.replace('</body>',updateTrace(j.updates.rows,j.updates.omitted,this.updates)+(j.auditPersistenceFailed?'<p>本地同步审计文件写入失败；以下记录仅在当前进程内保留。</p>':'')+'</body>');}
   notify(room,role,command,result){this.get(room).updates.enqueue(role,command,result);}
 
+  // A ticket says: the partner has seen the room as it is now, in the current control scope. It is
+  // good for one command. Speech from the player voids it (input), and so does any change of the room.
+  issue(room,j){
+    const ticket=id();j.tickets.clear();j.tickets.set(ticket,{scope:j.scope,rev:room.rev,expires:Date.now()+TICKET_MS});
+    return ticket;
+  }
+  // The room as the partner sees it now, with a ticket for its next command.
+  current(room,role,j){
+    // A look around the partner's own room: the facts of its own objects come with it (and change
+    // with the room, as the fan's does once the gate has risen).
+    room.look(role);
+    return {view:room.view(role),ticket:this.issue(room,j)};
+  }
   observe(room,role,scope){
     const j=this.get(room);if(role!==j.seat||j.ended||j.speaking||scope!==j.scope)return {ok:false,code:'live_superseded'};
-    const ticket=id();j.tickets.clear();j.tickets.set(ticket,{scope:j.scope,rev:room.rev,expires:Date.now()+15000});
-    // An observation is a look around the partner's own room: the facts of its own objects come
-    // with it (and change with the room, as the fan's does once the gate has risen).
-    room.look(role);
-    return {ok:true,ticket,scope:j.scope,view:room.view(role)};
+    return {ok:true,scope:j.scope,...this.current(room,role,j)};
   }
   command(room,role,b){
     const j=this.get(room),t=j.tickets.get(b.ticket);j.tickets.delete(b.ticket);
-    if(role!==j.seat||j.ended||j.speaking||!t||t.scope!==j.scope||t.rev!==room.rev||t.expires<Date.now()){
-      return {ok:false,code:'live_superseded',message:'旧观察已失效，请重新观察。',receipt:{requestId:id(),source:'live-gate',seat:role,
-        command:'未支持的操作',outcome:'waiting',code:'live_superseded',roomEventIds:[],changes:{},proposalId:null},view:room.view(role)};
+    // Every answer to the partner carries the room as it now is. While the session is current and
+    // the player is not speaking it also carries the next ticket, so a second action does not cost
+    // a tool round just to look again. While the player speaks there is none: the partner waits.
+    const may=role===j.seat&&!j.ended&&!j.speaking;
+    const answer=result=>may?{...result,...this.current(room,role,j)}:{...result,view:room.view(role)};
+    if(!may||!t||t.scope!==j.scope||t.rev!==room.rev||t.expires<Date.now()){
+      return answer({ok:false,code:'live_superseded',message:may?'这张ticket已经失效，什么都没有执行。回执里是最新视图和新的ticket。':'搭档正在说话或本段已结束，什么都没有执行。',
+        receipt:{requestId:id(),source:'live-gate',seat:role,command:'已作废的操作',outcome:'waiting',code:'live_superseded',roomEventIds:[],changes:{},proposalId:null}});
     }
     const c=b.command,arg=c?.type==='say'?'text':'id';
-    if(!c||!['inspect','share','action','say','accept','decline','cancel'].includes(c.type)||Object.keys(c).sort().join(',')!==[arg,'type'].sort().join(',')||typeof c[arg]!=='string'||(arg==='text'?(!c.text.trim()||c.text.length>500):! /^[a-zA-Z0-9_-]{1,100}$/.test(c.id)))return {ok:false,code:'invalid_tool',view:room.view(role)};
+    if(!c||!['inspect','share','action','say','accept','decline','cancel'].includes(c.type)||Object.keys(c).sort().join(',')!==[arg,'type'].sort().join(',')||typeof c[arg]!=='string'||(arg==='text'?(!c.text.trim()||c.text.length>500):! /^[a-zA-Z0-9_-]{1,100}$/.test(c.id)))return answer({ok:false,code:'invalid_tool'});
     // No await between gate and engine: interruption and dispatch serialize on Node's event loop.
-    const result=room.command(role,b.command);return {...result,view:room.view(role)};
+    return answer(room.command(role,b.command));
   }
   finish(room,reason,event={type:'closed',reason}){
     const j=this.get(room);if(j.ended)return false;

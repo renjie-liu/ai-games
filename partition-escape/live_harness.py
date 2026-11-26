@@ -57,7 +57,7 @@ def execute(api,seat,root,call_alias,ticket,c,fixture=False):
     result=adapter.last_result or {'ok':False,'code':'harness_aborted','message':'工具在发送前被 harness 中止。'}
     chunk=run.log.last(lambda r:r['type']=='action_chunk')
     return {k:result.get(k) for k in ('ok','code','message','receipt')}|{'harness_run':run.path.name,
-        'harness_chunk':chunk.get('chunk_id') if chunk else None,'view':result.get('view')}
+        'harness_chunk':chunk.get('chunk_id') if chunk else None,'view':result.get('view'),'ticket':result.get('ticket')}
 
 def tool_page(data,source):
     page=public_studio(data,source).replace('<body>', '<body><p style="padding:16px;background:#242c34;color:white">Gemini Live 工具执行 · 此 harness 步不另发推理请求；费用见 Live 会话账本。未提供可公开决策说明，语音不是内部思维。</p>')

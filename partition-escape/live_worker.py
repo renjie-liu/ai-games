@@ -54,7 +54,8 @@ SYSTEM=('你是隔墙逃脱游戏的东席搭档，用自然简短中文交流�
  '主动把自己房间的情况告诉搭档并合作。工具才会操作机关，说话不是操作成功；先看真实回执再报告结果。'
  '人类的嗯、好或语音不能替代其确认按钮；不能替人类操作。听到等等就等待，不因查看而催促。'
  'inspect的id用scene物件id；action的id必须用scene.actions中列出的动作id，例如递钥匙是send-key，不是hatch。'
- '每次行动使用observe返回的ticket。scope变更后旧ticket无效，要重新observe。只用允许的type和当前物件/提议id。'
+ '行动要用ticket，每个ticket只能用一次。搭档每说完一句，你会收到observation，里面有当前视图和一个ticket，直接用它行动；每次seat_command的回执也带最新视图和新的ticket，连续操作就用回执里的。手里没有可用ticket时才调用observe。只用允许的type和当前物件/提议id。'
+ '工具调用之间不要输出任何文字或解说；全部做完后，只用中文说一两句结果。'
  # What the partner knows about its own room, and how to behave around a shared action.
  'observe返回的notes是你房间里每个物件的说明，机关变化后会更新。搭档问你那边有什么，就据此回答；每一步都对照notes想清楚它会让你这边发生什么。'
  '标了shared的动作和pending里的提议要另一席确认才生效。确认对方的提议前，先想它对你这边的后果：需要准备就先操作自己的机关（提议等待期间你仍然可以操作自己的非shared机关），准备好再accept；现在不能确认就decline并说出还差什么，不要让对方干等。'
@@ -63,9 +64,9 @@ SYSTEM=('你是隔墙逃脱游戏的东席搭档，用自然简短中文交流�
  '不要输出内部思维，不背诵工具参数，不假装已经听到尚未传来的话。')
 
 TOOLS=[{'function_declarations':[
- {'name':'observe','description':'Read only your own seat and shared messages. Use latest control scope.',
+ {'name':'observe','description':'Read only your own seat and shared messages. Needed only when you hold no usable ticket. Use latest control scope.',
   'behavior':'BLOCKING','parameters':{'type':'OBJECT','properties':{'scope':{'type':'STRING'}},'required':['scope']}},
- {'name':'seat_command','description':'One own-seat action through harness. Shared actions need peer button consent. Never claim success without receipt.',
+ {'name':'seat_command','description':'One own-seat action through harness. The result carries the latest view and a new ticket for your next action. Shared actions need peer button consent. Never claim success without receipt.',
   'behavior':'BLOCKING','parameters':{'type':'OBJECT','properties':{'ticket':{'type':'STRING'},
    'type':{'type':'STRING','enum':['inspect','share','action','say','accept','decline','cancel']},'id':{'type':'STRING','description':'inspect: scene[].id; action: scene[].actions[].id, e.g. send-key, NEVER object id hatch; share: notes[].id; accept/decline/cancel: pending.id'},'text':{'type':'STRING'}},'required':['ticket','type']}}
 ]}]
@@ -113,6 +114,16 @@ class Session:
         o=await asyncio.to_thread(self.api.request,'/live-observe',{'scope':scope})
         if o.get('ok'):o['view']=slim(o['view'])
         return o
+    async def turn_context(self,**said):
+        # What the partner is told when the player has finished a turn: the control scope, and a
+        # fresh look at its own room with a ticket for one action, so the first thing it does need
+        # not be a tool round spent on looking. If the look cannot be had, it can still observe.
+        body={**said,'control_scope':self.scope}
+        try:
+            o=await self.observation(self.scope)
+            if o.get('ok'):body['observation']={'ticket':o['ticket'],'view':o['view']}
+        except Exception:pass
+        return json.dumps(body,ensure_ascii=False)
     def tool_record(self,a,tool,result,execution,delivery,reason,form=None,size=None):
         # Execution (engine side) and receipt delivery (model side) are separate facts; never merge them.
         self.record('tool_response',call_alias=a,tool=tool,ok=bool(result.get('ok')) if result else False,
@@ -218,7 +229,7 @@ class Session:
                 if self.utterance is not None:
                     u=self.utterance;self.utterance=None
                     self.record('utterance',seconds=round(u.pop('bytes')/32000,2),**u)
-                await self.send_content('Control scope '+self.scope+'. Previous tickets are invalid. Use observe if you need a current observation.',False)
+                await self.send_content(await self.turn_context(),False)
                 if not self.fixture:await self.session.send_realtime_input(activity_end={})
                 self.turn_open=True
             elif kind=='audio':
@@ -232,7 +243,7 @@ class Session:
             elif kind=='text':
                 self.scope=b['scope'];self.epoch=b['epoch'];self.interrupt_reply();self.turn_open=True
                 self.updates.rebind()
-                await self.send_content(json.dumps({'player_message':b['text'],'control_scope':self.scope},ensure_ascii=False),True)
+                await self.send_content(await self.turn_context(player_message=b['text']),True)
     async def receive_loop(self):
         while not self.closed.is_set():
             async for response in self.session.receive():

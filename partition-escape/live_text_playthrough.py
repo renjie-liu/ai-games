@@ -267,8 +267,8 @@ class Player:
              lambda v: v['local']['power'] is False and not v.get('pending') and self.public()['gateOpen'] is True, None),
             ('gate stays up by itself', ['动力断了。你那边还要做什么，才能腾出手和我一起离开？', '你现在能走开吗？还差什么？',
                                          '你那边有没有东西可以代替你撑住闸门？', '现在情况怎么样？'],
-             lambda v: 'brace' in v.get('signals', {}) and 'release-brake' in v.get('signals', {}),
-             lambda: self.button({'type': 'action', 'id': 'open-door'})),
+             # Letting go of the brake is not a step of its own: walking out lets go of it.
+             signal('brace'), lambda: self.button({'type': 'action', 'id': 'open-door'})),
             ('door confirmed', ['我提了推开西门，你那边准备好了就确认。', '推开西门的提议还在等你，你准备好了吗？', '请确认推开西门。'],
              lambda v: v['local']['doorOpen'] is True, None),
             ('both outside', ['门开了，我们一起走吧。', '你可以出来了吗？', '我们一起出去吧。'],

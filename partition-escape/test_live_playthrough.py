@@ -134,15 +134,33 @@ class WholeGameInOneSession(unittest.IsolatedAsyncioTestCase):
         await self.until(delivered, f'{command} never reached the partner')
         return result
 
+    use_handed_tickets = False
+
+    def handed(self):
+        """The look and ticket the worker handed over with the player's last turn, read off the wire as a model would."""
+        for text in reversed(self.live.sent):
+            try:
+                data = json.loads(text)
+            except ValueError:
+                continue
+            if isinstance(data, dict) and 'observation' in data:
+                return data['observation']
+        raise AssertionError('the worker handed over no observation with the turn')
+
     async def partner_turn(self, live, prompt):
-        """The scripted model: observe, then one command with that ticket, for each step planned."""
+        """The scripted model. By default it looks before every command, as a careful model does.
+        With `use_handed_tickets` it acts on the ticket that came with the turn, then on the one
+        in each result, and never calls observe."""
+        have = self.handed() if self.use_handed_tickets else None
         for kind, target in self.plan:
-            observed = await live.call('observe', {'scope': live.scope()})
-            self.assertTrue(observed.get('ok'), observed)
+            if have is None:
+                have = await live.call('observe', {'scope': live.scope()})
+                self.assertTrue(have.get('ok'), have)
             if kind in ('accept', 'decline'):
-                target = observed['view']['pending']['id']
-            result = await live.call('seat_command', {'ticket': observed['ticket'], 'type': kind, 'id': target})
+                target = have['view']['pending']['id']
+            result = await live.call('seat_command', {'ticket': have['ticket'], 'type': kind, 'id': target})
             self.assertTrue(result.get('ok'), (kind, target, result.get('code'), result.get('message')))
+            have = {'ticket': result['ticket'], 'view': result['view']} if self.use_handed_tickets else None
         await live.say(PARTNER_SECONDS)
         await live.complete()
 
@@ -189,6 +207,13 @@ class WholeGameInOneSession(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(self.run_task, 10)
 
     async def test_the_shortest_honest_game_fits_one_session(self):
+        await self.whole_game(tool_calls=22)
+
+    async def test_a_partner_that_uses_the_tickets_it_is_handed_spends_one_tool_call_per_action(self):
+        self.use_handed_tickets = True
+        await self.whole_game(tool_calls=11)
+
+    async def whole_game(self, tool_calls):
         for thing in ('plaque', 'power', 'door', 'hatch'):
             await self.west({'type': 'inspect', 'id': thing})
         await self.speak(('inspect', 'hatch'), ('inspect', 'gate'))
@@ -212,7 +237,7 @@ class WholeGameInOneSession(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(final['view']['complete'], 'both players should be outside')
         self.assertIsNone(self.closed(), 'the session must still be open when the game is won')
         row = self.session.ledger.row
-        self.assertEqual(row['tools'], 22)
+        self.assertEqual(row['tools'], tool_calls)
         # The shortest game must leave room for a real one: detours, repeats and small talk.
         used = {k: row[k] / row['limits'][k] for k in ('input_seconds', 'output_seconds', 'turns', 'tools', 'text_bytes')}
         used['usage_stop_usd'] = row['estimated_usd'] / row['limits']['usage_stop_usd']
@@ -222,7 +247,7 @@ class WholeGameInOneSession(unittest.IsolatedAsyncioTestCase):
         await asyncio.to_thread(self.post, '/live-input', self.tokens['west'], {'type': 'stop'})
         await asyncio.wait_for(self.run_task, 10)
         self.assertEqual(self.closed(), 'user_stop')
-        print('\nwhole game, share of each session cap used:', {k: round(v, 3) for k, v in used.items()}, file=sys.stderr)
+        print(f'\nwhole game with {tool_calls} tool calls, share of each session cap used:', {k: round(v, 3) for k, v in used.items()}, file=sys.stderr)
 
 
 if __name__ == '__main__':
