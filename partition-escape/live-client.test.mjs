@@ -4,11 +4,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import fs from 'node:fs';
+import {LiveHub} from './live.mjs';
+import {Room} from './world.mjs';
 const code=fs.readFileSync(new URL('./live-client.mjs',import.meta.url),'utf8').replace('export function setupLive','function setupLive');
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 const tick=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
-function fixture({gate,fixtureMode=false,segments=false,caps={seconds:60,inputSeconds:30,outputSeconds:20,usageStopUsd:.15}}={}){
-  const elements=new Map(),listeners={},calls=[],contexts=[],tracks=[],timers=new Map(),delays=[],delayOf=new Map(),worklets=[],wait=deferred(),micWaits=[];
+function fixture({gate,onInput,fixtureMode=false,segments=false,caps={seconds:60,inputSeconds:30,outputSeconds:20,usageStopUsd:.15}}={}){
+  const elements=new Map(),listeners={},calls=[],contexts=[],tracks=[],worklets=[],timers=new Map(),delays=[],delayOf=new Map(),wait=deferred(),micWaits=[];
   const view={role:'west',controllers:{east:'live'},paused:false};let nextTimer=0,micCalls=0,cancelCount=0,sourceCount=0,connectedSources=0,played=0;
   const el=id=>{if(!elements.has(id))elements.set(id,{id,disabled:['live-stop','live-interrupt'].includes(id),textContent:'',dataset:{},append(x){elements.set(x.id,x);}});return elements.get(id);};
   let pendingRead,rows=[];
@@ -26,7 +28,12 @@ function fixture({gate,fixtureMode=false,segments=false,caps={seconds:60,inputSe
       return response({remaining:1,totalUsd:.5,runtimeReady:true,fixture:fixtureMode,...caps,...(segments?{generation,sync:sync(0,{phase})}:{})});
     }
     if(kind==='renew'){generation++;phase='off';return response({generation});}
-    if(kind==='input'&&JSON.parse(opts.body).type==='stop')phase='closed';
+    if(kind==='input'){
+      const input=JSON.parse(opts.body),{type}=input;
+      onInput?.(input);
+      if(type==='stop')phase='closed';
+      if((type==='audio'&&gate==='upload')||(type==='start'&&gate==='talk-start')||(type==='end'&&gate==='talk-end'))await wait.promise;
+    }
     if(kind==='stream'){if(gate==='stream')await wait.promise;return {ok:true,body};}
     if(kind==='start'){phase='active';if(gate==='start')await wait.promise;return response({ok:true});}
     return response({ok:true});
@@ -44,11 +51,11 @@ function fixture({gate,fixtureMode=false,segments=false,caps={seconds:60,inputSe
   const sandbox={document,window:{addEventListener:(k,f)=>listeners[k]=f},fetch,AudioContext,AudioWorkletNode,AbortController,TextDecoder,Uint8Array,DataView,
     atob:s=>Buffer.from(s,'base64').toString('binary'),btoa:s=>Buffer.from(s,'binary').toString('base64'),
     navigator:{mediaDevices:{getUserMedia:async()=>{micCalls++;if(gate!=='mic')return capture();const d=micWaits.length?deferred():wait;micWaits.push(d);return d.promise;}}},
-    setInterval:f=>{timers.set(++nextTimer,f);return nextTimer;},clearInterval:id=>timers.delete(id),
+    setInterval:(f,ms)=>{timers.set(++nextTimer,f);delayOf.set(nextTimer,ms);return nextTimer;},clearInterval:id=>timers.delete(id),
     setTimeout:(f,ms)=>{timers.set(++nextTimer,f);delays.push(ms);delayOf.set(nextTimer,ms);return nextTimer;},clearTimeout:id=>timers.delete(id)};
   vm.createContext(sandbox);vm.runInContext(code,sandbox);
   const client=sandbox.setupLive({room:'offline-lifecycle',key:'fixture-token',getView:()=>view});
-  return {el,calls,contexts,tracks,timers,delays,delayOf,worklets,wait,micWaits,reader,document,view,client,push,capture,
+  return {el,calls,contexts,tracks,worklets,timers,delays,delayOf,wait,micWaits,reader,document,view,client,push,capture,
     start:()=>el(fixtureMode?'live-fixture':'live-start').onclick(),
     cancel:()=>el('live-stop').onclick(),
     background(){document.hidden=true;listeners.visibilitychange();},
@@ -213,22 +220,169 @@ test('the long notes fold away once voice starts and come back when the partner 
   f.push({type:'sync_status',sync:sync(5,{phase:'active',not_delivered:1})});await tick();
   assert.equal(f.el('live-details').open,true);assert.match(f.el('live-sync-state').textContent,/未送达/);
 });
-test('winning the game closes the microphone after the reply in progress, or after the grace period',async()=>{
-  // The partner's last line is still playing when the game is won: it is not cut off.
-  let f=fixture();await tick();await f.start();f.push({type:'ready'});await tick();
-  f.push({type:'audio',epoch:0,data:Buffer.alloc(4800).toString('base64')});await tick();
-  f.view.complete=true;f.client.update();await tick();
-  assert.equal(f.tracks[0].stopped,0);assert.ok(f.delays.includes(20000));
-  f.push({type:'turn_complete'});await tick();assert.equal(f.tracks[0].stopped,0,'audio is still playing');
-  f.contexts[0].sources.forEach(n=>n.onended());await tick();
-  assert.equal(f.tracks[0].stopped,1);assert.equal(f.el('live-state').textContent,'已通关 · 麦克风已关闭');assert.equal(f.timers.size,0);
-  assert.deepEqual(f.calls.filter(c=>c.kind==='input'&&c.body.type==='stop').length,1);
-  // No reply ever ends: the grace period closes it.
-  f=fixture();await tick();await f.start();f.push({type:'ready'});await tick();
-  f.view.complete=true;f.client.update();f.client.update();await tick();
-  assert.equal([...f.timers.values()].length,3,'heartbeat, session cap and one grace timer');
-  [...f.timers.entries()].filter(([id])=>f.delayOf.get(id)===20000).forEach(([,fn])=>fn());await tick();
-  assert.equal(f.tracks[0].stopped,1);assert.equal(f.el('live-state').textContent,'已通关 · 麦克风已关闭');
+test('the last finite audit estimate is shown on close, including zero',async()=>{
+  for(const [audit,shown] of [[{estimated_usd:1.11423},'1.114230'],[{estimated_usd:0},'0.000000'],
+    [undefined,'0.946200'],[{estimated_usd:null},'0.946200'],[{estimated_usd:'invalid'},'0.946200']]){
+    const f=fixture();await tick();await f.start();
+    f.push({type:'usage',estimatedUsd:0.9462});await tick();
+    f.push({type:'closed',reason:'live_usage_stop',audit});await tick();
+    assert.ok(f.el('live-budget').textContent.includes('$'+shown),'closed audit should show '+shown);
+    assert.match(f.el('live-budget').textContent,/非账单/);
+  }
+});
+
+test('winning drops unsent input and late capture while heartbeats and the last reply continue',async()=>{
+  const f=fixture({gate:'upload'});await tick();await f.start();f.push({type:'ready'});await tick();
+  const worklet=f.worklets[0], capturedMessage=worklet.port.onmessage;
+  const inputs=()=>f.calls.filter(c=>c.kind==='input').map(c=>c.body.type);
+  const frame={type:'audio',buffer:new ArrayBuffer(2)};
+  capturedMessage({data:frame});await tick(); // Dispatched. Its HTTP response is still pending.
+  assert.deepEqual(inputs(),['audio']);
+  const reply={type:'audio',epoch:0,data:Buffer.alloc(48).toString('base64')};
+  f.push(reply);await tick();
+  capturedMessage({data:frame}); // Queued behind the first request.
+  f.view.complete=true;f.client.update();f.client.update();
+  capturedMessage({data:{type:'start'}});
+  capturedMessage({data:frame});
+  capturedMessage({data:{type:'end'}});
+  f.el('live-interrupt').onclick();
+  const timer=ms=>[...f.timers].find(([id])=>f.delayOf.get(id)===ms)[1];
+  const heartbeat=timer(2000), deadline=timer(20000);
+  heartbeat();await tick();
+  const beforeUploadSettled=inputs();
+  f.wait.resolve();await tick();
+  assert.deepEqual(inputs(),['audio','heartbeat'],'no queued input or late callback may be posted');
+  assert.deepEqual(beforeUploadSettled,['audio','heartbeat'],'heartbeats must not wait for the capture queue');
+  assert.equal(worklet.port.onmessage,null);
+  assert.equal(f.tracks[0].stopped,1);
+  assert.match(f.el('live-state').textContent,/麦克风已关闭/);
+  f.push({type:'ready'}); // Late readiness cannot reopen capture.
+  f.push(reply); // The remainder of the same reply arrives after victory.
+  f.push({type:'turn_complete'});await tick();
+  assert.equal(f.stats().connectedSources,1);
+  assert.equal(f.stats().played,2);assert.equal(f.contexts[0].state,'running');
+  assert.equal(inputs().includes('stop'),false);
+  assert.doesNotMatch(f.el('live-state').textContent,/开口打断|在听/);
+  f.contexts[0].sources[0].onended();
+  assert.equal(inputs().includes('stop'),false,'the last buffer is still playing');
+  f.contexts[0].sources[1].onended();deadline();f.client.update();await tick();
+  assert.deepEqual(inputs(),['audio','heartbeat','stop']);
+  assert.equal(f.tracks[0].stopped,1);assert.equal(f.contexts[0].state,'closed');assert.equal(f.timers.size,0);
+});
+
+test('a talk start discarded at victory does not mute the final reply from the accepted turn',async()=>{
+  const f=fixture({gate:'upload'});await tick();await f.start();
+  f.push({type:'ready'});f.push({type:'interrupted',epoch:3});await tick();
+  const capture=f.worklets[0].port.onmessage;
+  capture({data:{type:'audio',buffer:new ArrayBuffer(2)}});await tick();
+  capture({data:{type:'start'}}); // Locally interrupts, but the server has not received this new turn.
+  f.view.complete=true;f.client.update();f.wait.resolve();await tick();
+  assert.equal(f.calls.some(c=>c.body?.type==='start'),false);
+  assert.equal(f.calls.some(c=>c.body?.type==='end'),false,'a discarded start needs no end');
+  const data=Buffer.alloc(48).toString('base64');
+  f.push({type:'audio',epoch:2,data});await tick();
+  assert.equal(f.stats().played,0,'a retired turn stays silent');
+  f.push({type:'audio',epoch:3,data});await tick();
+  assert.equal(f.stats().played,1,'the last accepted turn can still play');
+  f.cancel();
+});
+
+for(const gate of [undefined,'talk-start'])test(`victory ends an accepted microphone turn without PCM (start HTTP response pending: ${Boolean(gate)})`,async()=>{
+  const room=new Room({west:'human',east:'live'}),hub=new LiveHub('.','http://127.0.0.1',false);
+  const job=hub.get(room),workerInputs=[];
+  job.started=true;
+  hub.write=(_room,input)=>{workerInputs.push(input);return true;};
+  const f=fixture({gate,onInput:input=>hub.input(room,input)});
+  hub.emit=(_room,event)=>f.push(event);
+  await tick();await f.start();f.push({type:'ready'});await tick();
+  const capture=f.worklets[0].port.onmessage;
+  const inputs=()=>f.calls.filter(c=>c.kind==='input').map(c=>c.body);
+  const frame={type:'audio',buffer:new ArrayBuffer(2)};
+  // A talk-start says whether the partner was audible when the player began: nothing was playing here.
+  const START={type:'start',playing:false};
+  capture({data:{type:'start'}});await tick();
+  assert.equal(job.speaking,true);assert.equal(job.epoch,1);
+  capture({data:frame});capture({data:{type:'end'}});
+  assert.deepEqual(inputs(),[START]);
+  f.view.complete=true;f.client.update();f.client.update();
+  capture({data:frame});capture({data:{type:'end'}});
+  assert.equal(f.tracks[0].readyState,'ended');
+  await tick();
+  assert.deepEqual(inputs(),[START,{type:'end'}]);
+  assert.equal(job.speaking,false);
+  assert.deepEqual(workerInputs.map(({type,epoch})=>[type,epoch]),[['start',1],['end',1]]);
+  f.wait.resolve();await tick();
+  const data=Buffer.alloc(48).toString('base64');
+  f.push({type:'audio',epoch:0,data});f.push({type:'audio',epoch:1,data});
+  f.push({type:'turn_complete'});await tick();
+  assert.equal(f.stats().played,1);
+  assert.equal(f.contexts[0].state,'running');
+  const deadline=[...f.timers].find(([id])=>f.delayOf.get(id)===20000)[1];
+  f.contexts[0].sources[0].onended();deadline();await tick();
+  assert.deepEqual(inputs(),[START,{type:'end'},{type:'stop'}]);
+});
+
+test('victory does not resend a microphone end already in flight',async()=>{
+  const f=fixture({gate:'talk-end'});await tick();await f.start();f.push({type:'ready'});await tick();
+  const capture=f.worklets[0].port.onmessage;
+  capture({data:{type:'start'}});await tick();
+  f.push({type:'interrupted',epoch:1});await tick();
+  capture({data:{type:'end'}});await tick();
+  f.view.complete=true;f.client.update();f.wait.resolve();await tick();
+  f.push({type:'turn_complete'});await tick();
+  assert.deepEqual(f.calls.filter(c=>c.kind==='input').map(c=>c.body.type),['start','end','stop']);
+});
+
+test('only a matching late acknowledgement ends a turn whose start response was lost at victory',async()=>{
+  const f=fixture({gate:'talk-start'});await tick();await f.start();f.push({type:'ready'});await tick();
+  const inputs=()=>f.calls.filter(c=>c.kind==='input').map(c=>c.body.type);
+  f.worklets[0].port.onmessage({data:{type:'start'}});await tick();
+  f.view.complete=true;f.client.update();f.wait.reject(Error('response lost'));await tick();
+  f.push({type:'interrupted',epoch:0});await tick();
+  assert.deepEqual(inputs(),['start']);
+  f.push({type:'interrupted',epoch:1});f.push({type:'interrupted',epoch:1});await tick();
+  f.push({type:'turn_complete'});await tick();
+  assert.deepEqual(inputs(),['start','end','stop']);
+});
+
+test('victory ends an open turn after its in-flight PCM even when the worklet never emitted end',async()=>{
+  const f=fixture({gate:'upload'});await tick();await f.start();f.push({type:'ready'});await tick();
+  const capture=f.worklets[0].port.onmessage,inputs=()=>f.calls.filter(c=>c.kind==='input').map(c=>c.body.type);
+  capture({data:{type:'start'}});await tick();f.push({type:'interrupted',epoch:1});await tick();
+  const frame={type:'audio',buffer:new ArrayBuffer(2)};
+  capture({data:frame});await tick();capture({data:frame});
+  f.view.complete=true;f.client.update();capture({data:frame});
+  f.push({type:'turn_complete'});await tick(); // Earlier reply, before this input was closed.
+  assert.deepEqual(inputs(),['start','audio']);
+  f.wait.resolve();await tick();
+  assert.deepEqual(inputs(),['start','audio','end']);
+  f.push({type:'turn_complete'});await tick();
+  assert.deepEqual(inputs(),['start','audio','end','stop']);
+});
+
+test('on victory the microphone closes immediately even if the final reply never ends',async()=>{
+  const f=fixture();await tick();await f.start();f.push({type:'ready'});await tick();
+  f.push({type:'audio',epoch:0,data:Buffer.alloc(48).toString('base64')});await tick();
+  f.view.complete=true;f.client.update();
+  assert.equal(f.tracks[0].readyState,'ended');assert.equal(f.contexts[0].state,'running');
+  const deadline=[...f.timers].find(([id])=>f.delayOf.get(id)===20000)[1];
+  deadline();f.contexts[0].sources[0].onended();await tick();
+  assert.equal(f.calls.filter(c=>c.body?.type==='stop').length,1);
+  assert.equal(f.tracks[0].stopped,1);assert.equal(f.contexts[0].state,'closed');assert.equal(f.timers.size,0);
+});
+
+test('victory during permission or startup cannot enable capture on late completion',async()=>{
+  for(const gate of ['mic','start']){
+    const f=fixture({gate});await tick();const start=f.start();await tick();
+    f.view.complete=true;f.client.update();
+    if(gate==='mic')f.wait.resolve(f.capture());else f.wait.resolve();
+    await start;await tick();
+    assert.equal(f.tracks[0].readyState,'ended');
+    assert.equal(f.worklets.length,0);
+    assert.equal(f.starts(),gate==='start'?1:0);
+    assert.equal(f.calls.filter(c=>c.body?.type==='stop').length,gate==='start'?1:0);
+    assert.equal(f.timers.size,0);
+  }
 });
 test('a turn that ends without any voice says so; the page does not wait for the partner for good',async()=>{
   const f=fixture();await tick();await f.start();f.push({type:'ready'});await tick();
