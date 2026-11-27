@@ -30,7 +30,7 @@ class LiveTests(unittest.TestCase):
         for x in [float('nan'),float('inf'),-1]:
             with self.assertRaisesRegex(RuntimeError,'invalid_usage'):l.debit('input_seconds',x)
     def test_corrupt_config_not_reset(self):
-        l=self.ledger();l.reserve();l.data['limits']={'connections':100};l.save();l.close()
+        l=self.ledger();l.reserve();l.data['limits']={'connections':100};l.write();l.close()   # the file itself is changed, as by hand
         with self.assertRaisesRegex(RuntimeError,'mismatch'):Ledger(self.temp.name,fixture=True)
     def test_conservative_usage_stop_retains_observed_usage(self):
         l=self.ledger();l.reserve();u={'prompt_token_count':1000,'response_token_count':100}

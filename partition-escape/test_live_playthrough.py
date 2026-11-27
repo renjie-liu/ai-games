@@ -38,6 +38,8 @@ class LiveRoom(unittest.IsolatedAsyncioTestCase):
     """The production worker against the real room and hub, with a scripted provider. No tests of its own."""
     # The seed of the room's puzzle; None lets the room draw its own.
     SEED = None
+    # The invitation a hosted server would start the session under: (name, connections). None on this machine.
+    INVITE = None
 
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -61,6 +63,8 @@ class LiveRoom(unittest.IsolatedAsyncioTestCase):
         environment = {'PARTITION_RUN_ROOT': str(root / 'run'), 'PARTITION_SEAT': 'east',
                        'PARTITION_LIVE_SCOPE': first['scope'], 'PARTITION_ENDPOINT': self.base,
                        'PARTITION_SEAT_TOKEN': self.tokens['east']}
+        if self.INVITE:
+            environment |= {'PARTITION_INVITE_NAME': self.INVITE[0], 'PARTITION_INVITE_CONNECTIONS': str(self.INVITE[1])}
         for p in (patch.dict('os.environ', environment), patch('live_budget.ROOT', root),
                   patch('sys.stdin', self.room.stdout), patch('live_worker.key', lambda: 'k' * 32),
                   patch('google.genai.Client', lambda **_: client_for(self.live)),
@@ -390,6 +394,18 @@ class WholeGameInOneSession(LiveRoom):
         print(f'\nwhole game with a choice of supports: {declined} declined, {row["tools"]} tool calls, '
               f'{len(self.seen("turn_complete"))} turns, share of each session cap used:',
               {k: round(v, 3) for k, v in used.items()}, file=sys.stderr)
+
+
+class HostedSessionCountsAgainstItsInvitation(LiveRoom):
+    INVITE = ('朋友', 2)
+
+    async def test_the_connection_is_written_down_under_the_invitation_it_was_started_with(self):
+        row = self.session.ledger.row
+        self.assertEqual(row['invite'], '朋友')
+        await asyncio.to_thread(self.post, '/live-input', self.tokens['west'], {'type': 'stop'})
+        await asyncio.wait_for(self.run_task, 10)
+        import live_budget
+        self.assertEqual(live_budget.quota_status(live_budget.ROOT / '.live')['invites'], {'朋友': 1})
 
 
 if __name__ == '__main__':

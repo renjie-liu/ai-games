@@ -7,9 +7,39 @@ import {spawn} from 'node:child_process';
 import {Room} from './world.mjs';
 import {createVoiceService} from './voice.mjs';
 import {LiveHub} from './live.mjs';
+import {loadHosting,loadInvites,findInvite,idleRooms,INVITE_HEADER} from './hosting.mjs';
+import {PAGE,PAGE_FILES} from './page-files.mjs';
 const root=path.dirname(fileURLToPath(import.meta.url));
+// Whether the server can be reached from outside this machine, and who may then play (hosting.json).
+const hosting=loadHosting();
 const port=Number(process.env.PORT||4174), host='127.0.0.1';
+// The server's own address on this machine: what the workers it starts call back on.
 const origin=`http://${host}:${port}`;
+// Who is answered. The loopback names are answered to callers on this machine only. A hosted
+// server is also asked under its public address, by anyone; who may play there is the invitations'.
+const localHosts=[`${host}:${port}`,`localhost:${port}`];
+const publicHost=hosting.public_origin?new URL(hosting.public_origin).host:null;
+// Pages published somewhere else that may call this server from a browser (hosting.json).
+const pages=new Set(hosting.page_origins);
+const origins=new Set([origin,`http://localhost:${port}`,...(hosting.public_origin?[hosting.public_origin]:[]),...pages]);
+// What such a page's requests may carry: the room's key, JSON, the invitation's code, the voice session's number.
+const PAGE_HEADERS='Authorization, Content-Type, X-Partition-Invite, X-Live-Generation';
+const fromHere=req=>['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
+const answered=req=>(localHosts.includes(req.headers.host)&&fromHere(req))||(publicHost!==null&&req.headers.host===publicHost);
+// The invitation whose code the caller sent, or null. The file is read each time, so an invitation
+// added while the server runs counts at once. One that cannot be read invites nobody: the reason
+// goes to the operator's log and never to the caller.
+function invitationOf(req){
+  try{return findInvite(loadInvites(hosting.invites_file),req.headers[INVITE_HEADER]);}
+  catch(e){
+    // Anyone can make the server look at the file: the same complaint is logged once a minute, not once a request.
+    if(e.message!==complained.message||Date.now()-complained.at>60_000){console.error(e.message);complained={message:e.message,at:Date.now()};}
+    return null;
+  }
+}
+let complained={message:'',at:0};
+// When each invitation made its rooms, for the hourly cap.
+const roomsMade=new Map();
 const rooms=new Map(), children=new Set();
 const live=new LiveHub(root,origin,process.env.PARTITION_ALLOW_LIVE==='1');
 const liveOnly=process.env.PARTITION_LIVE_ONLY==='1';
@@ -17,12 +47,13 @@ if(live.enabled&&!live.runtime.ready)console.error(`Gemini Live 语音不可用�
 let tts;
 try{tts=createVoiceService({directory:path.join(root,'.voice'),mode:process.env.PARTITION_TTS_MODE||'off'});}
 catch{tts=createVoiceService();console.error('TTS unavailable: authorization, ledger, key or lock requires local review. Game remains available.');}
-const files=new Map([['/','play.html'],['/play','play.html'],['/watch','play.html'],['/play.mjs','play.mjs'],['/scene.mjs','scene.mjs'],['/play.css','play.css'],
-  ['/voice-client.mjs','voice-client.mjs'],['/live-client.mjs','live-client.mjs'],['/mic-worklet.js','mic-worklet.js'],['/vendor/three.module.min.js','vendor/three.module.min.js'],['/vendor/three.core.min.js','vendor/three.core.min.js']]);
+// The page's files (page-files.mjs): the page under its three ways in, and what it loads.
+const files=new Map([['/',PAGE],['/play',PAGE],['/watch',PAGE],...PAGE_FILES.map(file=>['/'+file,file])]);
 const mime={'.html':'text/html; charset=utf-8','.mjs':'text/javascript','.js':'text/javascript','.css':'text/css'};
 function send(res,status,data,type='application/json; charset=utf-8'){
+  // A response marked for a page elsewhere (see the request handler) is that page's to read.
   res.writeHead(status,{'Content-Type':type,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
-    'Referrer-Policy':'no-referrer','Cross-Origin-Resource-Policy':'same-origin',
+    'Referrer-Policy':'no-referrer','Cross-Origin-Resource-Policy':res.hasHeader('Access-Control-Allow-Origin')?'cross-origin':'same-origin',
     'Content-Security-Policy':"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; font-src 'self'; frame-ancestors 'self'; object-src 'none'"});
   res.end(typeof data==='object'&&!Buffer.isBuffer(data)?JSON.stringify(data):data);
 }
@@ -49,14 +80,38 @@ function studioRoot(room,seat){
 }
 const server=http.createServer(async(req,res)=>{
   try{
-    if(![`${host}:${port}`,`localhost:${port}`].includes(req.headers.host))return send(res,403,{error:'只允许本机访问'});
-    if(req.headers.origin && ![origin,`http://localhost:${port}`].includes(req.headers.origin))return send(res,403,{error:'跨站请求被拒绝'});
+    if(!answered(req))return send(res,403,{error:publicHost?'请从公开地址访问。':'只允许本机访问'});
+    if(req.headers.origin && !origins.has(req.headers.origin))return send(res,403,{error:'跨站请求被拒绝'});
+    // A page published elsewhere, at an address this server names: its browser is told that the
+    // page may read the answer, and what it may send. Nothing else about the request changes: a
+    // room still takes an invitation and a seat still takes its key.
+    if(pages.has(req.headers.origin)){
+      res.setHeader('Access-Control-Allow-Origin',req.headers.origin);res.setHeader('Vary','Origin');
+      if(req.method==='OPTIONS'){
+        res.writeHead(204,{'Access-Control-Allow-Methods':'GET, POST','Access-Control-Allow-Headers':PAGE_HEADERS,'Access-Control-Max-Age':'7200','Cache-Control':'no-store'});
+        return res.end();
+      }
+    }
     const u=new URL(req.url,origin);
-    if(u.pathname==='/api/health'&&req.method==='GET')return send(res,200,{ok:true,localOnly:true,tts:tts.status().mode,live:live.status()});
-    if(u.pathname==='/api/capabilities'&&req.method==='GET')return send(res,200,{liveOnly,modelEnabled:process.env.PARTITION_ALLOW_MODEL==='1'&&!!process.env.PARTITION_MODEL_CONFIG&&!!process.env.PARTITION_PRICE_TABLE,tts:tts.status(),live:live.status()});
+    if(u.pathname==='/api/health'&&req.method==='GET')return send(res,200,{ok:true,localOnly:publicHost===null,tts:tts.status().mode,live:live.status()});
+    if(u.pathname==='/api/capabilities'&&req.method==='GET'){
+      // On a hosted server: whether the caller's invitation is good, and how many voice connections
+      // it has left. Nothing is said about any other invitation.
+      const invite=publicHost?invitationOf(req):null;
+      return send(res,200,{liveOnly,modelEnabled:process.env.PARTITION_ALLOW_MODEL==='1'&&!!process.env.PARTITION_MODEL_CONFIG&&!!process.env.PARTITION_PRICE_TABLE,tts:tts.status(),live:live.status(),
+        hosted:publicHost!==null,...(publicHost?{invite:invite?{required:true,valid:true,name:invite.name,remaining:Math.max(0,invite.connections-live.usedBy(invite.name))}:{required:true,valid:false}}:{})});
+    }
     if(u.pathname==='/api/rooms'&&req.method==='POST'){
-      if(rooms.size>=20)return send(res,429,{error:'本地房间已满，请重启服务释放。'});
+      if(rooms.size>=hosting.rooms.most)return send(res,429,{error:publicHost?'现在房间已满，请过一会儿再来。':'本地房间已满，请重启服务释放。'});
       const b=await body(req);
+      // A hosted server makes a room for an invitation only, and so many an hour for each.
+      const invite=publicHost?invitationOf(req):null;
+      if(publicHost){
+        if(!invite)return send(res,403,{error:'需要有效的邀请链接。'});
+        const recent=(roomsMade.get(invite.name)||[]).filter(at=>at>Date.now()-3_600_000);
+        roomsMade.set(invite.name,recent);
+        if(recent.length>=hosting.rooms.per_invite_per_hour)return send(res,429,{error:'这条邀请在一小时内开的房间太多了，请过一会儿再来。'});
+      }
       if(liveOnly && (b?.controllers?.west!=='human' || b.controllers.east!=='live' || Object.keys(b.controllers).length!==2)){
         return send(res,403,{error:'此入口仅接受西席真人与东席 Gemini Live。'});
       }
@@ -65,7 +120,9 @@ const server=http.createServer(async(req,res)=>{
       if(Object.values(b.controllers||{}).includes('model')&&(!process.env.PARTITION_MODEL_CONFIG||!process.env.PARTITION_PRICE_TABLE))return send(res,400,{error:'真实模型需要明确的现有 harness 配置和价格表。'});
       if(Object.values(b.controllers||{}).includes('model')&&(!process.env.PARTITION_MODEL_LEDGER||Object.values(b.controllers).filter(x=>x==='model').length!==1))return send(res,400,{error:'本轮 smoke 仅允许一个模型席位，且必须提供共享请求限额账本。'});
       // There is one room (room-rules.json); only a scripted or a model seat gets the mechanisms alone.
-      const r=new Room(b.controllers);rooms.set(r.id,r);
+      const r=new Room(b.controllers);rooms.set(r.id,r);r.touched=Date.now();
+      // The room remembers its invitation: a voice session in it is counted against that invitation.
+      if(invite){r.invite={name:invite.name,connections:invite.connections};roomsMade.get(invite.name).push(Date.now());}
       // The seed makes a room's puzzle again (new Room(controllers,{seed})). It is the whole
       // answer, so it stays on this side: in the operator's terminal, never in a response.
       if(r.puzzle)console.log(`room ${r.id} · seed ${r.seed}`);
@@ -78,6 +135,7 @@ const server=http.createServer(async(req,res)=>{
       const r=rooms.get(m[1]);if(!r)return send(res,404,{error:'房间不存在。服务重启后需要重新开局。'});
       const role=r.role((req.headers.authorization||'').replace(/^Bearer /,''));
       if(!role)return send(res,403,{error:'没有有效的席位凭证。'});
+      r.touched=Date.now();   // someone with a key of the room is here: it is not idle
       if(m[2]==='live-trace'&&req.method==='GET'){
         if(role!=='watch')return send(res,403,{error:'仅观众可读公开Trace'});
         const seat=u.searchParams.get('seat');if(!['west','east'].includes(seat))return send(res,400,{error:'无效席位'});
@@ -97,7 +155,7 @@ const server=http.createServer(async(req,res)=>{
           if(!matchesSession())return send(res,409,{error:'语音会话已更换，请刷新本房间。'});
           live.attach(r,res);return;
         }
-        if(req.method!=='POST'||![origin,`http://localhost:${port}`].includes(req.headers.origin))return send(res,403,{error:'Live需要同源页面'});
+        if(req.method!=='POST'||!origins.has(req.headers.origin))return send(res,403,{error:'Live需要同源页面'});
         const b=await body(req);
         if(!matchesSession())return send(res,409,{error:'语音会话已更换，请刷新本房间。'});
         if(m[2]==='live-renew'){
@@ -112,7 +170,7 @@ const server=http.createServer(async(req,res)=>{
         if(role==='watch'||r.controllers[role]!=='human')return send(res,403,{error:'语音只允许真人席位使用。'});
         if(m[2]==='voice-status'&&req.method==='GET')return send(res,200,tts.status());
         // Strong same-origin requirement on all voice mutations, in addition to Host checks.
-        if(req.method!=='POST'||![origin,`http://localhost:${port}`].includes(req.headers.origin))return send(res,403,{error:'语音请求需要同源页面。'});
+        if(req.method!=='POST'||!origins.has(req.headers.origin))return send(res,403,{error:'语音请求需要同源页面。'});
         if(m[2]==='voice-disable'){tts.disable();return send(res,200,tts.status());}
         if(m[2]==='voice'){
           const b=await body(req);
@@ -153,10 +211,16 @@ const server=http.createServer(async(req,res)=>{
     send(res,404,{error:'Not found'});
   }catch(e){send(res,400,{error:e.message});}
 });
-server.listen(port,host,()=>console.log(`隔墙 3D · ${origin} · local only / no model calls by default`));
+// A hosted server lets go of the rooms nobody is in (hosting.json, rooms.idle_minutes): looked at
+// twice within the wait, and never while a voice session runs in the room.
+const sweeper=hosting.rooms.idle_minutes?setInterval(()=>{
+  for(const room of idleRooms(rooms.values(),Date.now(),hosting.rooms.idle_minutes,r=>live.running(r))){live.forget(room);rooms.delete(room.id);}
+},Math.max(250,Math.min(30_000,hosting.rooms.idle_minutes*30_000))):null;
+server.listen(port,hosting.bind,()=>console.log(publicHost?`隔墙 3D · ${hosting.public_origin} · hosted, by invitation · listening on ${hosting.bind}:${port}`:
+  `隔墙 3D · ${origin} · local only / no model calls by default`));
 let stopping=false;
 async function stop(){
-  if(stopping)return;stopping=true;tts.close();live.close();
+  if(stopping)return;stopping=true;clearInterval(sweeper);tts.close();live.close();
   const workers=[...children].map(c=>new Promise(resolve=>{
     const timer=setTimeout(()=>c.kill('SIGKILL'),5000);
     c.once('exit',()=>{clearTimeout(timer);resolve();});c.kill('SIGTERM');

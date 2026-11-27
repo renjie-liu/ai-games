@@ -1,0 +1,5 @@
+{
+  "server": {
+    "concurrent_sessions": 3
+  }
+}
