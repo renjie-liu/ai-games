@@ -35,12 +35,12 @@ async function server(t,hosting,invites=[{name:'朋友',code:CODE,connections:2}
     child.stdout.on('data',chunk=>{printed+=chunk;if(printed.includes('隔墙 3D'))resolve();});
     child.on('exit',code=>reject(Error(`the server stopped (${code}): ${printed}`)));
   });
-  const ask=(route,{method='GET',host=HOST,origin,invite,token,body}={})=>new Promise((resolve,reject)=>{
+  const ask=(route,{method='GET',host=HOST,origin,invite,token,body,headers:more={}}={})=>new Promise((resolve,reject)=>{
     const headers={Host:host,...(origin?{Origin:origin}:{}),...(invite?{'X-Partition-Invite':invite}:{}),
-      ...(token?{Authorization:'Bearer '+token}:{}),...(body?{'Content-Type':'application/json'}:{})};
+      ...(token?{Authorization:'Bearer '+token}:{}),...(body?{'Content-Type':'application/json'}:{}),...more};
     const request=http.request({host:'127.0.0.1',port,path:route,method,headers},response=>{
       let text='';response.on('data',chunk=>{text+=chunk;});
-      response.on('end',()=>{let data=null;try{data=JSON.parse(text);}catch{}resolve({status:response.statusCode,data,text});});
+      response.on('end',()=>{let data=null;try{data=JSON.parse(text);}catch{}resolve({status:response.statusCode,data,text,headers:response.headers});});
     });
     request.on('error',reject);request.end(body?JSON.stringify(body):undefined);
   });
@@ -116,6 +116,43 @@ test('an invitation added while the server runs counts at once; a broken file re
   // Asked again and again, the server says it once: a visitor cannot fill the operator's log.
   for(let i=0;i<5;i++)await room(CODE);
   assert.equal(printed().match(/invites_invalid/g).length,1);
+});
+// The page can be published as plain files somewhere else (a static site) and call this server from
+// there. A browser lets a page do that only if the server says that page's address may.
+test('a page published at an address the server names may call it; a page anywhere else may not',async t=>{
+  const PAGE='https://pages.example.test';
+  const {ask}=await server(t,{page_origins:[PAGE]});
+  const cors=r=>r.headers['access-control-allow-origin'];
+  // The browser asks first, without credentials, whether the real request would be allowed.
+  const before=await ask('/api/rooms',{method:'OPTIONS',origin:PAGE,headers:{'Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'content-type,x-partition-invite'}});
+  assert.equal(before.status,204);assert.equal(cors(before),PAGE);
+  assert.match(before.headers['access-control-allow-methods'],/POST/);
+  for(const name of ['authorization','content-type','x-partition-invite','x-live-generation'])assert.ok(before.headers['access-control-allow-headers'].toLowerCase().includes(name),name);
+  assert.ok(Number(before.headers['access-control-max-age'])>0);
+  // Then the real requests: answered as to anyone, and marked as readable by that page.
+  const seen=await ask('/api/capabilities',{origin:PAGE,invite:CODE});
+  assert.equal(seen.status,200);assert.equal(cors(seen),PAGE);assert.match(seen.headers.vary,/Origin/i);assert.equal(seen.data.invite.valid,true);
+  const made=await ask('/api/rooms',{method:'POST',origin:PAGE,invite:CODE,body:{controllers:{west:'human',east:'live'}}});
+  assert.equal(made.status,201);assert.equal(cors(made),PAGE);
+  const key=keyOf(made.data.links.west);
+  const moved=await ask('/api/rooms/'+made.data.id+'/command',{method:'POST',origin:PAGE,token:key,body:{type:'inspect',id:'plaque'}});
+  assert.equal(moved.status,200);assert.equal(cors(moved),PAGE);assert.equal(moved.data.ok,true);
+  const voice=await ask('/api/rooms/'+made.data.id+'/live-status',{origin:PAGE,token:key});
+  assert.equal(voice.status,200);assert.equal(cors(voice),PAGE);
+  // An invitation is still needed: naming the page lets it ask, not in.
+  assert.equal((await ask('/api/rooms',{method:'POST',origin:PAGE,body:{controllers:{west:'human',east:'live'}}})).status,403);
+  // Any other page: refused, and told nothing a browser would hand to it.
+  for(const method of ['OPTIONS','GET']){
+    const other=await ask('/api/capabilities',{method,origin:'https://evil.example'});
+    assert.equal(other.status,403,method);assert.equal(cors(other),undefined,method);
+  }
+  // The server's own page needs no such mark.
+  assert.equal(cors(await ask('/api/capabilities',{origin:PUBLIC})),undefined);
+});
+test('a server that names no page elsewhere answers none, whatever the page asks first',async t=>{
+  const {ask}=await server(t,{});
+  const before=await ask('/api/rooms',{method:'OPTIONS',origin:'https://pages.example.test',headers:{'Access-Control-Request-Method':'POST'}});
+  assert.equal(before.status,403);assert.equal(before.headers['access-control-allow-origin'],undefined);
 });
 test('on this machine nothing changed: no invitation, no public address',async t=>{
   const {ask,room,port}=await server(t,null);

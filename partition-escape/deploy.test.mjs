@@ -62,3 +62,37 @@ test('it refuses a folder with something in it, a folder inside a repository, an
   const fourth=make(path.join(temp(),'image'),null);
   assert.notEqual(fourth.status,0);assert.match(fourth.stderr,/PARTITION_HARNESS_ROOT/);
 });
+
+// --- the page as plain files, for a static site ------------------------------------------------
+const site=(out,server)=>spawnSync(process.execPath,['deploy/static-site.mjs',out,server],{cwd:game,encoding:'utf8'});
+test('the page is copied as plain files that find each other and name their server; nothing of the rules goes along',()=>{
+  const out=path.join(temp(),'partition-escape');
+  const made=site(out,'https://game.example.test');
+  assert.equal(made.status,0,made.stderr);
+  const files=listed(out);
+  assert.deepEqual(files,made.stdout.trim().split('\n').sort());
+  const html=fs.readFileSync(path.join(out,'index.html'),'utf8');
+  assert.ok(html.includes('<meta name="partition-server" content="https://game.example.test">'));
+  // Everything the page loads is beside it, by a path that works in any folder.
+  const loaded=[...html.matchAll(/(?:src|href)="(\.\/[^"]+)"/g)].map(m=>m[1].slice(2));
+  assert.deepEqual(loaded.sort(),['play.css','play.mjs']);
+  for(const file of loaded)assert.ok(files.includes(file),file);
+  assert.equal(/(?:src|href)="\//.test(html),false,'no path from the top of the site');
+  const code=files.filter(f=>f.endsWith('.mjs')&&!f.startsWith('vendor/')).map(f=>fs.readFileSync(path.join(out,f),'utf8')).join('\n');
+  for(const [,module] of code.matchAll(/from '\.\/([^']+)'/g))assert.ok(files.includes(module),module);
+  assert.equal(/fetch\(['"`]\/api/.test(code),false,'every request goes to the server the page names');
+  // The rules and a room's private facts are the server's: none of that code is published.
+  for(const kept of ['world.mjs','engine.mjs','room-rules.mjs','room-rules.json','server3d.mjs','live.mjs','hosting.mjs','live_worker.py'])
+    assert.equal(files.includes(kept),false,kept);
+  assert.ok(files.includes('vendor/THREE-LICENSE.txt'),'the library\'s licence goes with it');
+});
+test('a static copy is refused without a real address for the server, or into a folder with something in it',()=>{
+  for(const bad of ['game.example.test','https://game.example.test/','https://game.example.test/api','http://game.example.test','']){
+    const out=path.join(temp(),'site');
+    const refused=site(out,bad);
+    assert.notEqual(refused.status,0,bad);assert.equal(fs.existsSync(path.join(out,'index.html')),false,bad);
+  }
+  const full=temp();fs.writeFileSync(path.join(full,'kept.txt'),'mine');
+  assert.notEqual(site(full,'https://game.example.test').status,0);assert.deepEqual(fs.readdirSync(full),['kept.txt']);
+  assert.equal(site(path.join(temp(),'site'),'http://localhost:4191').status,0,'this machine, for a rehearsal');
+});

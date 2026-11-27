@@ -6,7 +6,20 @@ import {setupLive} from './live-client.mjs';
 window.addEventListener('hashchange',()=>location.reload());
 const $=s=>document.querySelector(s), app=$('#app');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// Where the server is. On the game's own server the page and the server are one address and this
+// is empty. Published as plain files somewhere else (HOSTING.md), the page names its server in
+// <meta name="partition-server">, and everything below that needs the server goes there.
+const SERVER=(document.querySelector('meta[name="partition-server"]')?.content||'').replace(/\/+$/,''), elsewhere=SERVER!=='';
+// Which way in this is. The server's own page has a path for each; a copy elsewhere is one page
+// in one folder, and the audience's way in is marked in the query.
+const entry=(elsewhere?new URLSearchParams(location.search).has('watch'):location.pathname==='/watch')?'watch':'play';
+const home=elsewhere?location.pathname:'/';
+// A link the server made for its own page ("/play#room=…&key=…"), as a link into this page.
+const linkHere=link=>{if(!elsewhere)return link;const [path,fragment]=link.split('#');return `${location.pathname}${path==='/watch'?'?watch':''}#${fragment}`;};
 const params=new URLSearchParams(location.hash.slice(1)), room=params.get('room'), key=params.get('key');
+// Which room and which invitation are read from the part after the # once, when the page loads. A
+// link that differs from the open page only there does not load the page again by itself.
+window.addEventListener('hashchange',()=>location.reload());
 // On a hosted server the link carries an invitation's code after the #, where no server sees it;
 // the page hands it over in a header when it asks what it may do and when it makes a room.
 const invitation=params.get('invite'), inviteHeader=invitation?{'X-Partition-Invite':invitation}:{};
@@ -16,7 +29,7 @@ let view,scene,selected=null,tab='objects',detailMessage='',previousRender='',ov
 let lastEventId=0,peerQueue=[],peerCurrent=null,peerUntil=0,peerTimer=null,pendingFocus=null,ownProposal=null,lastLocalCommand=null;
 const brand=`<div class="brand"><span class="brand-mark" aria-hidden="true"></span><strong>隔墙</strong><span class="top-sub">THE OTHER SIDE</span></div>`;
 async function api(suffix='',data){
-  const r=await fetch(`/api/rooms/${room}${suffix}`,{method:data?'POST':'GET',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:data?JSON.stringify(data):undefined});
+  const r=await fetch(`${SERVER}/api/rooms/${room}${suffix}`,{method:data?'POST':'GET',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:data?JSON.stringify(data):undefined});
   const result=await r.json();if(!r.ok)throw Error(result.error||'连接失败');return result;
 }
 function notice(text,error=false){const n=$('#feedback');if(n){n.textContent=text;n.classList.toggle('error',error);n.classList.remove('flash');void n.offsetWidth;n.classList.add('flash');}}
@@ -90,7 +103,7 @@ function command(c){
   commandTail=commandTail.then(perform,perform);return commandTail;
 }
 async function createRoom(controllers){
-  const response=await fetch('/api/rooms',{method:'POST',headers:{'Content-Type':'application/json',...inviteHeader},body:JSON.stringify({controllers})});
+  const response=await fetch(`${SERVER}/api/rooms`,{method:'POST',headers:{'Content-Type':'application/json',...inviteHeader},body:JSON.stringify({controllers})});
   const result=await response.json();
   if(!response.ok)throw Error(result.error||'创建房间失败');
   return result;
@@ -98,7 +111,7 @@ async function createRoom(controllers){
 function lobby(){
   app.innerHTML=`<header class="topbar">${brand}<span class="badge">LOCAL PROTOTYPE / 01</span></header><main class="lobby"><div class="lobby-grid"><section><div class="eyebrow">一堵墙 · 两个房间 · 同一个出口</div><h1>你看不到的，<br><em>另一侧看得见。</em></h1><p class="intro">先别急着开你的门。查看自己的机关，把发现告诉墙后的人，一起找到离开的办法。</p><div class="setup"><div class="eyebrow">选择这次合作</div><div class="seats"><label class="seat-choice"><span>01 / 西席 · 动力与出口</span><select id="west" disabled></select></label><label class="seat-choice"><span>02 / 东席 · 检修与闸门</span><select id="east" disabled></select></label></div><button class="primary" id="create" disabled>创建这次合作 ↗</button><p class="scope">正在读取本机可用席位…</p><div id="invite" aria-live="polite"></div></div></section><div class="preview" id="preview"><div class="preview-label"><span>WEST / 暖光</span><span>两侧线索各自私有</span><span>EAST / 冷光</span></div></div></div><div class="feature-row"><span>◈ 固定规则，真实机关</span><span>↔ 交换发现，商量行动</span><span>↶ 错了可以调整，没有突然失败</span></div></main>`;
   async function loadSeats(){
-    const response=await fetch('/api/capabilities',{headers:inviteHeader});
+    const response=await fetch(`${SERVER}/api/capabilities`,{headers:inviteHeader});
     if(!response.ok)throw Error('capabilities unavailable');
     const c=await response.json();
     // A hosted server lets in whoever holds an invitation. Without a good one the page says so and offers nothing.
@@ -138,7 +151,7 @@ function lobby(){
     const b=$('#create');b.disabled=true;b.textContent='正在接通两侧…';
     try{
       const d=await createRoom({west:$('#west').value,east:$('#east').value});
-      $('#invite').innerHTML=`<div class="invite"><strong>房间已准备好</strong><p class="small">这是组织者入口。把各席链接交给对应玩家；玩家页面只能看到自己的房间。观众只看公开事件与建筑机位。</p>${Object.entries(d.links).filter(([,u])=>u).map(([s,u])=>`<a class="button ${s==='watch'?'':'primary'}" href="${esc(u)}" target="_blank" rel="noopener">${s==='watch'?'打开只读观众':'进入'+seatName[s]} ↗</a>`).join('')}<p class="small">邀请第二位真人：右键对应入口复制链接。服务限本机；同机两个独立标签页可玩。远程联网尚未实现。</p></div>`;
+      $('#invite').innerHTML=`<div class="invite"><strong>房间已准备好</strong><p class="small">这是组织者入口。把各席链接交给对应玩家；玩家页面只能看到自己的房间。观众只看公开事件与建筑机位。</p>${Object.entries(d.links).filter(([,u])=>u).map(([s,u])=>`<a class="button ${s==='watch'?'':'primary'}" href="${esc(linkHere(u))}" target="_blank" rel="noopener">${s==='watch'?'打开只读观众':'进入'+seatName[s]} ↗</a>`).join('')}<p class="small">邀请第二位真人：右键对应入口复制链接。服务限本机；同机两个独立标签页可玩。远程联网尚未实现。</p></div>`;
     }catch(e){$('#invite').textContent=e.message;}finally{b.disabled=false;b.textContent='再开一个房间';}
   };
 }
@@ -151,9 +164,9 @@ function layout(){
   if(watching){document.querySelectorAll('[data-camera]').forEach(b=>b.onclick=()=>{scene.setCamera(b.dataset.camera);document.querySelectorAll('[data-camera]').forEach(x=>x.classList.toggle('active',x===b));$('.scene-tag').textContent='机位：'+b.textContent;});}
   else{
     const refreshVoice=()=>{voice=globalThis.speechSynthesis?.getVoices().find(v=>v.localService&&/^zh/i.test(v.lang));$('#voice').disabled=!voice;$('#voice').textContent=voice?(reading?'本机朗读：开':'本机朗读：关'):'无本机朗读';};refreshVoice();globalThis.speechSynthesis?.addEventListener('voiceschanged',refreshVoice);$('#voice').onclick=()=>{reading=!reading;globalThis.speechSynthesis.cancel();refreshVoice();};
-    ttsClient=setupTts({room,key,getView:()=>view});
+    ttsClient=setupTts({room,key,getView:()=>view,server:SERVER});
     const livePanel=document.createElement('section');livePanel.id='live-panel';livePanel.className='chat';$('#tts-panel').before(livePanel);
-    liveClient=setupLive({room,key,getView:()=>view});
+    liveClient=setupLive({room,key,getView:()=>view,server:SERVER,worklet:new URL('./mic-worklet.js',import.meta.url).href});
     if(Object.values(view.controllers).includes('live')){$('#tts-panel').hidden=true;$('#voice').hidden=true;}
     // Say what a typed line does with the partner this room has.
     const partner=view.controllers[view.role==='west'?'east':'west'];
@@ -229,7 +242,7 @@ async function showTrace(endpoint,seat){
     if(loading||document.hidden)return;
     loading=true;
     try{
-      const r=await fetch(`/api/rooms/${room}/${endpoint}?seat=${seat}`,{headers:{Authorization:`Bearer ${key}`},cache:'no-store'});
+      const r=await fetch(`${SERVER}/api/rooms/${room}/${endpoint}?seat=${seat}`,{headers:{Authorization:`Bearer ${key}`},cache:'no-store'});
       if(!r.ok)throw Error((await r.json()).error);
       const html=await r.text();
       if(html!==previous){frame.srcdoc=html;previous=html;}
@@ -242,17 +255,17 @@ async function showTrace(endpoint,seat){
   await refresh();
 }
 const query=new URLSearchParams(location.search);
-if(room&&key&&location.pathname==='/watch'&&['live-trace','studio'].includes(query.get('trace'))&&['east','west'].includes(query.get('seat'))){
+if(room&&key&&entry==='watch'&&['live-trace','studio'].includes(query.get('trace'))&&['east','west'].includes(query.get('seat'))){
   await showTrace(query.get('trace'),query.get('seat'));
-}else if(!room&&!key&&location.pathname==='/play'&&new URLSearchParams(location.search).get('join')==='live'){
+}else if(!room&&!key&&entry==='play'&&(elsewhere||location.pathname==='/play')&&new URLSearchParams(location.search).get('join')==='live'){
   try{
     const created=await createRoom({west:'human',east:'live'});
-    location.replace(created.links.west);
+    location.replace(linkHere(created.links.west));
   }catch(e){
-    app.innerHTML=`<div class="loading"><h1>无法进入真人语音房</h1><p>${esc(e.message)}</p><a href="/">返回开局页</a></div>`;
+    app.innerHTML=`<div class="loading"><h1>无法进入真人语音房</h1><p>${esc(e.message)}</p><a href="${esc(home)}">返回开局页</a></div>`;
   }
 }else if(!room||!key)lobby();else{
-  try{view=await api();if((location.pathname==='/watch')!==(view.role==='watch'))throw Error('入口与凭证角色不一致。请使用原始席位链接。');layout();render();
+  try{view=await api();if((entry==='watch')!==(view.role==='watch'))throw Error('入口与凭证角色不一致。请使用原始席位链接。');layout();render();
     setInterval(async()=>{try{const next=await api();if(next.rev>=view.rev&&(next.rev!==view.rev||JSON.stringify(next.worker)!==JSON.stringify(view.worker))){view=next;render();}}catch(e){notice(e.message,true);}},650);
-  }catch(e){app.innerHTML=`<div class="loading"><h1>没有接通房间</h1><p>${esc(e.message)}</p><a href="/">返回本地开局页</a></div>`;}
+  }catch(e){app.innerHTML=`<div class="loading"><h1>没有接通房间</h1><p>${esc(e.message)}</p><a href="${esc(home)}">返回开局页</a></div>`;}
 }

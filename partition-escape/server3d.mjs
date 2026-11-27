@@ -8,6 +8,7 @@ import {Room} from './world.mjs';
 import {createVoiceService} from './voice.mjs';
 import {LiveHub} from './live.mjs';
 import {loadHosting,loadInvites,findInvite,idleRooms,INVITE_HEADER} from './hosting.mjs';
+import {PAGE,PAGE_FILES} from './page-files.mjs';
 const root=path.dirname(fileURLToPath(import.meta.url));
 // Whether the server can be reached from outside this machine, and who may then play (hosting.json).
 const hosting=loadHosting();
@@ -18,7 +19,11 @@ const origin=`http://${host}:${port}`;
 // server is also asked under its public address, by anyone; who may play there is the invitations'.
 const localHosts=[`${host}:${port}`,`localhost:${port}`];
 const publicHost=hosting.public_origin?new URL(hosting.public_origin).host:null;
-const origins=new Set([origin,`http://localhost:${port}`,...(hosting.public_origin?[hosting.public_origin]:[])]);
+// Pages published somewhere else that may call this server from a browser (hosting.json).
+const pages=new Set(hosting.page_origins);
+const origins=new Set([origin,`http://localhost:${port}`,...(hosting.public_origin?[hosting.public_origin]:[]),...pages]);
+// What such a page's requests may carry: the room's key, JSON, the invitation's code, the voice session's number.
+const PAGE_HEADERS='Authorization, Content-Type, X-Partition-Invite, X-Live-Generation';
 const fromHere=req=>['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
 const answered=req=>(localHosts.includes(req.headers.host)&&fromHere(req))||(publicHost!==null&&req.headers.host===publicHost);
 // The invitation whose code the caller sent, or null. The file is read each time, so an invitation
@@ -42,12 +47,13 @@ if(live.enabled&&!live.runtime.ready)console.error(`Gemini Live 语音不可用�
 let tts;
 try{tts=createVoiceService({directory:path.join(root,'.voice'),mode:process.env.PARTITION_TTS_MODE||'off'});}
 catch{tts=createVoiceService();console.error('TTS unavailable: authorization, ledger, key or lock requires local review. Game remains available.');}
-const files=new Map([['/','play.html'],['/play','play.html'],['/watch','play.html'],['/play.mjs','play.mjs'],['/scene.mjs','scene.mjs'],['/play.css','play.css'],
-  ['/voice-client.mjs','voice-client.mjs'],['/live-client.mjs','live-client.mjs'],['/mic-worklet.js','mic-worklet.js'],['/vendor/three.module.min.js','vendor/three.module.min.js'],['/vendor/three.core.min.js','vendor/three.core.min.js']]);
+// The page's files (page-files.mjs): the page under its three ways in, and what it loads.
+const files=new Map([['/',PAGE],['/play',PAGE],['/watch',PAGE],...PAGE_FILES.map(file=>['/'+file,file])]);
 const mime={'.html':'text/html; charset=utf-8','.mjs':'text/javascript','.js':'text/javascript','.css':'text/css'};
 function send(res,status,data,type='application/json; charset=utf-8'){
+  // A response marked for a page elsewhere (see the request handler) is that page's to read.
   res.writeHead(status,{'Content-Type':type,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
-    'Referrer-Policy':'no-referrer','Cross-Origin-Resource-Policy':'same-origin',
+    'Referrer-Policy':'no-referrer','Cross-Origin-Resource-Policy':res.hasHeader('Access-Control-Allow-Origin')?'cross-origin':'same-origin',
     'Content-Security-Policy':"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; font-src 'self'; frame-ancestors 'self'; object-src 'none'"});
   res.end(typeof data==='object'&&!Buffer.isBuffer(data)?JSON.stringify(data):data);
 }
@@ -76,6 +82,16 @@ const server=http.createServer(async(req,res)=>{
   try{
     if(!answered(req))return send(res,403,{error:publicHost?'请从公开地址访问。':'只允许本机访问'});
     if(req.headers.origin && !origins.has(req.headers.origin))return send(res,403,{error:'跨站请求被拒绝'});
+    // A page published elsewhere, at an address this server names: its browser is told that the
+    // page may read the answer, and what it may send. Nothing else about the request changes: a
+    // room still takes an invitation and a seat still takes its key.
+    if(pages.has(req.headers.origin)){
+      res.setHeader('Access-Control-Allow-Origin',req.headers.origin);res.setHeader('Vary','Origin');
+      if(req.method==='OPTIONS'){
+        res.writeHead(204,{'Access-Control-Allow-Methods':'GET, POST','Access-Control-Allow-Headers':PAGE_HEADERS,'Access-Control-Max-Age':'7200','Cache-Control':'no-store'});
+        return res.end();
+      }
+    }
     const u=new URL(req.url,origin);
     if(u.pathname==='/api/health'&&req.method==='GET')return send(res,200,{ok:true,localOnly:publicHost===null,tts:tts.status().mode,live:live.status()});
     if(u.pathname==='/api/capabilities'&&req.method==='GET'){

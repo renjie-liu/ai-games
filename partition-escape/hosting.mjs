@@ -6,6 +6,10 @@
 //   bind            the address the server listens on.
 //   invites_file    the file of invitations. A server with a public address is never open to
 //                   everyone: it has to name one.
+//   page_origins    addresses of pages published somewhere else (the game's page as plain files
+//                   on a static site) that may call this server from a browser. None by default.
+//   invite_page     the page an invited player is sent to, when that is a copy published
+//                   elsewhere. null: the server's own page.
 //   rooms.most                 how many rooms the server keeps at once
 //   rooms.idle_minutes         a room nobody has touched for this long, with no voice session
 //                              running in it, is let go. 0 keeps every room until the server stops.
@@ -27,6 +31,12 @@ const invalid=why=>new Error(`hosting_invalid: ${why} (check hosting.json and th
 const plain=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 const text=v=>typeof v==='string'&&v.trim().length>0&&v===v.trim();
 const LOOPBACK=['localhost','127.0.0.1','[::1]'];
+// An address a browser would give as a page's origin: scheme and host, nothing after. Plain http
+// only for this machine, where it is used to rehearse.
+function pageAddress(value){
+  let url;try{url=new URL(value);}catch{return false;}
+  return typeof value==='string'&&url.origin===value&&(url.protocol==='https:'||(url.protocol==='http:'&&LOOPBACK.includes(url.hostname)));
+}
 
 function check(h){
   const no=why=>{throw invalid(why);};
@@ -36,6 +46,14 @@ function check(h){
     // A microphone works only on a page the browser trusts: https, or this machine itself.
     if(url.protocol==='http:'&&!LOOPBACK.includes(url.hostname))no('public_origin has to be https; plain http is for rehearsing on this machine');
     if(h.invites_file===null)no('a server with a public_origin needs invites_file: it is never open to everyone');
+  }
+  if(!Array.isArray(h.page_origins)||!h.page_origins.every(pageAddress)||new Set(h.page_origins).size!==h.page_origins.length)
+    no('page_origins is a list of different addresses like https://someone.example, with nothing after the host');
+  if(h.page_origins.length&&h.public_origin===null)no('page_origins is for a server with a public_origin: a page elsewhere has to reach it');
+  if(h.invite_page!==null){
+    let page;try{page=new URL(h.invite_page);}catch{no('invite_page is the address of the page invited players open');}
+    if(page.href!==h.invite_page||page.search||page.hash||![h.public_origin,...h.page_origins].includes(page.origin))
+      no('invite_page is a page of public_origin or of one of page_origins, with nothing after its path');
   }
   if(!text(h.bind))no('bind is the address to listen on');
   if(h.invites_file!==null&&!text(h.invites_file))no('invites_file is the path of the file of invitations, or null');
@@ -54,7 +72,7 @@ export function mergeHosting(defaults,changes={}){
   if(strange)throw invalid(`unknown name rooms.${strange}`);
   const merged={...defaults,...changes,rooms:{...defaults.rooms,...rooms}};
   check(merged);
-  return Object.freeze({...merged,rooms:Object.freeze(merged.rooms)});
+  return Object.freeze({...merged,page_origins:Object.freeze([...merged.page_origins]),rooms:Object.freeze(merged.rooms)});
 }
 export function loadHosting(override=process.env.PARTITION_HOSTING,root=here){
   let defaults,changes;
@@ -113,7 +131,8 @@ export function newInvite(file,name,connections){
   fs.renameSync(temporary,file);fs.chmodSync(file,0o600);
   return invite;
 }
-export const inviteLink=(origin,invite)=>`${origin}/#invite=${invite.code}`;
+// The link to give an invited player: into the page they are to open, with the code after the #.
+export const inviteLink=(hosting,invite)=>`${hosting.invite_page??hosting.public_origin+'/'}#invite=${invite.code}`;
 
 // --- rooms ---------------------------------------------------------------------------------------
 // The rooms to let go: untouched for longer than the wait, and no voice session running in them.

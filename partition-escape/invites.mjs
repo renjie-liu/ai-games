@@ -24,7 +24,7 @@ try{
     if(rest.length!==2||!/^[1-9]\d*$/.test(count))fail('usage: node invites.mjs add <name> <connections>');
     const invite=newInvite(hosting.invites_file,name,Number(count));
     console.log(`${invite.name}: ${invite.connections} voice connections`);
-    console.log(hosting.public_origin?inviteLink(hosting.public_origin,invite):`code ${invite.code} (no public_origin is set, so there is no link to give)`);
+    console.log(hosting.public_origin?inviteLink(hosting,invite):`code ${invite.code} (no public_origin is set, so there is no link to give)`);
   }else if(command==='list'&&!rest.length){
     // What each has started is in the ledger, read by the code that keeps it.
     const asked=spawnSync(python,[path.join(root,'live_budget.py')],{cwd:root,encoding:'utf8',timeout:10000});

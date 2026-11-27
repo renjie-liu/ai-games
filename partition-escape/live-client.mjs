@@ -1,4 +1,6 @@
-export function setupLive({room,key,getView}){
+// `server` is where the server is when the page is published somewhere else ('' on the server's own
+// page), and `worklet` the address of the microphone worklet beside the page.
+export function setupLive({room,key,getView,server='',worklet='/mic-worklet.js'}){
   const panel=document.querySelector('#live-panel');if(!panel)return {stop(){},update(){}};
   const view=getView(),other=view.role==='west'?'east':'west';if(view.controllers[other]!=='live')return {stop(){},update(){}};
   panel.innerHTML='<h2>与 Gemini Live 对话</h2><p id="live-state" role="status" aria-live="polite">麦克风关 · 尚未连接</p><div class="actions"><button id="live-start" class="primary" aria-describedby="live-notice" disabled>开始语音</button><button id="live-continue" class="primary" aria-describedby="live-notice" hidden>在本局继续语音</button><a id="live-new-room" class="button primary" href="/play?join=live" hidden>开新房与 Gemini 通话</a><button id="live-stop" disabled>结束语音</button><button id="live-interrupt" disabled>打断 / 先等等</button></div><p id="live-you"></p><p id="live-partner"></p><p id="live-result" class="small"></p><details id="live-details" open><summary>语音说明、用量上限与数据条款</summary><p class="small" id="live-notice">开启或继续语音，即确认你已满 18 岁、在<a href="https://aistudio.google.com/docs/available-regions" target="_blank" rel="noopener noreferrer">支持地区</a>试玩，并同意 Google 处理你的声音和本局游戏上下文。当前项目的数据设置未经核实；免费服务可能将内容用于产品改进或人工审核。请只谈游戏。<a href="https://aistudio.google.com/docs/terms" target="_blank" rel="noopener noreferrer">Google 数据条款</a></p><p class="small" id="live-caps">切换标签页会关闭麦克风并结束本段语音，返回后可在本局续聊。随时可点「结束语音」。</p><p id="live-budget" class="small"></p><p id="live-sync-state" role="status" aria-live="polite">公开状态更新：尚未开启语音。</p></details>';
@@ -79,7 +81,7 @@ export function setupLive({room,key,getView}){
     return Number.isInteger(session)?{'X-Live-Generation':String(session)}:{};
   }
   async function api(suffix,data,signal,session){
-    const r=await fetch(`/api/rooms/${room}/live-${suffix}`,{method:data?'POST':'GET',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json',...sessionHeaders(session)},body:data?JSON.stringify(data):undefined,signal,keepalive:data?.type==='stop'});
+    const r=await fetch(`${server}/api/rooms/${room}/live-${suffix}`,{method:data?'POST':'GET',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json',...sessionHeaders(session)},body:data?JSON.stringify(data):undefined,signal,keepalive:data?.type==='stop'});
     const d=await r.json();if(!r.ok)throw Error(d.error||'连接失败');return d;
   }
   function clearAudio(s){for(const n of s.audioNodes){try{n.stop();}catch{}}s.audioNodes=[];s.schedule=s.ctx?.currentTime||0;}
@@ -251,7 +253,7 @@ export function setupLive({room,key,getView}){
     }
   }
   async function readStream(s){
-    const r=await fetch(`/api/rooms/${room}/live-stream`,{headers:{Authorization:`Bearer ${key}`,...sessionHeaders(s.generation)},signal:s.streamAbort.signal});
+    const r=await fetch(`${server}/api/rooms/${room}/live-stream`,{headers:{Authorization:`Bearer ${key}`,...sessionHeaders(s.generation)},signal:s.streamAbort.signal});
     if(!valid(s)){r.body?.cancel().catch(()=>{});return;}
     if(!r.ok)throw Error('语音下行连接失败');s.reader=r.body.getReader();const decode=new TextDecoder();
     (async()=>{
@@ -332,7 +334,7 @@ export function setupLive({room,key,getView}){
       }
       s.ctx=new AudioContext({sampleRate:16000});await s.ctx.resume();if(!valid(s))return;
       // Finish local capture setup before asking the server to spend a connection.
-      if(!mock){await s.ctx.audioWorklet.addModule('/mic-worklet.js');if(!valid(s))return;}
+      if(!mock){await s.ctx.audioWorklet.addModule(worklet);if(!valid(s))return;}
       if(s.ctx.state!=='running')throw Error('音频设备未就绪');
       s.ctx.onstatechange=()=>{if(current===s&&s.ctx.state!=='running')stop('音频设备已暂停，语音已停止',s);};
       used=true;await readStream(s);if(!valid(s))return;
