@@ -21,6 +21,10 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      # Where Partition Escape's server is. Its page is published here and talks to that server,
+      # which has to name this site in page_origins (partition-escape/HOSTING.md).
+      PARTITION_SERVER: https://geqiang.tarot-rj.workers.dev
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -30,12 +34,14 @@ jobs:
       - name: Put the site together
         run: |
           mkdir -p _site/ironyard _site/tonight-i-pay
-          cp site/index.html site/ironyard.jpg site/tonight-i-pay.jpg _site/
+          cp site/index.html site/ironyard.jpg site/tonight-i-pay.jpg site/partition-escape.jpg _site/
           # the game is one self-contained file, already built and tested in the repository
           cp ironyard/dist/index.html _site/ironyard/index.html
           # the drama is one page, its cover, and the clips it plays
           cp tonight-i-pay/index.html tonight-i-pay/cover.jpg _site/tonight-i-pay/
           cp -r tonight-i-pay/clips _site/tonight-i-pay/clips
+          # Partition Escape: only its page, which plays against the server named above
+          node partition-escape/deploy/static-site.mjs _site/partition-escape "$PARTITION_SERVER"
           touch _site/.nojekyll
 
       - uses: actions/configure-pages@v6
