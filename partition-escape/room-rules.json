@@ -1,0 +1,12 @@
+{
+  "battery_cells": 2,
+  "supports": {"weak": 2, "too_long": 1},
+  "marks": ["三角", "圆圈", "方块", "菱形", "十字", "星形"],
+  "tags": ["红", "黄"],
+  "gate_weights_kg": [200, 240, 280, 320],
+  "margins_kg": [40, 60, 80],
+  "slot_cm": [100, 120],
+  "fit_lengths_cm": [100, 110, 120],
+  "long_lengths_cm": [140, 150],
+  "stars": {"three": {"power_ons": 1, "spare_packs": 0}, "two": {"spare_packs": 0}}
+}

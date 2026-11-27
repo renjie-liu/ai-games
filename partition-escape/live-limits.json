@@ -1,0 +1,20 @@
+{
+  "session": {
+    "seconds": 600,
+    "input_seconds": 300,
+    "output_seconds": 300,
+    "turns": 120,
+    "tools": 120,
+    "text_bytes": 160000,
+    "max_output_tokens": 1024,
+    "usage_stop_usd": 1.0
+  },
+  "updates": {
+    "debounce_ms": 250,
+    "interval_ms": 2000,
+    "batches": 60,
+    "events": 12,
+    "batch_bytes": 2400,
+    "total_bytes": 96000
+  }
+}

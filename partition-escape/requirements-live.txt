@@ -1,0 +1,5 @@
+# Install into the ai-gaming Python environment after its uv sync --frozen.
+# These imports are required even for the SDK's offline protocol tests.
+google-genai==2.32.0
+httpx[socks]==0.28.1
+python-socks[asyncio]==2.8.2
