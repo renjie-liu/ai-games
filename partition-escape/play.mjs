@@ -115,8 +115,13 @@ function lobby(){
     if(!response.ok)throw Error('capabilities unavailable');
     const c=await response.json();
     // A hosted server lets in whoever holds an invitation. Without a good one the page says so and offers nothing.
+    // A hosted server lets in whoever holds an invitation. Without a good one the page asks for the
+    // code, which then goes after the # like a link's, and offers nothing else.
     if(c.hosted&&!c.invite?.valid){
-      $('.scope').textContent=invitation?'这条邀请链接无效，或者已经被收回。请向邀请你的人要一条新的。':'这个入口需要邀请链接。请向邀请你的人要一条完整的链接。';
+      $('.scope').textContent=invitation?'这个邀请码不对，或者已经被收回。请再输入一次，或向邀请你的人确认。':'这个入口需要邀请码。输入邀请你的人给你的码，或者打开他发给你的完整链接。';
+      $('#invite').innerHTML='<form class="code-form" id="code-form"><label class="seat-choice"><span>邀请码</span><input id="invite-code" name="invite-code" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="128" required></label><button class="primary" type="submit">进入</button></form>';
+      const box=$('#invite-code');box.value=invitation||'';box.focus();
+      $('#code-form').onsubmit=event=>{event.preventDefault();const code=box.value.trim();if(code)location.hash='invite='+encodeURIComponent(code);};
       return;
     }
     const west=$('#west'),east=$('#east');

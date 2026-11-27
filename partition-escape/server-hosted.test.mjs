@@ -72,6 +72,14 @@ test('without an invitation a visitor sees that one is needed and nothing about 
     assert.equal(refused.status,403);assert.match(refused.data.error,/邀请/);
   }
 });
+test('a short code typed on the page works like the long one in a link',async t=>{
+  const {ask,room}=await server(t,{},[{name:'朋友',code:'tea-time-42',connections:2}]);
+  assert.deepEqual((await ask('/api/capabilities',{invite:'tea-time-42'})).data.invite,{required:true,valid:true,name:'朋友',remaining:2});
+  assert.equal((await room('tea-time-42')).status,201);
+  // A code is compared as it is: a near miss does not get in. (Spaces around it never arrive: a
+  // header's value is trimmed on the way, and the page trims what is typed.)
+  for(const near of ['tea-time-4','TEA-TIME-42','tea-time-422'])assert.equal((await room(near)).status,403,near);
+});
 test('an invitation opens a room, from the public page only, and says how many voice connections it has left',async t=>{
   const {ask,room}=await server(t,{});
   assert.deepEqual((await ask('/api/capabilities',{invite:CODE})).data.invite,{required:true,valid:true,name:'朋友',remaining:2});

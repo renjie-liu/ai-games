@@ -49,6 +49,7 @@
 .fact-table th[scope=row]{color:var(--ink);font-weight:500}
 .inspect .small{color:var(--muted);font-size:13px;margin-top:10px}
 /* How the game went, on the closing card. */
+.code-form{display:flex;gap:12px;align-items:flex-end;margin-top:12px}.code-form .seat-choice{flex:1}.code-form input{min-height:44px;border:1px solid var(--line);background:#253138;color:var(--ink);border-radius:9px;padding:10px 15px;letter-spacing:.06em}
 .victory .rating{color:var(--ink);font-size:17px}.victory .rating span{color:var(--warm);font-size:26px;letter-spacing:.12em;margin-right:10px;vertical-align:-2px}
 /* A waiting proposal stays in sight while the side column scrolls: deciding on a support means
    reading the load chart above it, and on a short window the card would otherwise sit below the fold. */

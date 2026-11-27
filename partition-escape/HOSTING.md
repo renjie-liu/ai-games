@@ -67,7 +67,9 @@ fly ssh console --app <应用名> -C "/app/game/deploy/run.sh /app/harness/.venv
 fly ssh console --app <应用名> -C "/app/game/deploy/run.sh node invites.mjs add 朋友 20"
 ```
 
-把打印出来的链接（`https://<应用名>.fly.dev/#invite=…`）发给对方。`#` 后面的部分浏览器不会发给任何服务器，页面在开房间时才把它放在请求头里交给这台服务。
+把打印出来的链接（`https://<应用名>.fly.dev/#invite=…`）发给对方。
+
+不想发长链接时，可以用短码：`invites.mjs add 朋友 30 --short` 生成一个 8 位、不会看错的码，`--code <你选的码>` 用你自己定的码（至少 6 位）。对方打开主页，在「邀请码」框里输入即可。短码更容易被转发或猜到，靠这条邀请自己的次数封顶。`#` 后面的部分浏览器不会发给任何服务器，页面在开房间时才把它放在请求头里交给这台服务。
 
 ## 上线后先做的检查
 

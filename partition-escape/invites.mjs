@@ -2,10 +2,13 @@
 // The operator's hand on the invitations of a hosted server (HOSTING.md). Run where the server
 // runs, with the same PARTITION_HOSTING, so both read the same file.
 //
-//   node invites.mjs add <name> <connections>   a new invitation; prints its link, once
+//   node invites.mjs add <name> <connections> [--short | --code <code>]
+//                                               a new invitation; prints its code and link, once.
+//                                               --short makes a code of 8 letters and digits to type
+//                                               on the page; --code uses one you choose (6 or more).
 //   node invites.mjs list                       every invitation: what it may start, what it has started
 //
-// The link is the secret. It is printed when the invitation is made and not again; the file of
+// The code is the secret. It is printed when the invitation is made and not again; the file of
 // codes stays on the server.
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -20,10 +23,12 @@ try{
   const hosting=loadHosting();
   if(!hosting.invites_file)fail('this server takes no invitations: hosting names no invites_file (PARTITION_HOSTING)');
   if(command==='add'){
-    const [name,count]=rest;
-    if(rest.length!==2||!/^[1-9]\d*$/.test(count))fail('usage: node invites.mjs add <name> <connections>');
-    const invite=newInvite(hosting.invites_file,name,Number(count));
+    const [name,count,...how]=rest,usage='usage: node invites.mjs add <name> <connections> [--short | --code <code>]';
+    const choice=how.length===0?{}:how.length===1&&how[0]==='--short'?{short:true}:how.length===2&&how[0]==='--code'?{code:how[1]}:null;
+    if(!name||!/^[1-9]\d*$/.test(count||'')||!choice)fail(usage);
+    const invite=newInvite(hosting.invites_file,name,Number(count),choice);
     console.log(`${invite.name}: ${invite.connections} voice connections`);
+    console.log(`邀请码 ${invite.code}`);
     console.log(hosting.public_origin?inviteLink(hosting,invite):`code ${invite.code} (no public_origin is set, so there is no link to give)`);
   }else if(command==='list'&&!rest.length){
     // What each has started is in the ledger, read by the code that keeps it.

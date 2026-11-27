@@ -16,8 +16,10 @@
 //   rooms.per_invite_per_hour  how many rooms one invitation may make in an hour
 //
 // An invitation is a name, a code and a number of voice connections. The code is the secret: it
-// travels in the link after the #, which a browser sends to no server, and the page hands it over
-// in a header when it makes a room. How many connections an invitation has used is counted in the
+// travels in the link after the #, which a browser sends to no server, or is typed on the page;
+// the page hands it over in a header when it makes a room. A code is made long and random unless
+// the operator chooses one or asks for a short one to type: a short code is easier to pass on and
+// to guess, and the invitation's own count is what caps it. How many connections an invitation has used is counted in the
 // ledger, with the grant's own count (live_budget.py).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -86,7 +88,9 @@ export function loadHosting(override=process.env.PARTITION_HOSTING,root=here){
 // --- invitations ---------------------------------------------------------------------------------
 // A message here never repeats a code: it may end up in a log.
 const refused=why=>new Error(`invites_invalid: ${why}`);
-const CODE=/^[A-Za-z0-9_-]{24,128}$/,MOST_NAME=40;
+const CODE=/^[A-Za-z0-9_-]{6,128}$/,MOST_NAME=40;
+// A short code to type: letters and digits that cannot be mistaken for one another.
+const TYPABLE='abcdefghjkmnpqrstuvwxyz23456789',TYPABLE_LENGTH=8;
 function checkInvites(value){
   if(!plain(value)||!Array.isArray(value.invites)||Object.keys(value).length!==1)throw refused('the file is {"invites": [...]}');
   const names=new Set(),codes=new Set();
@@ -95,7 +99,7 @@ function checkInvites(value){
     const unknown=Object.keys(invite).find(k=>!['name','code','connections'].includes(k));
     if(unknown)throw refused(`unknown name ${unknown}`);
     if(!text(invite.name)||[...invite.name].length>MOST_NAME)throw refused(`a name is 1 to ${MOST_NAME} letters`);
-    if(typeof invite.code!=='string'||!CODE.test(invite.code))throw refused(`the code of ${invite.name} is 24 to 128 letters, digits, - or _`);
+    if(typeof invite.code!=='string'||!CODE.test(invite.code))throw refused(`the code of ${invite.name} is 6 to 128 letters, digits, - or _`);
     if(!Number.isSafeInteger(invite.connections)||invite.connections<1)throw refused(`connections of ${invite.name} is a whole number from 1`);
     if(names.has(invite.name))throw refused(`two invitations named ${invite.name}`);
     if(codes.has(invite.code))throw refused(`${invite.name} has the same code as another invitation`);
@@ -119,11 +123,13 @@ export function findInvite(invites,code){
   for(const invite of invites)if(timingSafeEqual(digest(invite.code),given))found=invite;
   return found;
 }
-// Adds an invitation with a fresh code to the file (making the file if it is not there) and
-// returns it. The file is written whole, readable by its owner only.
-export function newInvite(file,name,connections){
+// Adds an invitation to the file (making the file if it is not there) and returns it. Its code is
+// `code` if given, a short one to type with `short`, and otherwise long and random. The file is
+// written whole, readable by its owner only.
+export function newInvite(file,name,connections,{code,short=false}={}){
   const invites=fs.existsSync(file)?loadInvites(file):[];
-  const invite={name,code:randomBytes(24).toString('base64url'),connections};
+  const made=short?[...randomBytes(TYPABLE_LENGTH)].map(b=>TYPABLE[b%TYPABLE.length]).join(''):randomBytes(24).toString('base64url');
+  const invite={name,code:code??made,connections};
   const all=checkInvites({invites:[...invites,invite]});
   fs.mkdirSync(path.dirname(file),{recursive:true,mode:0o700});
   const temporary=`${file}.${process.pid}.tmp`;

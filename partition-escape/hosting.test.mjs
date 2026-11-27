@@ -56,7 +56,7 @@ test('invitations are names, codes too long to guess and a number of connections
   const good={invites:[{name:'朋友',code:CODE,connections:20},{name:'同事',code:OTHER,connections:5}]};
   assert.deepEqual(loadInvites(file(good)),good.invites);
   const bad=[
-    [{invites:[{name:'朋友',code:'short',connections:20}]},/code/],[{invites:[{name:'朋友',code:CODE+'!',connections:20}]},/code/],
+    [{invites:[{name:'朋友',code:'abc12',connections:20}]},/code/],[{invites:[{name:'朋友',code:CODE+'!',connections:20}]},/code/],
     [{invites:[{name:'',code:CODE,connections:20}]},/name/],[{invites:[{name:'x'.repeat(41),code:CODE,connections:20}]},/name/],
     [{invites:[{name:'朋友',code:CODE,connections:0}]},/connections/],[{invites:[{name:'朋友',code:CODE,connections:1.5}]},/connections/],
     [{invites:[{name:'朋友',code:CODE,connections:2},{name:'朋友',code:OTHER,connections:2}]},/two invitations named/],
@@ -67,6 +67,19 @@ test('invitations are names, codes too long to guess and a number of connections
   }
   assert.throws(()=>loadInvites('/nonexistent/invites.json'),/invites_invalid/);
   assert.deepEqual(loadInvites(file({invites:[]})),[],'a server may be up before anyone is invited');
+  // A code short enough to say aloud or type on the page is allowed; it is the operator's choice to make one.
+  assert.equal(loadInvites(file({invites:[{name:'朋友',code:'k7m2qx9p',connections:5}]}))[0].code,'k7m2qx9p');
+});
+test('the operator may choose a short code, or have one made that is easy to type',()=>{
+  const at=file({invites:[{name:'朋友',code:CODE,connections:20}]});
+  assert.equal(newInvite(at,'同事',5,{code:'tea-time-42'}).code,'tea-time-42');
+  const typed=newInvite(at,'家人',5,{short:true}).code;
+  // Eight letters and digits, none that look alike (0 O o, 1 l I).
+  assert.match(typed,/^[a-hjkmnp-z2-9]{8}$/);
+  for(const bad of ['abc12','with space','中文码字码字码','toolong'.repeat(20)])
+    assert.throws(()=>newInvite(at,'坏的',1,{code:bad}),/invites_invalid/,bad);
+  assert.throws(()=>newInvite(at,'重复',1,{code:'tea-time-42'}),/same code/);
+  assert.deepEqual(loadInvites(at).map(i=>i.name),['朋友','同事','家人']);
 });
 test('a code finds its invitation and nothing else does',()=>{
   const invites=[{name:'朋友',code:CODE,connections:20},{name:'同事',code:OTHER,connections:5}];
@@ -115,11 +128,17 @@ test('the operator adds an invitation from the command line and is given its lin
   const listed=run('list');
   assert.equal(listed.status,0,listed.stderr);
   assert.match(listed.stdout,/朋友: \? of 20 voice connections started/);assert.equal(listed.stdout.includes(made.code),false);
-  for(const bad of [['add','朋友','20'],['add','同事'],['add','同事','0'],['add','同事','many'],['remove','朋友'],[]]){
+  // A code the operator chooses, and one made short.
+  const chosen=run('add','同事','5','--code','tea-time-42');
+  assert.equal(chosen.status,0,chosen.stderr);assert.match(chosen.stdout,/邀请码 tea-time-42/);assert.ok(chosen.stdout.includes('#invite=tea-time-42'));
+  const short=run('add','家人','2','--short');
+  assert.equal(short.status,0,short.stderr);assert.match(short.stdout,/邀请码 [a-hjkmnp-z2-9]{8}\n/);
+  assert.equal(loadInvites(invites).length,3);
+  for(const bad of [['add','朋友','20'],['add','同事'],['add','新的','0'],['add','新的','many'],['add','新的','2','--code'],['add','新的','2','--code','abc'],['add','新的','2','--short','--code','tea-time-43'],['remove','朋友'],[]]){
     const refused=run(...bad);
     assert.notEqual(refused.status,0,bad.join(' '));assert.equal((refused.stdout+refused.stderr).includes(made.code),false);
   }
-  assert.equal(loadInvites(invites).length,1);
+  assert.equal(loadInvites(invites).length,3);
   // On a server for this machine only there is nothing to add to.
   const local=spawnSync(process.execPath,['invites.mjs','list'],{cwd:path.dirname(fileURLToPath(import.meta.url)),encoding:'utf8',env:{...process.env,PARTITION_HOSTING:''}});
   assert.notEqual(local.status,0);assert.match(local.stderr,/takes no invitations/);
