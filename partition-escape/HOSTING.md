@@ -124,6 +124,8 @@ node deploy/static-site.mjs <新文件夹> https://<服务的公开地址>
 - `page_origins`：允许从浏览器调用这台服务的网站地址。没列在这里的网站一律被拒绝。列在这里只表示「可以问」，开房间仍然要邀请，进席位仍然要房间自己的钥匙。
 - `invite_page`：邀请链接指向的页面。设了以后，`invites.mjs add` 打印的链接就是这个网站上的地址。
 
+本仓库的网站就是这样发布的：`.github/workflows/pages.yml` 用 `PARTITION_SERVER` 指明服务地址，把页面放到 `https://renjie-liu.github.io/ai-games/partition-escape/`。
+
 在本机用两个端口演练过这种拆法（页面在一个端口的子文件夹里，服务在另一个端口）：没有邀请进不去，有邀请能开房间、进西席，离线替身搭档的下行流和上行请求都能跨地址工作，观众入口正常。
 
 ## 不用 Fly 的话
